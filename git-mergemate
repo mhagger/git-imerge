@@ -1,0 +1,143 @@
+#! /usr/bin/python
+
+"""Use bisection to determine the latest commit on one branch that can
+be merged successfully with another branch.
+
+In symmetric mode, it tries to find the first commit pair (one from
+each branch) that lead to a merge conflict.
+
+In either case, only the --first-parent commits on each branch are
+considered.
+
+Don't actually retain any merges.
+"""
+
+import sys
+import os
+import subprocess
+import argparse
+
+
+def rev_list(args):
+    return [
+        l.strip()
+        for l in subprocess.check_output(
+            ['git', 'rev-list', '--first-parent'] + args,
+            ).splitlines()
+        ]
+
+
+def call_silently(cmd):
+    NULL = open('/dev/null', 'w')
+    p = subprocess.Popen(
+        cmd, stdout=NULL, stderr=subprocess.PIPE,
+        )
+    (out,err) = p.communicate()
+    retcode = p.wait()
+    if retcode:
+        raise subprocess.CalledProcessError(retcode, cmd, err)
+
+
+def merge_possible(commit1, commit2):
+    sys.stderr.write('Testing %s + %s -> ' % (commit1, commit2))
+    call_silently(['git', 'checkout', '-f', commit1])
+    try:
+        call_silently(['git', 'merge', '--no-commit', commit2])
+    except subprocess.CalledProcessError:
+        call_silently(['git', 'merge', '--abort'])
+        sys.stderr.write('FAIL\n')
+        return False
+    else:
+        call_silently(['git', 'merge', '--abort'])
+        sys.stderr.write('SUCCESS\n')
+        return True
+
+
+def find_first_failing_merge(commit1, commits2):
+    # commits prior to this one succeed:
+    lo = 0
+
+    # this commit and its successors fail:
+    hi = len(commits2)
+
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if merge_possible(commit1, commits2[mid]):
+            lo = mid + 1
+        else:
+            hi = mid
+
+    return lo
+
+
+def examine_merges(commit1, branch2, commits2):
+    failing2 = find_first_failing_merge(commit1, commits2)
+    if failing2 == 0:
+        sys.stderr.write(
+            '\n'
+            'On branch %s, all commits fail to merge with %s:\n'
+            '    (%d) %s FAIL\n'
+            '\n'
+            % (branch2, commit1,
+               failing2, commits2[failing2],)
+            )
+    elif failing2 == len(commits2):
+        sys.stderr.write(
+            '\n'
+            'On branch %s, all commits can be merged successfully with %s:\n'
+            '    (%d) %s OK\n'
+            '\n'
+            % (branch2, commit1,
+               failing2 - 1, commits2[failing2 - 1],)
+            )
+    else:
+        sys.stderr.write(
+            '\n'
+            'On branch %s, failure to merge with %s arises between\n'
+            '    (%d) %s OK\n'
+            '    (%d) %s FAIL\n'
+            '\n'
+            % (branch2, commit1,
+               failing2 - 1, commits2[failing2 - 1],
+               failing2, commits2[failing2],)
+            )
+    return failing2
+
+
+def symmetric_merge(branch1, branch2):
+    commits1 = rev_list(['%s..%s' % (branch2, branch1)])
+    commits1.reverse()
+    commits2 = rev_list(['%s..%s' % (branch1, branch2)])
+    commits2.reverse()
+
+    sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
+
+    failing2 = examine_merges(commits1[-1], branch2, commits2)
+    if failing2 != len(commits2):
+        failing1 = examine_merges(commits2[failing2], branch1, commits1)
+
+
+def asymmetric_merge(branch1, branch2):
+    commits2 = rev_list(['%s..%s' % (branch1, branch2)])
+    commits2.reverse()
+
+    sys.stderr.write('%s commits to examine\n' % (len(commits2),))
+
+    failing2 = examine_merges(branch1, branch2, commits2)
+
+
+def main(args):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('range', help='BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
+    options = parser.parse_args(args)
+
+    if '...' in options.range:
+        (branch1, branch2) = options.range.split('...')
+        symmetric_merge(branch1, branch2)
+    else:
+        (branch1, branch2) = options.range.split('..')
+        asymmetric_merge(branch1, branch2)
+
+
+main(sys.argv[1:])
+
