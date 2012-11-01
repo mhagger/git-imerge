@@ -44,13 +44,13 @@ def merge_possible(commit1, commit2):
     try:
         call_silently(['git', 'merge', '--no-commit', commit2])
     except subprocess.CalledProcessError:
-        call_silently(['git', 'merge', '--abort'])
         sys.stderr.write('FAIL\n')
         return False
     else:
-        call_silently(['git', 'merge', '--abort'])
         sys.stderr.write('SUCCESS\n')
         return True
+    finally:
+        call_silently(['git', 'merge', '--abort'])
 
 
 def find_first_failing_merge(commit1, commits2):
