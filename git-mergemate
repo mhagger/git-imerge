@@ -131,7 +131,6 @@ class MergeFailedException(Exception):
 
 
 def merge(commit):
-    sys.stderr.write('Merging %s...\n' % (commit,))
     try:
         subprocess.check_call(
             ['git', '-c', 'rerere.enabled=false', 'merge', '--no-edit', commit],
@@ -147,7 +146,8 @@ def incremental_merge(branch):
     sys.stderr.write('%s commits to merge\n' % (len(commits),))
 
     try:
-        for commit in commits:
+        for (i, commit) in enumerate(commits):
+            sys.stderr.write('Merging %s (%d/%d)...\n' % (commit, i + 1, len(commits)))
             merge(commit)
     except MergeFailedException, e:
         sys.stderr.write('\n')
