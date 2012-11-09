@@ -42,7 +42,7 @@ def merge_possible(commit1, commit2):
     sys.stderr.write('Testing %s + %s -> ' % (commit1, commit2))
     call_silently(['git', 'checkout', '-f', commit1])
     try:
-        call_silently(['git', 'merge', '--no-commit', commit2])
+        call_silently(['git', '-c', 'rerere.enabled=false', 'merge', '--no-commit', commit2])
     except subprocess.CalledProcessError:
         sys.stderr.write('FAIL\n')
         return False
@@ -126,17 +126,53 @@ def asymmetric_merge(branch1, branch2):
     failing2 = examine_merges(branch1, branch2, commits2)
 
 
+class MergeFailedException(Exception):
+    pass
+
+
+def merge(commit):
+    sys.stderr.write('Merging %s...\n' % (commit,))
+    try:
+        subprocess.check_call(
+            ['git', '-c', 'rerere.enabled=false', 'merge', '--no-edit', commit],
+            )
+    except subprocess.CalledProcessError:
+        raise MergeFailedException('Failed to merge commit %s' % (commit,))
+
+
+def incremental_merge(branch):
+    commits = rev_list(['HEAD..%s' % (branch,)])
+    commits.reverse()
+
+    sys.stderr.write('%s commits to merge\n' % (len(commits),))
+
+    try:
+        for commit in commits:
+            merge(commit)
+    except MergeFailedException, e:
+        sys.stderr.write('\n')
+        sys.stderr.write('Failed to merge the following commits:\n')
+        subprocess.check_call(
+            ['git', 'log', 'HEAD..%s' % (commit,)],
+            )
+        sys.stderr.write('\n')
+        sys.exit('Merge of commit %s failed; please resolve manually' % (commit,))
+
+
 def main(args):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('range', help='BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
+    parser.add_argument('range', help='BRANCH | BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
     options = parser.parse_args(args)
 
     if '...' in options.range:
         (branch1, branch2) = options.range.split('...')
         symmetric_merge(branch1, branch2)
-    else:
+    elif '..' in options.range:
         (branch1, branch2) = options.range.split('..')
         asymmetric_merge(branch1, branch2)
+    else:
+        branch = options.range
+        incremental_merge(branch)
 
 
 main(sys.argv[1:])
