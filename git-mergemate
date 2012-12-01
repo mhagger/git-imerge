@@ -1,15 +1,46 @@
 #! /usr/bin/python
 
-"""Use bisection to determine the latest commit on one branch that can
-be merged successfully with another branch.
+r"""Tools for crazy git merges.
 
-In symmetric mode, it tries to find the first commit pair (one from
-each branch) that lead to a merge conflict.
+usage:
+    %(prog)s BRANCH
 
-In either case, only the --first-parent commits on each branch are
-considered.
+        Merge the commits from BRANCH into HEAD, one commit at a time.
+        If there is a merge conflict, stop in "conflicted" state (as
+        usual with a git merge).  After resolving the conflict, commit
+        and then re-execute the %(prog)s command to continue.  In
+        other words, transform this:
 
-Don't actually retain any merges.
+            o---o---o---o          HEAD
+                 \
+                  A---B---C---D    BRANCH
+
+        into this:
+
+            o---o---o---o---A'--B'--C'--D'    HEAD
+                 \         /   /   /   /
+                  --------A---B---C---D       BRANCH
+
+        This is like a rebase, except with the history of individual
+        merges retained [1].
+
+    %(prog)s BRANCH1..BRANCH2
+
+        Use bisection to determine the latest commit on BRANCH2 that
+        can be merged successfully into BRANCH1.  Don't actually
+        retain any merges.
+
+    %(prog)s BRANCH1...BRANCH2
+
+        Use bisection to find one of the latest commit pairs (one from
+        each branch) that do not merge cleanly.  Don't actually retain
+        any merges.
+
+In all cases, only the --first-parent commits are considered for
+merging, and git rerere is disabled.
+
+[1] http://softwareswirl.blogspot.de/2009/04/truce-in-merge-vs-rebase-war.html
+
 """
 
 import sys
@@ -202,7 +233,10 @@ def incremental_merge(branch):
 
 
 def main(args):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
     parser.add_argument('range', help='BRANCH | BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
     options = parser.parse_args(args)
 
