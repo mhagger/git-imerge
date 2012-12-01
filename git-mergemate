@@ -199,6 +199,38 @@ def asymmetric_merge(branch1, branch2):
     failing2 = examine_merges(branch1, branch2, commits2)
 
 
+def graph_merge(branch1, branch2, full=False):
+    commits1 = rev_list(['%s..%s' % (branch2, branch1)])
+    commits1.reverse()
+    commits2 = rev_list(['%s..%s' % (branch1, branch2)])
+    commits2.reverse()
+
+    sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
+
+    results = [[None] * len(commits2) for commit1 in commits1]
+
+    if full:
+        for i1, commit1 in enumerate(commits1):
+            for i2, commit2 in enumerate(commits2):
+                results[i1][i2] = merge_possible(commit1, commit2)
+    elif len(commits2) < len(commits1):
+        for i2, commit2 in enumerate(commits2):
+            i1 = find_first_failing_merge(commit2, commits1)
+            for i in range(len(commits1)):
+                results[i][i2] = i < i1
+    else:
+        for i1, commit1 in enumerate(commits1):
+            i2 = find_first_failing_merge(commit1, commits2)
+            for i in range(len(commits2)):
+                results[i1][i] = i < i2
+
+    OUTPUT_CHARS = {True : '.', False : 'X'}
+
+    for i2 in range(len(commits2)):
+        for i1 in range(len(commits1)):
+            print OUTPUT_CHARS[results[i1][i2]]
+
+
 class MergeFailedException(Exception):
     pass
 
@@ -237,12 +269,25 @@ def main(args):
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         )
+    parser.add_argument(
+        '--graph', action='store_true',
+        help='Compute graph of conflicts using bisection',
+        )
+    parser.add_argument(
+        '--graph-full', action='store_true',
+        help='Compute graph of conflicts',
+        )
     parser.add_argument('range', help='BRANCH | BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
     options = parser.parse_args(args)
 
     if '...' in options.range:
         (branch1, branch2) = options.range.split('...')
-        symmetric_merge(branch1, branch2)
+        if options.graph_full:
+            graph_merge(branch1, branch2, full=True)
+        elif options.graph:
+            graph_merge(branch1, branch2, full=False)
+        else:
+            symmetric_merge(branch1, branch2)
     elif '..' in options.range:
         (branch1, branch2) = options.range.split('..')
         asymmetric_merge(branch1, branch2)
