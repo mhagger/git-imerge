@@ -199,6 +199,58 @@ def asymmetric_merge(branch1, branch2):
     failing2 = examine_merges(branch1, branch2, commits2)
 
 
+class MergeResults(object):
+    """A dictionary {(commit1, commit2) : mergeable}."""
+
+    def __init__(self, commits1, commits2, assume_monotonic=True):
+        self.commits1 = list(commits1)
+        self.indexes1 = dict((commit, i) for (i, commit) in enumerate(self.commits1))
+        self.commits2 = list(commits2)
+        self.indexes2 = dict((commit, i) for (i, commit) in enumerate(self.commits2))
+        self.results = [[None] * len(commits2) for commit1 in commits1]
+        self.assume_monotonic = assume_monotonic
+
+    def __getitem__(self, index):
+        (commit1, commit2) = index
+        i1 = self.indexes1[commit1]
+        i2 = self.indexes2[commit2]
+        return self.results[i1][i2]
+
+    def __setitem__(self, index, value):
+        (commit1, commit2) = index
+        i1 = self.indexes1[commit1]
+        i2 = self.indexes2[commit2]
+        if self.assume_monotonic:
+            if value:
+                # All entries with i1' <= i1 and i2' <= i2 are mergeable:
+                for i1p in reversed(range(i1 + 1)):
+                    if self.results[i1p][i2] is not None:
+                        break
+                    for i2p in reversed(range(i2 + 1)):
+                        if self.results[i1p][i2p] is not None:
+                            break
+                        self.results[i1p][i2p] = value
+            else:
+                # All entries with i1' >= i1 and i2' >= i2 are non-mergeable:
+                for i1p in range(i1, len(self.commits1)):
+                    if self.results[i1p][i2] is not None:
+                        break
+                    for i2p in range(i2, len(self.commits2)):
+                        if self.results[i1p][i2p] is not None:
+                            break
+                        self.results[i1p][i2p] = value
+        else:
+            self.results[i1][i2] = value
+
+    OUTPUT_CHARS = {True : '.', False : 'X', None : '?'}
+
+    def write(self, f):
+        for i2 in range(len(self.commits2)):
+            for i1 in range(len(self.commits1)):
+                f.write(self.OUTPUT_CHARS[self.results[i1][i2]])
+            f.write('\n')
+
+
 def graph_merge(branch1, branch2, full=False):
     commits1 = rev_list(['%s..%s' % (branch2, branch1)])
     commits1.reverse()
@@ -207,28 +259,32 @@ def graph_merge(branch1, branch2, full=False):
 
     sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
 
-    results = [[None] * len(commits2) for commit1 in commits1]
+    results = MergeResults(commits1, commits2, not full)
 
     if full:
-        for i1, commit1 in enumerate(commits1):
-            for i2, commit2 in enumerate(commits2):
-                results[i1][i2] = merge_possible(commit1, commit2)
+        for commit1 in commits1:
+            for commit2 in commits2:
+                results[commit1,commit2] = merge_possible(commit1, commit2)
     elif len(commits2) < len(commits1):
+        i1 = len(commits1)
         for i2, commit2 in enumerate(commits2):
-            i1 = find_first_failing_merge(commit2, commits1)
-            for i in range(len(commits1)):
-                results[i][i2] = i < i1
+            i1 = find_first_failing_merge(commit2, commits1[:i1])
+            if i1 < len(commits1):
+                results[commits1[i1],commit2] = False
+            if i1 - 1 >= 0:
+                results[commits1[i1 - 1],commit2] = True
+            results.write(sys.stderr)
     else:
+        i2 = len(commits2)
         for i1, commit1 in enumerate(commits1):
-            i2 = find_first_failing_merge(commit1, commits2)
-            for i in range(len(commits2)):
-                results[i1][i] = i < i2
+            i2 = find_first_failing_merge(commit1, commits2[:i2])
+            if i2 < len(commits2):
+                results[commit1,commits2[i2]] = False
+            if i2 - 1 >= 0:
+                results[commit1,commits2[i2 - 1]] = True
+            results.write(sys.stderr)
 
-    OUTPUT_CHARS = {True : '.', False : 'X'}
-
-    for i2 in range(len(commits2)):
-        for i1 in range(len(commits1)):
-            print OUTPUT_CHARS[results[i1][i2]]
+    results.write(sys.stdout)
 
 
 class MergeFailedException(Exception):
