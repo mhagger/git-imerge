@@ -242,6 +242,30 @@ class MergeResults(object):
         else:
             self.results[i1][i2] = value
 
+    def fill(self, commits1, commits2):
+        if not self.assume_monotonic:
+            for commit1 in commits1:
+                for commit2 in commits2:
+                    self[commit1,commit2] = merge_possible(commit1, commit2)
+        elif len(commits2) < len(commits1):
+            i1 = len(commits1)
+            for i2, commit2 in enumerate(commits2):
+                i1 = find_first_failing_merge(commit2, commits1[:i1])
+                if i1 < len(commits1):
+                    self[commits1[i1],commit2] = False
+                if i1 - 1 >= 0:
+                    self[commits1[i1 - 1],commit2] = True
+                self.write(sys.stderr)
+        else:
+            i2 = len(commits2)
+            for i1, commit1 in enumerate(commits1):
+                i2 = find_first_failing_merge(commit1, commits2[:i2])
+                if i2 < len(commits2):
+                    self[commit1,commits2[i2]] = False
+                if i2 - 1 >= 0:
+                    self[commit1,commits2[i2 - 1]] = True
+                self.write(sys.stderr)
+
     OUTPUT_CHARS = {True : '.', False : 'X', None : '?'}
 
     def write(self, f):
@@ -260,30 +284,7 @@ def graph_merge(branch1, branch2, full=False):
     sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
 
     results = MergeResults(commits1, commits2, not full)
-
-    if full:
-        for commit1 in commits1:
-            for commit2 in commits2:
-                results[commit1,commit2] = merge_possible(commit1, commit2)
-    elif len(commits2) < len(commits1):
-        i1 = len(commits1)
-        for i2, commit2 in enumerate(commits2):
-            i1 = find_first_failing_merge(commit2, commits1[:i1])
-            if i1 < len(commits1):
-                results[commits1[i1],commit2] = False
-            if i1 - 1 >= 0:
-                results[commits1[i1 - 1],commit2] = True
-            results.write(sys.stderr)
-    else:
-        i2 = len(commits2)
-        for i1, commit1 in enumerate(commits1):
-            i2 = find_first_failing_merge(commit1, commits2[:i2])
-            if i2 < len(commits2):
-                results[commit1,commits2[i2]] = False
-            if i2 - 1 >= 0:
-                results[commit1,commits2[i2 - 1]] = True
-            results.write(sys.stderr)
-
+    results.fill(commits1, commits2)
     results.write(sys.stdout)
 
 
