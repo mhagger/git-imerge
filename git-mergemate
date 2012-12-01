@@ -17,11 +17,53 @@ import os
 import subprocess
 import argparse
 
+# CalledProcessError, check_call, and check_output were not in the
+# original Python 2.4 subprocess library, so implement it here if
+# necessary (implementations are taken from the Python 2.7 library):
+try:
+    from subprocess import CalledProcessError
+except ImportError:
+    class CalledProcessError(Exception):
+        def __init__(self, returncode, cmd, output=None):
+            self.returncode = returncode
+            self.cmd = cmd
+            self.output = output
+        def __str__(self):
+            return "Command '%s' returned non-zero exit status %d" % (self.cmd, self.returncode)
+
+try:
+    from subprocess import check_call
+except ImportError:
+    def check_call(*popenargs, **kwargs):
+        retcode = subprocess.call(*popenargs, **kwargs)
+        if retcode:
+            cmd = kwargs.get("args")
+            if cmd is None:
+                cmd = popenargs[0]
+            raise CalledProcessError(retcode, cmd)
+        return 0
+
+try:
+    from subprocess import check_output
+except ImportError:
+    def check_output(*popenargs, **kwargs):
+        if 'stdout' in kwargs:
+            raise ValueError('stdout argument not allowed, it will be overridden.')
+        process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
+        output, unused_err = process.communicate()
+        retcode = process.poll()
+        if retcode:
+            cmd = kwargs.get("args")
+            if cmd is None:
+                cmd = popenargs[0]
+            raise CalledProcessError(retcode, cmd, output=output)
+        return output
+
 
 def rev_list(args):
     return [
         l.strip()
-        for l in subprocess.check_output(
+        for l in check_output(
             ['git', 'rev-list', '--first-parent'] + args,
             ).splitlines()
         ]
@@ -35,7 +77,7 @@ def call_silently(cmd):
     (out,err) = p.communicate()
     retcode = p.wait()
     if retcode:
-        raise subprocess.CalledProcessError(retcode, cmd, err)
+        raise CalledProcessError(retcode, cmd, err)
 
 
 def merge_possible(commit1, commit2):
@@ -43,7 +85,7 @@ def merge_possible(commit1, commit2):
     call_silently(['git', 'checkout', '-f', commit1])
     try:
         call_silently(['git', '-c', 'rerere.enabled=false', 'merge', '--no-commit', commit2])
-    except subprocess.CalledProcessError:
+    except CalledProcessError:
         sys.stderr.write('FAIL\n')
         return False
     else:
@@ -132,10 +174,10 @@ class MergeFailedException(Exception):
 
 def merge(commit):
     try:
-        subprocess.check_call(
+        check_call(
             ['git', '-c', 'rerere.enabled=false', 'merge', '--no-edit', commit],
             )
-    except subprocess.CalledProcessError:
+    except CalledProcessError:
         raise MergeFailedException('Failed to merge commit %s' % (commit,))
 
 
@@ -152,7 +194,7 @@ def incremental_merge(branch):
     except MergeFailedException, e:
         sys.stderr.write('\n')
         sys.stderr.write('Failed to merge the following commits:\n')
-        subprocess.check_call(
+        check_call(
             ['git', 'log', 'HEAD..%s' % (commit,)],
             )
         sys.stderr.write('\n')
