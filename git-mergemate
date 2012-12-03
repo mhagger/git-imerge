@@ -235,13 +235,15 @@ def asymmetric_merge(branch1, branch2):
 class MergeResults(object):
     """A dictionary {(commit1, commit2) : mergeable}."""
 
-    def __init__(self, commits1, commits2, assume_monotonic=True):
+    def __init__(self, commits1, commits2, assume_monotonic=True, progress=None):
         self.commits1 = list(commits1)
         self.indexes1 = dict((commit, i) for (i, commit) in enumerate(self.commits1))
         self.commits2 = list(commits2)
         self.indexes2 = dict((commit, i) for (i, commit) in enumerate(self.commits2))
         self.results = [[None] * len(commits2) for commit1 in commits1]
         self.assume_monotonic = assume_monotonic
+        self.progress = progress
+        self.filename_index = 0
 
     def __getitem__(self, index):
         (commit1, commit2) = index
@@ -275,6 +277,18 @@ class MergeResults(object):
         else:
             self.results[i1][i2] = value
 
+    def get_filename(self):
+        try:
+            return os.path.join(
+                self.progress, 'crazymerge-%04d.ppm' % (self.filename_index,)
+                )
+        finally:
+            self.filename_index += 1
+
+    def show_progress(self):
+        if self.progress:
+            self.writeppm(open(self.get_filename(), 'w'))
+
     def fill(self, commits1, commits2):
         if not commits1 or not commits2:
             return
@@ -290,7 +304,7 @@ class MergeResults(object):
                 self[commits1[i1],commit2] = False
             if i1 - 1 >= 0:
                 self[commits1[i1 - 1],commit2] = True
-            self.write(sys.stderr)
+            self.show_progress()
             if i1 < len(commits1):
                 self.fill(commits1[i1:], commits2[:i2])
             if i1 - 1 >= 0:
@@ -303,7 +317,7 @@ class MergeResults(object):
                 self[commit1,commits2[i2]] = False
             if i2 - 1 >= 0:
                 self[commit1,commits2[i2 - 1]] = True
-            self.write(sys.stderr)
+            self.show_progress()
             if i2 < len(commits2):
                 self.fill(commits1[:i1], commits2[i2:])
             if i2 - 1 >= 0:
@@ -317,8 +331,19 @@ class MergeResults(object):
                 f.write(self.OUTPUT_CHARS[self.results[i1][i2]])
             f.write('\n')
 
+    OUTPUT_COLORS = {True : (0, 255, 0), False : (255, 0, 0), None : (255, 255, 0)}
 
-def graph_merge(branch1, branch2, full=False):
+    def writeppm(self, f):
+        f.write('P3\n')
+        f.write('%d %d 255\n' % (len(self.commits1), len(self.commits2),))
+        for i2 in range(len(self.commits2)):
+            f.write('%d %d %d' % self.OUTPUT_COLORS[self.results[0][i2]])
+            for i1 in range(1, len(self.commits1)):
+                f.write(' %d %d %d' % self.OUTPUT_COLORS[self.results[i1][i2]])
+            f.write('\n')
+
+
+def graph_merge(branch1, branch2, full=False, progress=None):
     commits1 = rev_list(['%s..%s' % (branch2, branch1)])
     commits1.reverse()
     commits2 = rev_list(['%s..%s' % (branch1, branch2)])
@@ -326,9 +351,9 @@ def graph_merge(branch1, branch2, full=False):
 
     sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
 
-    results = MergeResults(commits1, commits2, not full)
+    results = MergeResults(commits1, commits2, not full, progress=progress)
     results.fill(commits1, commits2)
-    results.write(sys.stdout)
+    results.writeppm(sys.stdout)
 
 
 class MergeFailedException(Exception):
@@ -374,6 +399,10 @@ def main(args):
         help='Compute graph of conflicts using bisection',
         )
     parser.add_argument(
+        '--progress', action='store', default=None, metavar='DIR',
+        help='Write images showing progress to specified directory',
+        )
+    parser.add_argument(
         '--graph-full', action='store_true',
         help='Compute graph of conflicts',
         )
@@ -383,9 +412,9 @@ def main(args):
     if '...' in options.range:
         (branch1, branch2) = options.range.split('...')
         if options.graph_full:
-            graph_merge(branch1, branch2, full=True)
+            graph_merge(branch1, branch2, full=True, progress=options.progress)
         elif options.graph:
-            graph_merge(branch1, branch2, full=False)
+            graph_merge(branch1, branch2, full=False, progress=options.progress)
         else:
             symmetric_merge(branch1, branch2)
     elif '..' in options.range:
