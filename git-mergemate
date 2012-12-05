@@ -297,22 +297,20 @@ def fill_block(results, commit1, commit2, value):
     i2 = results.indexes2[commit2]
     if value:
         # All entries with i1' <= i1 and i2' <= i2 are mergeable:
-        for i1p in reversed(range(i1 + 1)):
-            if results.results[i1p][i2] is not None:
-                break
-            for i2p in reversed(range(i2 + 1)):
-                if results.results[i1p][i2p] is not None:
-                    break
-                results.results[i1p][i2p] = value
+        i1range = reversed(range(i1 + 1))
+        i2range = reversed(range(i2 + 1))
     else:
         # All entries with i1' >= i1 and i2' >= i2 are non-mergeable:
-        for i1p in range(i1, len(results.commits1)):
-            if results.results[i1p][i2] is not None:
+        i1range = range(i1, len(results.commits1))
+        i2range = range(i2, len(results.commits2))
+
+    for i1p in i1range:
+        if results.results[i1p][i2] is not None:
+            break
+        for i2p in i2range:
+            if results.results[i1p][i2p] is not None:
                 break
-            for i2p in range(i2, len(results.commits2)):
-                if results.results[i1p][i2p] is not None:
-                    break
-                results.results[i1p][i2p] = value
+            results.results[i1p][i2p] = value
 
 
 def fill_assuming_monotonic(results, commits1, commits2):
