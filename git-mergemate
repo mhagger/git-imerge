@@ -246,15 +246,11 @@ class MergeResults(object):
 
     def __getitem__(self, index):
         (commit1, commit2) = index
-        i1 = self.indexes1[commit1]
-        i2 = self.indexes2[commit2]
-        return self.results[i1][i2]
+        return self.results[self.indexes1[commit1]][self.indexes2[commit2]]
 
     def __setitem__(self, index, value):
         (commit1, commit2) = index
-        i1 = self.indexes1[commit1]
-        i2 = self.indexes2[commit2]
-        self.results[i1][i2] = value
+        self.results[self.indexes1[commit1]][self.indexes2[commit2]] = value
 
     def get_filename(self):
         try:
