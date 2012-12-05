@@ -255,27 +255,7 @@ class MergeResults(object):
         (commit1, commit2) = index
         i1 = self.indexes1[commit1]
         i2 = self.indexes2[commit2]
-        if self.assume_monotonic:
-            if value:
-                # All entries with i1' <= i1 and i2' <= i2 are mergeable:
-                for i1p in reversed(range(i1 + 1)):
-                    if self.results[i1p][i2] is not None:
-                        break
-                    for i2p in reversed(range(i2 + 1)):
-                        if self.results[i1p][i2p] is not None:
-                            break
-                        self.results[i1p][i2p] = value
-            else:
-                # All entries with i1' >= i1 and i2' >= i2 are non-mergeable:
-                for i1p in range(i1, len(self.commits1)):
-                    if self.results[i1p][i2] is not None:
-                        break
-                    for i2p in range(i2, len(self.commits2)):
-                        if self.results[i1p][i2p] is not None:
-                            break
-                        self.results[i1p][i2p] = value
-        else:
-            self.results[i1][i2] = value
+        self.results[i1][i2] = value
 
     def get_filename(self):
         try:
@@ -317,6 +297,29 @@ def fill_full(results, commits1, commits2):
             results[commit1,commit2] = merge_possible(commit1, commit2)
 
 
+def fill_block(results, commit1, commit2, value):
+    i1 = results.indexes1[commit1]
+    i2 = results.indexes2[commit2]
+    if value:
+        # All entries with i1' <= i1 and i2' <= i2 are mergeable:
+        for i1p in reversed(range(i1 + 1)):
+            if results.results[i1p][i2] is not None:
+                break
+            for i2p in reversed(range(i2 + 1)):
+                if results.results[i1p][i2p] is not None:
+                    break
+                results.results[i1p][i2p] = value
+    else:
+        # All entries with i1' >= i1 and i2' >= i2 are non-mergeable:
+        for i1p in range(i1, len(results.commits1)):
+            if results.results[i1p][i2] is not None:
+                break
+            for i2p in range(i2, len(results.commits2)):
+                if results.results[i1p][i2p] is not None:
+                    break
+                results.results[i1p][i2p] = value
+
+
 def fill_assuming_monotonic(results, commits1, commits2):
     if not commits1 or not commits2:
         return
@@ -325,9 +328,9 @@ def fill_assuming_monotonic(results, commits1, commits2):
         commit2 = commits2[i2]
         i1 = find_first_failing_merge(commit2, commits1)
         if i1 < len(commits1):
-            results[commits1[i1],commit2] = False
+            fill_block(results, commits1[i1], commit2, False)
         if i1 - 1 >= 0:
-            results[commits1[i1 - 1],commit2] = True
+            fill_block(results, commits1[i1 - 1], commit2, True)
         results.show_progress()
         if i1 < len(commits1):
             fill_assuming_monotonic(results, commits1[i1:], commits2[:i2])
@@ -338,9 +341,9 @@ def fill_assuming_monotonic(results, commits1, commits2):
         commit1 = commits1[i1]
         i2 = find_first_failing_merge(commit1, commits2)
         if i2 < len(commits2):
-            results[commit1,commits2[i2]] = False
+            fill_block(results, commit1, commits2[i2], False)
         if i2 - 1 >= 0:
-            results[commit1,commits2[i2 - 1]] = True
+            fill_block(results, commit1, commits2[i2 - 1], True)
         results.show_progress()
         if i2 < len(commits2):
             fill_assuming_monotonic(results, commits1[:i1], commits2[i2:])
