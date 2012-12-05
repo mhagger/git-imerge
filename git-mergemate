@@ -220,7 +220,7 @@ def symmetric_merge(branch1, branch2):
 
     failing2 = examine_merges(commits1[-1], branch2, commits2)
     if failing2 != len(commits2):
-        failing1 = examine_merges(commits2[failing2], branch1, commits1)
+        examine_merges(commits2[failing2], branch1, commits1)
 
 
 def asymmetric_merge(branch1, branch2):
@@ -229,7 +229,7 @@ def asymmetric_merge(branch1, branch2):
 
     sys.stderr.write('%s commits to examine\n' % (len(commits2),))
 
-    failing2 = examine_merges(branch1, branch2, commits2)
+    examine_merges(branch1, branch2, commits2)
 
 
 class MergeResults(object):
