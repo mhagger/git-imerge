@@ -292,25 +292,10 @@ def fill_full(results, commits1, commits2):
             results[commit1,commit2] = merge_possible(commit1, commit2)
 
 
-def fill_block(results, commit1, commit2, value):
-    i1 = results.indexes1[commit1]
-    i2 = results.indexes2[commit2]
-    if value:
-        # All entries with i1' <= i1 and i2' <= i2 are mergeable:
-        i1range = reversed(range(i1 + 1))
-        i2range = reversed(range(i2 + 1))
-    else:
-        # All entries with i1' >= i1 and i2' >= i2 are non-mergeable:
-        i1range = range(i1, len(results.commits1))
-        i2range = range(i2, len(results.commits2))
-
-    for i1p in i1range:
-        if results.results[i1p][i2] is not None:
-            break
-        for i2p in i2range:
-            if results.results[i1p][i2p] is not None:
-                break
-            results.results[i1p][i2p] = value
+def fill_block(results, commits1, commits2, value):
+    for commit1 in commits1:
+        for commit2 in commits2:
+            results[commit1,commit2] = value
 
 
 def fill_assuming_monotonic(results, commits1, commits2):
@@ -321,9 +306,9 @@ def fill_assuming_monotonic(results, commits1, commits2):
         commit2 = commits2[i2]
         i1 = find_first_failing_merge(commit2, commits1)
         if i1 < len(commits1):
-            fill_block(results, commits1[i1], commit2, False)
+            fill_block(results, commits1[i1:], commits2[i2:], False)
         if i1 - 1 >= 0:
-            fill_block(results, commits1[i1 - 1], commit2, True)
+            fill_block(results, commits1[:i1], commits2[:i2 + 1], True)
         results.show_progress()
         if i1 < len(commits1):
             fill_assuming_monotonic(results, commits1[i1:], commits2[:i2])
@@ -334,9 +319,9 @@ def fill_assuming_monotonic(results, commits1, commits2):
         commit1 = commits1[i1]
         i2 = find_first_failing_merge(commit1, commits2)
         if i2 < len(commits2):
-            fill_block(results, commit1, commits2[i2], False)
+            fill_block(results, commits1[i1:], commits2[i2:], False)
         if i2 - 1 >= 0:
-            fill_block(results, commit1, commits2[i2 - 1], True)
+            fill_block(results, commits1[:i1 + 1], commits2[:i2], True)
         results.show_progress()
         if i2 < len(commits2):
             fill_assuming_monotonic(results, commits1[:i1], commits2[i2:])
