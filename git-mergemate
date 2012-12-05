@@ -309,14 +309,18 @@ class MergeResults(object):
             f.write('\n')
 
 
-def fill(results, commits1, commits2):
+def fill_full(results, commits1, commits2):
     if not commits1 or not commits2:
         return
-    if not results.assume_monotonic:
-        for commit1 in commits1:
-            for commit2 in commits2:
-                results[commit1,commit2] = merge_possible(commit1, commit2)
-    elif len(commits2) < len(commits1):
+    for commit1 in commits1:
+        for commit2 in commits2:
+            results[commit1,commit2] = merge_possible(commit1, commit2)
+
+
+def fill_assuming_monotonic(results, commits1, commits2):
+    if not commits1 or not commits2:
+        return
+    if len(commits2) < len(commits1):
         i2 = len(commits2) // 2
         commit2 = commits2[i2]
         i1 = find_first_failing_merge(commit2, commits1)
@@ -326,9 +330,9 @@ def fill(results, commits1, commits2):
             results[commits1[i1 - 1],commit2] = True
         results.show_progress()
         if i1 < len(commits1):
-            fill(results, commits1[i1:], commits2[:i2])
+            fill_assuming_monotonic(results, commits1[i1:], commits2[:i2])
         if i1 - 1 >= 0:
-            fill(results, commits1[:i1], commits2[i2 + 1:])
+            fill_assuming_monotonic(results, commits1[:i1], commits2[i2 + 1:])
     else:
         i1 = len(commits1) // 2
         commit1 = commits1[i1]
@@ -339,9 +343,9 @@ def fill(results, commits1, commits2):
             results[commit1,commits2[i2 - 1]] = True
         results.show_progress()
         if i2 < len(commits2):
-            fill(results, commits1[:i1], commits2[i2:])
+            fill_assuming_monotonic(results, commits1[:i1], commits2[i2:])
         if i2 - 1 >= 0:
-            fill(results, commits1[i1 + 1:], commits2[:i2])
+            fill_assuming_monotonic(results, commits1[i1 + 1:], commits2[:i2])
 
 
 def diagram_merge(branch1, branch2, full=False, progress=None):
@@ -353,7 +357,10 @@ def diagram_merge(branch1, branch2, full=False, progress=None):
     sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
 
     results = MergeResults(commits1, commits2, not full, progress=progress)
-    fill(results, commits1, commits2)
+    if full:
+        fill_full(results, commits1, commits2)
+    else:
+        fill_assuming_monotonic(results, commits1, commits2)
     results.writeppm(sys.stdout)
 
 
