@@ -289,40 +289,6 @@ class MergeResults(object):
         if self.progress:
             self.writeppm(open(self.get_filename(), 'w'))
 
-    def fill(self, commits1, commits2):
-        if not commits1 or not commits2:
-            return
-        if not self.assume_monotonic:
-            for commit1 in commits1:
-                for commit2 in commits2:
-                    self[commit1,commit2] = merge_possible(commit1, commit2)
-        elif len(commits2) < len(commits1):
-            i2 = len(commits2) // 2
-            commit2 = commits2[i2]
-            i1 = find_first_failing_merge(commit2, commits1)
-            if i1 < len(commits1):
-                self[commits1[i1],commit2] = False
-            if i1 - 1 >= 0:
-                self[commits1[i1 - 1],commit2] = True
-            self.show_progress()
-            if i1 < len(commits1):
-                self.fill(commits1[i1:], commits2[:i2])
-            if i1 - 1 >= 0:
-                self.fill(commits1[:i1], commits2[i2 + 1:])
-        else:
-            i1 = len(commits1) // 2
-            commit1 = commits1[i1]
-            i2 = find_first_failing_merge(commit1, commits2)
-            if i2 < len(commits2):
-                self[commit1,commits2[i2]] = False
-            if i2 - 1 >= 0:
-                self[commit1,commits2[i2 - 1]] = True
-            self.show_progress()
-            if i2 < len(commits2):
-                self.fill(commits1[:i1], commits2[i2:])
-            if i2 - 1 >= 0:
-                self.fill(commits1[i1 + 1:], commits2[:i2])
-
     OUTPUT_CHARS = {True : '.', False : 'X', None : '?'}
 
     def write(self, f):
@@ -343,6 +309,41 @@ class MergeResults(object):
             f.write('\n')
 
 
+def fill(results, commits1, commits2):
+    if not commits1 or not commits2:
+        return
+    if not results.assume_monotonic:
+        for commit1 in commits1:
+            for commit2 in commits2:
+                results[commit1,commit2] = merge_possible(commit1, commit2)
+    elif len(commits2) < len(commits1):
+        i2 = len(commits2) // 2
+        commit2 = commits2[i2]
+        i1 = find_first_failing_merge(commit2, commits1)
+        if i1 < len(commits1):
+            results[commits1[i1],commit2] = False
+        if i1 - 1 >= 0:
+            results[commits1[i1 - 1],commit2] = True
+        results.show_progress()
+        if i1 < len(commits1):
+            fill(results, commits1[i1:], commits2[:i2])
+        if i1 - 1 >= 0:
+            fill(results, commits1[:i1], commits2[i2 + 1:])
+    else:
+        i1 = len(commits1) // 2
+        commit1 = commits1[i1]
+        i2 = find_first_failing_merge(commit1, commits2)
+        if i2 < len(commits2):
+            results[commit1,commits2[i2]] = False
+        if i2 - 1 >= 0:
+            results[commit1,commits2[i2 - 1]] = True
+        results.show_progress()
+        if i2 < len(commits2):
+            fill(results, commits1[:i1], commits2[i2:])
+        if i2 - 1 >= 0:
+            fill(results, commits1[i1 + 1:], commits2[:i2])
+
+
 def diagram_merge(branch1, branch2, full=False, progress=None):
     commits1 = rev_list(['%s..%s' % (branch2, branch1)])
     commits1.reverse()
@@ -352,7 +353,7 @@ def diagram_merge(branch1, branch2, full=False, progress=None):
     sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
 
     results = MergeResults(commits1, commits2, not full, progress=progress)
-    results.fill(commits1, commits2)
+    fill(results, commits1, commits2)
     results.writeppm(sys.stdout)
 
 
