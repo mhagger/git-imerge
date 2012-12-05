@@ -343,7 +343,7 @@ class MergeResults(object):
             f.write('\n')
 
 
-def graph_merge(branch1, branch2, full=False, progress=None):
+def diagram_merge(branch1, branch2, full=False, progress=None):
     commits1 = rev_list(['%s..%s' % (branch2, branch1)])
     commits1.reverse()
     commits2 = rev_list(['%s..%s' % (branch1, branch2)])
@@ -395,26 +395,29 @@ def main(args):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         )
     parser.add_argument(
-        '--graph', action='store_true',
-        help='Compute graph of conflicts using bisection',
+        '--diagram', action='store_true',
+        help='Compute diagram of conflicts using bisection',
         )
     parser.add_argument(
         '--progress', action='store', default=None, metavar='DIR',
         help='Write images showing progress to specified directory',
         )
     parser.add_argument(
-        '--graph-full', action='store_true',
-        help='Compute graph of conflicts',
+        '--diagram-full', action='store_true',
+        help=(
+            'Compute diagram of conflicts by computing all possible merges '
+            '(slower than --diagram)'
+            ),
         )
     parser.add_argument('range', help='BRANCH | BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
     options = parser.parse_args(args)
 
     if '...' in options.range:
         (branch1, branch2) = options.range.split('...')
-        if options.graph_full:
-            graph_merge(branch1, branch2, full=True, progress=options.progress)
-        elif options.graph:
-            graph_merge(branch1, branch2, full=False, progress=options.progress)
+        if options.diagram_full:
+            diagram_merge(branch1, branch2, full=True, progress=options.progress)
+        elif options.diagram:
+            diagram_merge(branch1, branch2, full=False, progress=options.progress)
         else:
             symmetric_merge(branch1, branch2)
     elif '..' in options.range:
