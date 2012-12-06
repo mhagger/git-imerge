@@ -252,6 +252,9 @@ class MergeResults(object):
         (commit1, commit2) = index
         self.results[self.indexes1[commit1]][self.indexes2[commit2]] = value
 
+    def get_transposed(self):
+        return TransposedMergeResults(self)
+
     def get_filename(self):
         try:
             return os.path.join(
@@ -284,6 +287,25 @@ class MergeResults(object):
             f.write('\n')
 
 
+class TransposedMergeResults(object):
+    def __init__(self, mergeresults):
+        self.mergeresults = mergeresults
+
+    def __getitem__(self, index):
+        (commit1, commit2) = index
+        return self.mergeresults[commit2,commit1]
+
+    def __setitem__(self, index, value):
+        (commit1, commit2) = index
+        self.mergeresults[commit2,commit1] = value
+
+    def get_transposed(self):
+        return self.mergeresults
+
+    def show_progress(self):
+        self.mergeresults.show_progress()
+
+
 def fill_full(results, commits1, commits2):
     if not commits1 or not commits2:
         return
@@ -301,36 +323,23 @@ def fill_block(results, commits1, commits2, value):
 def fill_assuming_monotonic(results, commits1, commits2):
     if not commits1 or not commits2:
         return
-    if len(commits2) < len(commits1):
-        i2 = len(commits2) // 2
-        i1 = find_first_failing_merge(commits2[i2], commits1)
+    if len(commits2) > len(commits1):
+        results, commits1, commits2 = results.get_transposed(), commits2, commits1
 
-        if i1 < len(commits1):
-            i2min = find_first_failing_merge(commits1[i1], commits2[:i2])
-            fill_block(results, commits1[i1:], commits2[i2min:], False)
-            results.show_progress()
-            fill_assuming_monotonic(results, commits1[i1:], commits2[:i2min])
+    i2 = len(commits2) // 2
+    i1 = find_first_failing_merge(commits2[i2], commits1)
 
-        if i1 - 1 >= 0:
-            i2max = find_first_failing_merge(commits1[i1 - 1], commits2[i2 + 1:]) + i2 + 1
-            fill_block(results, commits1[:i1], commits2[:i2max], True)
-            results.show_progress()
-            fill_assuming_monotonic(results, commits1[:i1], commits2[i2max:])
+    if i1 < len(commits1):
+        i2min = find_first_failing_merge(commits1[i1], commits2[:i2])
+        fill_block(results, commits1[i1:], commits2[i2min:], False)
+        results.show_progress()
+        fill_assuming_monotonic(results, commits1[i1:], commits2[:i2min])
 
-    else:
-        i1 = len(commits1) // 2
-        i2 = find_first_failing_merge(commits1[i1], commits2)
-
-        if i2 < len(commits2):
-            i1min = find_first_failing_merge(commits2[i2], commits1[:i1])
-            fill_block(results, commits1[i1min:], commits2[i2:], False)
-            results.show_progress()
-            fill_assuming_monotonic(results, commits1[:i1min], commits2[i2:])
-        if i2 - 1 >= 0:
-            i1max = find_first_failing_merge(commits2[i2 - 1], commits1[i1 + 1:]) + i1 + 1
-            fill_block(results, commits1[:i1max], commits2[:i2], True)
-            results.show_progress()
-            fill_assuming_monotonic(results, commits1[:i1max], commits2[i2:])
+    if i1 - 1 >= 0:
+        i2max = find_first_failing_merge(commits1[i1 - 1], commits2[i2 + 1:]) + i2 + 1
+        fill_block(results, commits1[:i1], commits2[:i2max], True)
+        results.show_progress()
+        fill_assuming_monotonic(results, commits1[:i1], commits2[i2max:])
 
 
 def diagram_merge(branch1, branch2, full=False, progress=None):
