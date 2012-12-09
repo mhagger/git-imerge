@@ -220,7 +220,7 @@ def asymmetric_merge(branch1, branch2):
 
 
 class MergeResults(object):
-    """A dictionary {(commit1, commit2) : mergeable}."""
+    """A map {(i1, i2) : mergeable}."""
 
     def __init__(self, commits1, commits2, progress=None):
         self.commits1 = list(commits1)
@@ -231,13 +231,18 @@ class MergeResults(object):
         self.progress = progress
         self.filename_index = 0
 
+    def is_mergeable(self, i1, i2):
+        """Check whether specified commits can be merged successfully."""
+
+        return merge_possible(self.commits1[i1], self.commits2[i2])
+
     def __getitem__(self, index):
-        (commit1, commit2) = index
-        return self.results[self.indexes1[commit1]][self.indexes2[commit2]]
+        (i1, i2) = index
+        return self.results[i1][i2]
 
     def __setitem__(self, index, value):
-        (commit1, commit2) = index
-        self.results[self.indexes1[commit1]][self.indexes2[commit2]] = value
+        (i1, i2) = index
+        self.results[i1][i2] = value
 
     def get_filename(self):
         try:
@@ -274,15 +279,15 @@ class MergeResults(object):
 def fill_full(results):
     if not results.commits1 or not results.commits2:
         return
-    for commit1 in results.commits1:
-        for commit2 in results.commits2:
-            results[commit1,commit2] = merge_possible(commit1, commit2)
+    for i1 in range(len(results.commits1)):
+        for i2 in range(len(results.commits2)):
+            results[i1, i2] = results.is_mergeable(i1, i2)
 
 
-def fill_block(results, commits1, commits2, value):
-    for commit1 in commits1:
-        for commit2 in commits2:
-            results[commit1,commit2] = value
+def fill_block(results, indexes1, indexes2, value):
+    for i1 in indexes1:
+        for i2 in indexes2:
+            results[i1,i2] = value
 
 
 def fill_assuming_monotonic(results):
@@ -297,11 +302,11 @@ def fill_assuming_monotonic(results):
     # and fall back to bisection otherwise.
     while True:
         # Find the width of the success rectangle at row (i2-1) and fill it in:
-        if merge_possible(results.commits1[-1], results.commits2[i2 - 1]):
+        if results.is_mergeable(len(results.commits1) - 1, i2 - 1):
             newi1 = len(results.commits1)
         else:
             newi1 = find_first_failing_merge(results.commits2[i2 - 1], results.commits1[i1:-1]) + i1
-        fill_block(results, results.commits1[i1:newi1], results.commits2[:i2], True)
+        fill_block(results, range(i1, newi1), range(0, i2), True)
         i1 = newi1
         results.show_progress()
 
@@ -309,11 +314,11 @@ def fill_assuming_monotonic(results):
             return
 
         # Find the height of the conflict rectangle at column i1 and fill it in:
-        if not merge_possible(results.commits1[i1], results.commits2[0]):
+        if not results.is_mergeable(i1, 0):
             newi2 = 0
         else:
             newi2 = find_first_failing_merge(results.commits1[i1], results.commits2[1:i2]) + 1
-        fill_block(results, results.commits1[i1:], results.commits2[newi2:i2], False)
+        fill_block(results, range(i1, len(results.commits1)), range(newi2, i2), False)
         i2 = newi2
         results.show_progress()
 
