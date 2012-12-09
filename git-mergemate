@@ -230,9 +230,7 @@ class MergeResults(object):
 
     def __init__(self, commits1, commits2, progress=None):
         self.commits1 = list(commits1)
-        self.indexes1 = dict((commit, i) for (i, commit) in enumerate(self.commits1))
         self.commits2 = list(commits2)
-        self.indexes2 = dict((commit, i) for (i, commit) in enumerate(self.commits2))
         self._data = [[MergeResults.UNKNOWN] * len(commits2) for commit1 in commits1]
         self.progress = progress
         self.filename_index = 0
