@@ -1,8 +1,15 @@
 #! /usr/bin/python2
 
-r"""Tools for crazy git merges.
+r"""Tools to help handle git nightmare merges.
 
 usage:
+    %(prog)s --diagram [--full] [--progress=DIR] BRANCH1...BRANCH2 >diagram.ppm
+
+        Determine which pairs of commits from the two branchs can be
+        merged together without conflict.  Output the result as a
+        PPM-formatted image, where successful merges are shown as
+        green pixels and unsuccessful merges as red pixels.
+
     %(prog)s BRANCH
 
         Merge the commits from BRANCH into HEAD, one commit at a time.
@@ -382,25 +389,23 @@ def main(args):
         help='Compute diagram of conflicts using bisection',
         )
     parser.add_argument(
-        '--progress', action='store', default=None, metavar='DIR',
-        help='Write images showing progress to specified directory',
-        )
-    parser.add_argument(
-        '--diagram-full', action='store_true',
+        '--full', action='store_true',
         help=(
             'Compute diagram of conflicts by computing all possible merges '
-            '(slower than --diagram)'
+            '(otherwise a much faster bisection-based algorithm is used)'
             ),
+        )
+    parser.add_argument(
+        '--progress', action='store', default=None, metavar='DIR',
+        help='Write images showing progress to specified directory',
         )
     parser.add_argument('range', help='BRANCH | BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
     options = parser.parse_args(args)
 
     if '...' in options.range:
         (branch1, branch2) = options.range.split('...')
-        if options.diagram_full:
-            diagram_merge(branch1, branch2, full=True, progress=options.progress)
-        elif options.diagram:
-            diagram_merge(branch1, branch2, full=False, progress=options.progress)
+        if options.diagram:
+            diagram_merge(branch1, branch2, full=options.full, progress=options.progress)
         else:
             symmetric_merge(branch1, branch2)
     elif '..' in options.range:
