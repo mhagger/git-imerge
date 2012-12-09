@@ -302,7 +302,10 @@ def fill_assuming_monotonic(results):
         if results.is_mergeable(len(results.commits1) - 1, i2 - 1):
             newi1 = len(results.commits1)
         else:
-            newi1 = find_first_failing_merge(results.commits2[i2 - 1], results.commits1[i1:-1]) + i1
+            newi1 = find_first_false(
+                lambda i: results.is_mergeable(i, i2 - 1),
+                i1, len(results.commits1) - 1,
+                )
         fill_block(results, range(i1, newi1), range(0, i2), True)
         i1 = newi1
         results.show_progress()
@@ -314,7 +317,10 @@ def fill_assuming_monotonic(results):
         if not results.is_mergeable(i1, 0):
             newi2 = 0
         else:
-            newi2 = find_first_failing_merge(results.commits1[i1], results.commits2[1:i2]) + 1
+            newi2 = find_first_false(
+                lambda i: results.is_mergeable(i1, i),
+                1, i2,
+                )
         fill_block(results, range(i1, len(results.commits1)), range(newi2, i2), False)
         i2 = newi2
         results.show_progress()
