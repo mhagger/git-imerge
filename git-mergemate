@@ -100,12 +100,10 @@ except ImportError:
         return output
 
 
-def rev_list(args):
+def rev_list(*args):
     return [
         l.strip()
-        for l in check_output(
-            ['git', 'rev-list', '--first-parent'] + args,
-            ).splitlines()
+        for l in check_output(['git', 'rev-list'] + list(args),).splitlines()
         ]
 
 
@@ -187,9 +185,9 @@ def examine_merges(commit1, branch2, commits2):
 
 
 def symmetric_merge(branch1, branch2):
-    commits1 = rev_list(['%s..%s' % (branch2, branch1)])
+    commits1 = rev_list('--first-parent', '%s..%s' % (branch2, branch1))
     commits1.reverse()
-    commits2 = rev_list(['%s..%s' % (branch1, branch2)])
+    commits2 = rev_list('--first-parent', '%s..%s' % (branch1, branch2))
     commits2.reverse()
 
     sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
@@ -200,7 +198,7 @@ def symmetric_merge(branch1, branch2):
 
 
 def asymmetric_merge(branch1, branch2):
-    commits2 = rev_list(['%s..%s' % (branch1, branch2)])
+    commits2 = rev_list('--first-parent', '%s..%s' % (branch1, branch2))
     commits2.reverse()
 
     sys.stderr.write('%s commits to examine\n' % (len(commits2),))
@@ -311,9 +309,9 @@ def fill_assuming_monotonic(results):
 
 
 def diagram_merge(branch1, branch2, full=False, progress=None):
-    commits1 = rev_list(['%s..%s' % (branch2, branch1)])
+    commits1 = rev_list('--first-parent', '%s..%s' % (branch2, branch1))
     commits1.reverse()
-    commits2 = rev_list(['%s..%s' % (branch1, branch2)])
+    commits2 = rev_list('--first-parent', '%s..%s' % (branch1, branch2))
     commits2.reverse()
 
     sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
@@ -340,7 +338,7 @@ def merge(commit):
 
 
 def incremental_merge(branch):
-    commits = rev_list(['HEAD..%s' % (branch,)])
+    commits = rev_list('--first-parent', 'HEAD..%s' % (branch,))
     commits.reverse()
 
     sys.stderr.write('%s commits to merge\n' % (len(commits),))
