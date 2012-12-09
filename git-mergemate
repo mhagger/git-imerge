@@ -260,11 +260,11 @@ class MergeResults(object):
             f.write('\n')
 
 
-def fill_full(results, commits1, commits2):
-    if not commits1 or not commits2:
+def fill_full(results):
+    if not results.commits1 or not results.commits2:
         return
-    for commit1 in commits1:
-        for commit2 in commits2:
+    for commit1 in results.commits1:
+        for commit2 in results.commits2:
             results[commit1,commit2] = merge_possible(commit1, commit2)
 
 
@@ -274,35 +274,35 @@ def fill_block(results, commits1, commits2, value):
             results[commit1,commit2] = value
 
 
-def fill_assuming_monotonic(results, commits1, commits2):
-    if not commits1 or not commits2:
+def fill_assuming_monotonic(results):
+    if not results.commits1 or not results.commits2:
         return
 
     i1 = 0
-    i2 = len(commits2)
+    i2 = len(results.commits2)
 
     # Given that these diagrams typically have few blocks, check the
     # end of a range first to see if the whole range can be filled in,
     # and fall back to bisection otherwise.
     while True:
         # Find the width of the success rectangle at row (i2-1) and fill it in:
-        if merge_possible(commits1[-1], commits2[i2 - 1]):
-            newi1 = len(commits1)
+        if merge_possible(results.commits1[-1], results.commits2[i2 - 1]):
+            newi1 = len(results.commits1)
         else:
-            newi1 = find_first_failing_merge(commits2[i2 - 1], commits1[i1:-1]) + i1
-        fill_block(results, commits1[i1:newi1], commits2[:i2], True)
+            newi1 = find_first_failing_merge(results.commits2[i2 - 1], results.commits1[i1:-1]) + i1
+        fill_block(results, results.commits1[i1:newi1], results.commits2[:i2], True)
         i1 = newi1
         results.show_progress()
 
-        if i1 == len(commits1):
+        if i1 == len(results.commits1):
             return
 
         # Find the height of the conflict rectangle at column i1 and fill it in:
-        if not merge_possible(commits1[i1], commits2[0]):
+        if not merge_possible(results.commits1[i1], results.commits2[0]):
             newi2 = 0
         else:
-            newi2 = find_first_failing_merge(commits1[i1], commits2[1:i2]) + 1
-        fill_block(results, commits1[i1:], commits2[newi2:i2], False)
+            newi2 = find_first_failing_merge(results.commits1[i1], results.commits2[1:i2]) + 1
+        fill_block(results, results.commits1[i1:], results.commits2[newi2:i2], False)
         i2 = newi2
         results.show_progress()
 
@@ -320,9 +320,9 @@ def diagram_merge(branch1, branch2, full=False, progress=None):
 
     results = MergeResults(commits1, commits2, progress=progress)
     if full:
-        fill_full(results, commits1, commits2)
+        fill_full(results)
     else:
-        fill_assuming_monotonic(results, commits1, commits2)
+        fill_assuming_monotonic(results)
     results.writeppm(sys.stdout)
 
 
