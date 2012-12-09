@@ -127,53 +127,20 @@ def merge_possible(commit1, commit2):
 
 
 def find_first_failing_merge(commit1, commits2):
-    if not commits2:
-        return 0
-
     # commits prior to this one succeed:
     lo = 0
 
     # this commit and its successors fail:
     hi = len(commits2)
 
-    # The most common case will be that either all commits succeed or
-    # all fail, which is somewhat pessimal for a bisect algorithm.  So
-    # optimize for that case a little bit:
-    #
-    # 1. First test the middle commit.  This establishes whether, if
-    #    all commits have the same result, whether that result is
-    #    succeed vs. fail.
-    #
-    # 2. If the middle commit succeeded, then test commit 0;
-    #    otherwise, test commit n-1.  This might prove that all
-    #    succeed or all fail, leading to an early exit.
-    #
-    # 3. Then proceed with a traditional bisect.
-
-    class Done(Exception):
-        def __init__(self, retval):
-            self.retval = retval
-
-    def bisect(lo, mid, hi):
-        success = merge_possible(commit1, commits2[mid])
-        if success:
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if merge_possible(commit1, commits2[mid]):
             lo = mid + 1
         else:
             hi = mid
-        if hi == lo:
-            raise Done(lo)
-        return (success, lo, hi)
 
-    try:
-        (success, lo, hi) = bisect(lo, (lo + hi) // 2, hi)
-        if success:
-            (success, lo, hi) = bisect(lo, hi - 1, hi)
-        else:
-            (success, lo, hi) = bisect(lo, 0, hi)
-        while True:
-            (success, lo, hi) = bisect(lo, (lo + hi) // 2, hi)
-    except Done, e:
-        return e.retval
+    return lo
 
 
 def examine_merges(commit1, branch2, commits2):
@@ -321,15 +288,21 @@ def fill_block(results, commits1, commits2, value):
 
 
 def fill_assuming_monotonic(results, commits1, commits2):
+    if not commits1 or not commits2:
+        return
+
     i1 = 0
     i2 = len(commits2)
 
-    if i2 == 0:
-        return
-
+    # Given that these diagrams typically have few blocks, check the
+    # end of a range first to see if the whole range can be filled in,
+    # and fall back to bisection otherwise.
     while True:
-        # Find the width of the success rectangle at (i2-1) and fill it in:
-        newi1 = find_first_failing_merge(commits2[i2 - 1], commits1[i1:]) + i1
+        # Find the width of the success rectangle at row (i2-1) and fill it in:
+        if merge_possible(commits1[-1], commits2[i2 - 1]):
+            newi1 = len(commits1)
+        else:
+            newi1 = find_first_failing_merge(commits2[i2 - 1], commits1[i1:-1]) + i1
         fill_block(results, commits1[i1:newi1], commits2[:i2], True)
         i1 = newi1
         results.show_progress()
@@ -337,8 +310,11 @@ def fill_assuming_monotonic(results, commits1, commits2):
         if i1 == len(commits1):
             return
 
-        # Find the height of the conflict rectangle at i1 and fill it in:
-        newi2 = find_first_failing_merge(commits1[i1], commits2[:i2])
+        # Find the height of the conflict rectangle at column i1 and fill it in:
+        if not merge_possible(commits1[i1], commits2[0]):
+            newi2 = 0
+        else:
+            newi2 = find_first_failing_merge(commits1[i1], commits2[1:i2]) + 1
         fill_block(results, commits1[i1:], commits2[newi2:i2], False)
         i2 = newi2
         results.show_progress()
