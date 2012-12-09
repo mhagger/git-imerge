@@ -12,11 +12,8 @@ usage:
 
     %(prog)s BRANCH
 
-        Merge the commits from BRANCH into HEAD, one commit at a time.
-        If there is a merge conflict, stop in "conflicted" state (as
-        usual with a git merge).  After resolving the conflict, commit
-        and then re-execute the %(prog)s command to continue.  In
-        other words, transform this:
+        Merge the commits from BRANCH into HEAD, one commit at a
+        time. In other words, transform this:
 
             o---o---o---o          HEAD
                  \
@@ -30,6 +27,11 @@ usage:
 
         This is like a rebase, except with the history of individual
         merges retained [1].
+
+        If there is a merge conflict, stop in "conflicted" state (as
+        usual with a git merge).  The user should resolve the
+        conflict, commit, and then re-execute the %(prog)s command to
+        continue.
 
     %(prog)s BRANCH1..BRANCH2
 
