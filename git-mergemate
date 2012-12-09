@@ -230,8 +230,10 @@ class MergeResults(object):
 
     def __init__(self, commits1, commits2, progress=None):
         self.commits1 = list(commits1)
+        self.n1 = len(self.commits1)
         self.commits2 = list(commits2)
-        self._data = [[MergeResults.UNKNOWN] * len(commits2) for commit1 in commits1]
+        self.n2 = len(self.commits2)
+        self._data = [[MergeResults.UNKNOWN] * self.n2 for i1 in range(self.n1)]
         self.progress = progress
         self.filename_index = 0
 
@@ -256,10 +258,10 @@ class MergeResults(object):
     def _setitem_impl(self, index, value):
         (i1, i2) = index
         if isinstance(i1, slice):
-            for i in range(*i1.indices(len(self.commits1))):
+            for i in range(*i1.indices(self.n1)):
                 self._setitem_impl((i, i2), value)
         elif isinstance(i2, slice):
-            for i in range(*i2.indices(len(self.commits2))):
+            for i in range(*i2.indices(self.n2)):
                 self._setitem_impl((i1, i), value)
         else:
             oldvalue = self._data[i1][i2]
@@ -297,8 +299,8 @@ class MergeResults(object):
         }
 
     def write(self, f):
-        for i2 in range(len(self.commits2)):
-            for i1 in range(len(self.commits1)):
+        for i2 in range(self.n2):
+            for i1 in range(self.n1):
                 f.write(self.OUTPUT_CHARS[self._data[i1][i2]])
             f.write('\n')
 
@@ -312,10 +314,10 @@ class MergeResults(object):
 
     def writeppm(self, f):
         f.write('P3\n')
-        f.write('%d %d 255\n' % (len(self.commits1), len(self.commits2),))
-        for i2 in range(len(self.commits2)):
+        f.write('%d %d 255\n' % (self.n1, self.n2,))
+        for i2 in range(self.n2):
             f.write('%d %d %d' % self.OUTPUT_COLORS[self._data[0][i2]])
-            for i1 in range(1, len(self.commits1)):
+            for i1 in range(1, self.n1):
                 f.write(' %d %d %d' % self.OUTPUT_COLORS[self._data[i1][i2]])
             f.write('\n')
 
@@ -323,8 +325,8 @@ class MergeResults(object):
 def fill_full(results):
     if not results.commits1 or not results.commits2:
         return
-    for i1 in range(len(results.commits1)):
-        for i2 in range(len(results.commits2)):
+    for i1 in range(results.n1):
+        for i2 in range(results.n2):
             results[i1, i2] = results.is_mergeable(i1, i2)
 
 
@@ -333,25 +335,25 @@ def fill_assuming_monotonic(results):
         return
 
     i1 = 0
-    i2 = len(results.commits2)
+    i2 = results.n2
 
     # Given that these diagrams typically have few blocks, check the
     # end of a range first to see if the whole range can be filled in,
     # and fall back to bisection otherwise.
     while True:
         # Find the width of the success rectangle at row (i2-1) and fill it in:
-        if results.is_mergeable(len(results.commits1) - 1, i2 - 1):
-            newi1 = len(results.commits1)
+        if results.is_mergeable(results.n1 - 1, i2 - 1):
+            newi1 = results.n1
         else:
             newi1 = find_first_false(
                 lambda i: results.is_mergeable(i, i2 - 1),
-                i1, len(results.commits1) - 1,
+                i1, results.n1 - 1,
                 )
         results[i1:newi1,:i2] = True
         i1 = newi1
         results.show_progress()
 
-        if i1 == len(results.commits1):
+        if i1 == results.n1:
             return
 
         # Find the height of the conflict rectangle at column i1 and fill it in:
