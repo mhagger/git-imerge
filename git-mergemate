@@ -321,25 +321,30 @@ def fill_block(results, commits1, commits2, value):
 
 
 def fill_assuming_monotonic(results, commits1, commits2):
-    if not commits1 or not commits2:
+    i1 = 0
+    i2 = len(commits2)
+
+    if i2 == 0:
         return
-    if len(commits2) > len(commits1):
-        results, commits1, commits2 = results.get_transposed(), commits2, commits1
 
-    i2 = len(commits2) // 2
-    i1 = find_first_failing_merge(commits2[i2], commits1)
-
-    if i1 < len(commits1):
-        i2min = find_first_failing_merge(commits1[i1], commits2[:i2])
-        fill_block(results, commits1[i1:], commits2[i2min:], False)
+    while True:
+        # Find the width of the success rectangle at (i2-1) and fill it in:
+        newi1 = find_first_failing_merge(commits2[i2 - 1], commits1[i1:]) + i1
+        fill_block(results, commits1[i1:newi1], commits2[:i2], True)
+        i1 = newi1
         results.show_progress()
-        fill_assuming_monotonic(results, commits1[i1:], commits2[:i2min])
 
-    if i1 - 1 >= 0:
-        i2max = find_first_failing_merge(commits1[i1 - 1], commits2[i2 + 1:]) + i2 + 1
-        fill_block(results, commits1[:i1], commits2[:i2max], True)
+        if i1 == len(commits1):
+            return
+
+        # Find the height of the conflict rectangle at i1 and fill it in:
+        newi2 = find_first_failing_merge(commits1[i1], commits2[:i2])
+        fill_block(results, commits1[i1:], commits2[newi2:i2], False)
+        i2 = newi2
         results.show_progress()
-        fill_assuming_monotonic(results, commits1[:i1], commits2[i2max:])
+
+        if i2 == 0:
+            return
 
 
 def diagram_merge(branch1, branch2, full=False, progress=None):
