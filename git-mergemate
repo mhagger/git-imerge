@@ -119,7 +119,6 @@ def call_silently(cmd):
 
 
 def merge_possible(commit1, commit2):
-    sys.stderr.write('Testing %s + %s -> ' % (commit1, commit2))
     call_silently(['git', 'checkout', '-f', commit1])
     try:
         call_silently(['git', '-c', 'rerere.enabled=false', 'merge', '--no-commit', commit2])
@@ -155,7 +154,9 @@ def find_first_false(f, lo, hi):
 
 def find_first_failing_merge(commit1, commits2):
     def f(i):
-        return merge_possible(commit1, commits2[i])
+        commit2 = commits2[i]
+        sys.stderr.write('Testing %s + %s -> ' % (commit1, commit2))
+        return merge_possible(commit1, commit2)
 
     return find_first_false(f, 0, len(commits2))
 
@@ -219,34 +220,63 @@ def asymmetric_merge(branch1, branch2):
 class MergeResults(object):
     """A map {(i1, i2) : mergeable}."""
 
+    UNKNOWN = 0x00
+    RESULT = 0x01
+    CONFLICT = 0x00
+    SUCCESSFUL = 0x01
+    SOURCE = 0x06
+    TESTED = 0x02
+    INFERRED = 0x04
+
     def __init__(self, commits1, commits2, progress=None):
         self.commits1 = list(commits1)
         self.indexes1 = dict((commit, i) for (i, commit) in enumerate(self.commits1))
         self.commits2 = list(commits2)
         self.indexes2 = dict((commit, i) for (i, commit) in enumerate(self.commits2))
-        self._data = [[None] * len(commits2) for commit1 in commits1]
+        self._data = [[MergeResults.UNKNOWN] * len(commits2) for commit1 in commits1]
         self.progress = progress
         self.filename_index = 0
 
     def is_mergeable(self, i1, i2):
         """Check whether specified commits can be merged successfully."""
 
-        return merge_possible(self.commits1[i1], self.commits2[i2])
+        commit1 = self.commits1[i1]
+        commit2 = self.commits2[i2]
+        sys.stderr.write('Testing [%d] %s + [%d] %s -> ' % (i1, commit1, i2, commit2))
+        retval = merge_possible(commit1, commit2)
+        if retval:
+            self._data[i1][i2] = MergeResults.TESTED | MergeResults.SUCCESSFUL
+        else:
+            self._data[i1][i2] = MergeResults.TESTED | MergeResults.CONFLICT
+        self.show_progress()
+        return retval
 
     def __getitem__(self, index):
         (i1, i2) = index
         return self._data[i1][i2]
 
-    def __setitem__(self, index, value):
+    def _setitem_impl(self, index, value):
         (i1, i2) = index
         if isinstance(i1, slice):
             for i in range(*i1.indices(len(self.commits1))):
-                self[i, i2] = value
+                self._setitem_impl((i, i2), value)
         elif isinstance(i2, slice):
             for i in range(*i2.indices(len(self.commits2))):
-                self[i1, i] = value
+                self._setitem_impl((i1, i), value)
         else:
-            self._data[i1][i2] = value
+            oldvalue = self._data[i1][i2]
+            if oldvalue == MergeResults.UNKNOWN:
+                self._data[i1][i2] = value
+            elif oldvalue & MergeResults.RESULT != value & MergeResults.RESULT:
+                raise ValueError(
+                    'Overwriting result[%d,%d] == 0x%02x with different value 0x%02x\n'
+                    '    for merge %s + %s'
+                    % (i1, i2, oldvalue, value, self.commits1[i1], self.commits2[i2])
+                    )
+
+    def __setitem__(self, index, value):
+        value = int(bool(value)) | MergeResults.INFERRED
+        self._setitem_impl(index, value)
 
     def get_filename(self):
         try:
@@ -260,7 +290,13 @@ class MergeResults(object):
         if self.progress:
             self.writeppm(open(self.get_filename(), 'w'))
 
-    OUTPUT_CHARS = {True : '.', False : 'X', None : '?'}
+    OUTPUT_CHARS = {
+        UNKNOWN : '?',
+        SUCCESSFUL | TESTED : '+',
+        SUCCESSFUL | INFERRED : '.',
+        CONFLICT | TESTED : 'X',
+        CONFLICT | INFERRED : 'x',
+        }
 
     def write(self, f):
         for i2 in range(len(self.commits2)):
@@ -268,7 +304,13 @@ class MergeResults(object):
                 f.write(self.OUTPUT_CHARS[self._data[i1][i2]])
             f.write('\n')
 
-    OUTPUT_COLORS = {True : (0, 255, 0), False : (255, 0, 0), None : (255, 255, 0)}
+    OUTPUT_COLORS = {
+        UNKNOWN : (63, 63, 63),
+        SUCCESSFUL | TESTED : (0, 255, 0),
+        SUCCESSFUL | INFERRED : (0, 127, 0),
+        CONFLICT | TESTED : (255, 0, 0),
+        CONFLICT | INFERRED : (127, 0, 0),
+        }
 
     def writeppm(self, f):
         f.write('P3\n')
