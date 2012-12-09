@@ -133,21 +133,34 @@ def merge_possible(commit1, commit2):
         call_silently(['git', 'merge', '--abort'])
 
 
-def find_first_failing_merge(commit1, commits2):
-    # commits prior to this one succeed:
+def find_first_false(f, n):
+    """Return the smallest i in 0 <= i < n for which f(i) returns False using bisection.
+
+    If there is no such i, return n.
+
+    """
+
+    # values prior to this one return True:
     lo = 0
 
-    # this commit and its successors fail:
-    hi = len(commits2)
+    # this value and its successors return False:
+    hi = n
 
     while lo < hi:
         mid = (lo + hi) // 2
-        if merge_possible(commit1, commits2[mid]):
+        if f(mid):
             lo = mid + 1
         else:
             hi = mid
 
     return lo
+
+
+def find_first_failing_merge(commit1, commits2):
+    def f(i):
+        return merge_possible(commit1, commits2[i])
+
+    return find_first_false(f, len(commits2))
 
 
 def examine_merges(commit1, branch2, commits2):
