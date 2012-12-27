@@ -71,7 +71,6 @@ Usage::
       --full          Compute diagram of conflicts by computing all possible
                       merges (otherwise a much faster bisection-based algorithm is
                       used)
-      --progress DIR  Write images showing progress to specified directory
 
 .. _`my blog`: http://softwareswirl.blogspot.de/
 

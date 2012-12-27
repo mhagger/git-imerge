@@ -3,7 +3,7 @@
 r"""Tools to help handle git nightmare merges.
 
 usage:
-    %(prog)s --diagram [--full] [--progress=DIR] BRANCH1...BRANCH2 >diagram.ppm
+    %(prog)s --diagram [--full] BRANCH1...BRANCH2 >diagram.ppm
 
         Determine which pairs of commits from the two branchs can be
         merged together without conflict.  Output the result as a
@@ -228,13 +228,12 @@ class MergeResults(object):
     TESTED = 0x02
     INFERRED = 0x04
 
-    def __init__(self, commits1, commits2, progress=None):
+    def __init__(self, commits1, commits2):
         self.commits1 = list(commits1)
         self.n1 = len(self.commits1)
         self.commits2 = list(commits2)
         self.n2 = len(self.commits2)
         self._data = [[MergeResults.UNKNOWN] * self.n2 for i1 in range(self.n1)]
-        self.progress = progress
         self.filename_index = 0
 
     def is_mergeable(self, i1, i2):
@@ -248,7 +247,6 @@ class MergeResults(object):
             self._data[i1][i2] = MergeResults.TESTED | MergeResults.SUCCESSFUL
         else:
             self._data[i1][i2] = MergeResults.TESTED | MergeResults.CONFLICT
-        self.show_progress()
         return retval
 
     def __getitem__(self, index):
@@ -277,18 +275,6 @@ class MergeResults(object):
     def __setitem__(self, index, value):
         value = int(bool(value)) | MergeResults.INFERRED
         self._setitem_impl(index, value)
-
-    def get_filename(self):
-        try:
-            return os.path.join(
-                self.progress, 'crazymerge-%04d.ppm' % (self.filename_index,)
-                )
-        finally:
-            self.filename_index += 1
-
-    def show_progress(self):
-        if self.progress:
-            self.writeppm(open(self.get_filename(), 'w'))
 
     OUTPUT_CHARS = {
         UNKNOWN : '?',
@@ -351,7 +337,6 @@ def fill_assuming_monotonic(results):
                 )
         results[i1:newi1,:i2] = True
         i1 = newi1
-        results.show_progress()
 
         if i1 == results.n1:
             return
@@ -366,13 +351,12 @@ def fill_assuming_monotonic(results):
                 )
         results[i1:, newi2:i2] = False
         i2 = newi2
-        results.show_progress()
 
         if i2 == 0:
             return
 
 
-def diagram_merge(branch1, branch2, full=False, progress=None):
+def diagram_merge(branch1, branch2, full=False):
     commits1 = rev_list('--first-parent', '%s..%s' % (branch2, branch1))
     commits1.reverse()
     commits2 = rev_list('--first-parent', '%s..%s' % (branch1, branch2))
@@ -380,7 +364,7 @@ def diagram_merge(branch1, branch2, full=False, progress=None):
 
     sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
 
-    results = MergeResults(commits1, commits2, progress=progress)
+    results = MergeResults(commits1, commits2)
     if full:
         fill_full(results)
     else:
@@ -437,17 +421,13 @@ def main(args):
             '(otherwise a much faster bisection-based algorithm is used)'
             ),
         )
-    parser.add_argument(
-        '--progress', action='store', default=None, metavar='DIR',
-        help='Write images showing progress to specified directory',
-        )
     parser.add_argument('range', help='BRANCH | BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
     options = parser.parse_args(args)
 
     if '...' in options.range:
         (branch1, branch2) = options.range.split('...')
         if options.diagram:
-            diagram_merge(branch1, branch2, full=options.full, progress=options.progress)
+            diagram_merge(branch1, branch2, full=options.full)
         else:
             symmetric_merge(branch1, branch2)
     elif '..' in options.range:
