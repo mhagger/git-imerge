@@ -133,6 +133,48 @@ def call_silently(cmd):
         raise CalledProcessError(retcode, cmd, err)
 
 
+class UncleanWorkTreeError(Exception):
+    pass
+
+
+def require_clean_work_tree(action):
+    """Verify that the current tree is clean.
+
+    The code is a Python translation of the git-sh-setup(1) function
+    of the same name."""
+
+    process = subprocess.Popen(
+        ['git', 'rev-parse', '--verify', 'HEAD'],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+    _unused, err = process.communicate()
+    retcode = process.poll()
+    if retcode:
+        raise UncleanWorkTreeError(err.rstrip())
+
+    check_call(['git', 'update-index', '-q', '--ignore-submodules', '--refresh'])
+
+    error = []
+    try:
+        check_call(['git', 'diff-files', '--quiet', '--ignore-submodules'])
+    except CalledProcessError:
+        error.append('Cannot %s: You have unstaged changes.' % (action,))
+
+    try:
+        check_call([
+            'git', 'diff-index', '--cached', '--quiet',
+            '--ignore-submodules', 'HEAD', '--',
+            ])
+    except CalledProcessError:
+        if not error:
+            error.append('Cannot %s: Your index contains uncommitted changes.' % (action,))
+        else:
+            error.append('Additionally, your index contains uncommitted changes.')
+
+    if error:
+        raise UncleanWorkTreeError('\n'.join(error))
+
+
 def rev_list(*args):
     return [
         l.strip()
@@ -445,6 +487,11 @@ def main(args):
         )
     parser.add_argument('range', help='BRANCH | BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
     options = parser.parse_args(args)
+
+    try:
+        require_clean_work_tree('proceed')
+    except UncleanWorkTreeError, e:
+        sys.exit(e.message)
 
     if '...' in options.range:
         (branch1, branch2) = options.range.split('...')
