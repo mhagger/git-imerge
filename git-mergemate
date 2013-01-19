@@ -119,7 +119,11 @@ except ImportError:
 
 
 def call_silently(cmd):
-    NULL = open('/dev/null', 'w')
+    try:
+        NULL = open('/dev/null', 'w')
+    except IOError:
+        NULL = subprocess.PIPE
+
     p = subprocess.Popen(
         cmd, stdout=NULL, stderr=subprocess.PIPE,
         )
