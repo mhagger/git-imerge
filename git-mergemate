@@ -118,13 +118,6 @@ except ImportError:
         return output
 
 
-def rev_list(*args):
-    return [
-        l.strip()
-        for l in check_output(['git', 'rev-list'] + list(args),).splitlines()
-        ]
-
-
 def call_silently(cmd):
     NULL = open('/dev/null', 'w')
     p = subprocess.Popen(
@@ -134,6 +127,13 @@ def call_silently(cmd):
     retcode = p.wait()
     if retcode:
         raise CalledProcessError(retcode, cmd, err)
+
+
+def rev_list(*args):
+    return [
+        l.strip()
+        for l in check_output(['git', 'rev-list'] + list(args),).splitlines()
+        ]
 
 
 def merge_possible(commit1, commit2):
