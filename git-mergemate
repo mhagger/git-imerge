@@ -209,6 +209,45 @@ def get_commit_sha1(arg):
     return sha1
 
 
+class TemporaryHead(object):
+    """A context manager that records the current HEAD state then restores it.
+
+    The message is used for the reflog."""
+
+    def __enter__(self, message='mergemate: restoring'):
+        self.message = message
+        try:
+            self.head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
+            sys.stderr.write('head_name = %r\n' % (self.head_name,))
+        except CalledProcessError:
+            self.head_name = None
+        self.orig_head = get_commit_sha1('HEAD')
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.head_name:
+            try:
+                check_call([
+                    'git', 'symbolic-ref',
+                    '-m', self.message, 'HEAD',
+                    self.head_name,
+                    ])
+            except Exception, e:
+                sys.stderr.write(
+                    'Could not restore HEAD to %r!:    %s\n'
+                    % (self.head_name, e.message,)
+                    )
+            else:
+                try:
+                    check_call(['git', 'reset', '--hard', self.orig_head])
+                except Exception, e:
+                    sys.stderr.write(
+                        'Could not restore HEAD to %r!:    %s\n'
+                        % (self.orig_head, e.message,)
+                        )
+        return False
+
+
 def reparent(commit, parent_sha1s):
     """Create a new commit object like commit, but with the specified parents.
 
@@ -590,18 +629,21 @@ def main(args):
             parser.error(
                 'diagram subcommand requires an argument BRANCH1...BRANCH2'
                 )
-        (branch1, branch2) = options.range.split('...')
-        diagram_merge(branch1, branch2, full=options.full)
+        with TemporaryHead():
+            (branch1, branch2) = options.range.split('...')
+            diagram_merge(branch1, branch2, full=options.full)
     elif options.subcommand == 'merge':
         branch = options.range
         incremental_merge(branch)
     elif options.subcommand == 'find-conflict':
         if '...' in options.range:
             (branch1, branch2) = options.range.split('...')
-            symmetric_merge(branch1, branch2)
+            with TemporaryHead():
+                symmetric_merge(branch1, branch2)
         elif '..' in options.range:
             (branch1, branch2) = options.range.split('..')
-            asymmetric_merge(branch1, branch2)
+            with TemporaryHead():
+                asymmetric_merge(branch1, branch2)
         else:
             parser.error(
                 'RANGE must be of the form '
