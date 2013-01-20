@@ -14,19 +14,18 @@ git-mergemate is under the GNU General Public License (GPL), version 2
 or later.
 
 Usage::
-
     git-mergemate --help
 
         Output this message.
 
-    git-mergemate --diagram [--full] BRANCH1...BRANCH2 >diagram.ppm
+    git-mergemate diagram [--full] BRANCH1...BRANCH2 >diagram.ppm
 
         Determine which pairs of commits from the two branchs can be
         merged together without conflict.  Output the result as a
         PPM-formatted image, where successful merges are shown as
-        green pixels, unsuccessful merges as red pixels.
+        green pixels and unsuccessful merges as red pixels.
 
-    git-mergemate BRANCH
+    git-mergemate merge BRANCH
 
         Merge the commits from BRANCH into HEAD, one commit at a
         time. In other words, transform this:
@@ -49,31 +48,26 @@ Usage::
         conflict, commit, and then re-execute the git-mergemate command to
         continue.
 
-    git-mergemate BRANCH1..BRANCH2
+    git-mergemate find-conflict BRANCH1..BRANCH2
 
-        Use bisection to determine the latest commit on BRANCH2 that
-        can be merged successfully into BRANCH1.  Don't actually
+        Use bisection to determine the earliest commit on BRANCH2 that
+        causes a conflict when merged to BRANCH1.  Don't actually
         retain any merges.
 
-    git-mergemate BRANCH1...BRANCH2
+    git-mergemate find-conflict BRANCH1...BRANCH2
 
-        Use bisection to find one of the latest commit pairs (one from
+        Use bisection to find a pair of earliest commits (one from
         each branch) that do not merge cleanly.  Don't actually retain
         any merges.
 
+    git-mergemate reparent [PARENT...]
+
+        Change the parents of the HEAD commit to the specified list.
+        Write the name of the new commit object to stdout without
+        actually pointing HEAD at it.
+
     In all cases, only the --first-parent commits are considered for
     merging, and git rerere is disabled.
-
-
-    positional arguments:
-      range           BRANCH | BRANCH1..BRANCH2 | BRANCH1...BRANCH2
-
-    optional arguments:
-      -h, --help      show this help message and exit
-      --diagram       Compute diagram of conflicts using bisection
-      --full          Compute diagram of conflicts by computing all possible
-                      merges (otherwise a much faster bisection-based algorithm is
-                      used)
 
 .. _`my blog`: http://softwareswirl.blogspot.de/
 

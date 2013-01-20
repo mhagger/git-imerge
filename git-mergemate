@@ -63,6 +63,12 @@ usage:
         each branch) that do not merge cleanly.  Don't actually retain
         any merges.
 
+    %(prog)s reparent [PARENT...]
+
+        Change the parents of the HEAD commit to the specified list.
+        Write the name of the new commit object to stdout without
+        actually pointing HEAD at it.
+
 In all cases, only the --first-parent commits are considered for
 merging, and git rerere is disabled.
 
