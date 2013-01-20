@@ -14,6 +14,7 @@ git-mergemate is under the GNU General Public License (GPL), version 2
 or later.
 
 Usage::
+
     git-mergemate --help
 
         Output this message.
