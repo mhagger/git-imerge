@@ -74,6 +74,7 @@ import sys
 import os
 import subprocess
 import argparse
+from cStringIO import StringIO
 
 # CalledProcessError, check_call, and check_output were not in the
 # original Python 2.4 subprocess library, so implement it here if
@@ -175,11 +176,77 @@ def require_clean_work_tree(action):
         raise UncleanWorkTreeError('\n'.join(error))
 
 
+def rev_parse(arg):
+    return check_output(['git', 'rev-parse', '--verify', '--quiet', arg]).strip()
+
+
 def rev_list(*args):
     return [
         l.strip()
         for l in check_output(['git', 'rev-list'] + list(args),).splitlines()
         ]
+
+
+def get_type(arg):
+    """Return the type of a git object ('commit', 'tree', 'blob', or 'tag')."""
+
+    return check_output(['git', 'cat-file', '-t', arg]).strip()
+
+
+def get_commit_sha1(arg):
+    """Convert arg into a SHA1 and verify that it refers to a commit.
+
+    If not, raise ValueError."""
+
+    try:
+        sha1 = rev_parse(arg)
+        if get_type(arg) != 'commit':
+            raise ValueError(
+                '%r does not refer to a valid git commit' % (parent,)
+                )
+    except CalledProcessError:
+        raise ValueError('%r is not a valid object reference' % (arg,))
+    return sha1
+
+
+def reparent(commit, parent_sha1s):
+    """Create a new commit object like commit, but with the specified parents.
+
+    commit is the SHA1 of an existing commit and parent_sha1s is a
+    list of SHA1s.  Create a new commit exactly like that one, except
+    that it has the specified parent commits.  Return the SHA1 of the
+    resulting commit object, which is already stored in the object
+    database but not yet referenced by anything."""
+
+    old_commit = check_output(['git', 'cat-file', 'commit', commit])
+    separator = old_commit.index('\n\n')
+    headers = old_commit[:separator + 1].splitlines(True)
+    rest = old_commit[separator + 1:]
+
+    new_commit = StringIO()
+    for i in range(len(headers)):
+        line = headers[i]
+        if line.startswith('tree '):
+            new_commit.write(line)
+            for parent_sha1 in parent_sha1s:
+                new_commit.write('parent %s\n' % (parent_sha1,))
+        elif line.startswith('parent '):
+            # Discard old parents:
+            pass
+        else:
+            new_commit.write(line)
+
+    new_commit.write(rest)
+
+    process = subprocess.Popen(
+        ['git', 'hash-object', '-t', 'commit', '-w', '--stdin'],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        )
+    out, err = process.communicate(new_commit.getvalue())
+    retcode = process.poll()
+    if retcode:
+        raise RuntimeError('Could not reparent commit %s' % (commit,))
+    return out.strip()
 
 
 def merge_possible(commit1, commit2):
@@ -503,6 +570,14 @@ def main(args):
         'range', help='BRANCH1..BRANCH2 | BRANCH1...BRANCH2'
         )
 
+    parser_reparent = subparsers.add_parser(
+        'reparent',
+        help='change the parents of the HEAD commit',
+        )
+    parser_reparent.add_argument(
+        'parents', nargs='*', help='[PARENT...]',
+        )
+
     options = parser.parse_args(args)
 
     try:
@@ -532,6 +607,18 @@ def main(args):
                 'RANGE must be of the form '
                 '"BRANCH1..BRANCH2" or "BRANCH1...BRANCH2"'
                 )
+    elif options.subcommand == 'reparent':
+        try:
+            commit_sha1 = get_commit_sha1('HEAD')
+        except ValueError:
+            sys.exit('HEAD is not a valid commit')
+
+        try:
+            parent_sha1s = map(get_commit_sha1, options.parents)
+        except ValueError, e:
+            sys.exit(e.message)
+
+        sys.stdout.write('%s\n' % (reparent(commit_sha1, parent_sha1s),))
     else:
         parser.error('Unrecognized subcommand')
 
