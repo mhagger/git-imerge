@@ -21,14 +21,14 @@
 r"""Tools to help handle git nightmare merges.
 
 usage:
-    %(prog)s --diagram [--full] BRANCH1...BRANCH2 >diagram.ppm
+    %(prog)s diagram [--full] BRANCH1...BRANCH2 >diagram.ppm
 
         Determine which pairs of commits from the two branchs can be
         merged together without conflict.  Output the result as a
         PPM-formatted image, where successful merges are shown as
         green pixels and unsuccessful merges as red pixels.
 
-    %(prog)s BRANCH
+    %(prog)s merge BRANCH
 
         Merge the commits from BRANCH into HEAD, one commit at a
         time. In other words, transform this:
@@ -51,13 +51,13 @@ usage:
         conflict, commit, and then re-execute the %(prog)s command to
         continue.
 
-    %(prog)s BRANCH1..BRANCH2
+    %(prog)s merge BRANCH1..BRANCH2
 
         Use bisection to determine the latest commit on BRANCH2 that
         can be merged successfully into BRANCH1.  Don't actually
         retain any merges.
 
-    %(prog)s BRANCH1...BRANCH2
+    %(prog)s merge BRANCH1...BRANCH2
 
         Use bisection to find one of the latest commit pairs (one from
         each branch) that do not merge cleanly.  Don't actually retain
@@ -474,18 +474,27 @@ def main(args):
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         )
-    parser.add_argument(
-        '--diagram', action='store_true',
-        help='Compute diagram of conflicts using bisection',
+    subparsers = parser.add_subparsers(dest='subcommand', help='sub-command')
+
+    parser_diagram = subparsers.add_parser(
+        'diagram',
+        help='compute diagram of conflicts using bisection',
         )
-    parser.add_argument(
+    parser_diagram.add_argument(
         '--full', action='store_true',
         help=(
             'Compute diagram of conflicts by computing all possible merges '
             '(otherwise a much faster bisection-based algorithm is used)'
             ),
         )
-    parser.add_argument('range', help='BRANCH | BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
+    parser_diagram.add_argument('range', help='BRANCH1...BRANCH2')
+
+    parser_merge = subparsers.add_parser(
+        'merge',
+        help='merge two branches incrementally',
+        )
+    parser_merge.add_argument('range', help='BRANCH | BRANCH1..BRANCH2 | BRANCH1...BRANCH2')
+
     options = parser.parse_args(args)
 
     try:
@@ -493,18 +502,23 @@ def main(args):
     except UncleanWorkTreeError, e:
         sys.exit(e.message)
 
-    if '...' in options.range:
+    if options.subcommand == 'diagram':
+        if '...' not in options.range:
+            parser.error('diagram subcommand requires an argument BRANCH1...BRANCH2')
         (branch1, branch2) = options.range.split('...')
-        if options.diagram:
-            diagram_merge(branch1, branch2, full=options.full)
-        else:
+        diagram_merge(branch1, branch2, full=options.full)
+    elif options.subcommand == 'merge':
+        if '...' in options.range:
+            (branch1, branch2) = options.range.split('...')
             symmetric_merge(branch1, branch2)
-    elif '..' in options.range:
-        (branch1, branch2) = options.range.split('..')
-        asymmetric_merge(branch1, branch2)
+        elif '..' in options.range:
+            (branch1, branch2) = options.range.split('..')
+            asymmetric_merge(branch1, branch2)
+        else:
+            branch = options.range
+            incremental_merge(branch)
     else:
-        branch = options.range
-        incremental_merge(branch)
+        parser.error('Unrecognized subcommand')
 
 
 main(sys.argv[1:])
