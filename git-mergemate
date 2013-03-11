@@ -592,6 +592,20 @@ class MergeState(object):
         return os.path.join(GIT_DIR, 'imerge', name, 'state')
 
     @classmethod
+    def iter_existing_names(klass):
+        """Iterate over the names of existing MergeStates in this repo."""
+
+        GIT_DIR = check_output(['git', 'rev-parse', '--git-dir']).rstrip()
+        imerge_dir = os.path.join(GIT_DIR, 'imerge')
+        if not os.path.isdir(imerge_dir):
+            return
+        names = os.listdir(imerge_dir)
+        for name in names:
+            state_filename = os.path.join(imerge_dir, name, 'state')
+            if os.path.isfile(state_filename):
+                yield name
+
+    @classmethod
     def start(klass, name, goal, tip1, tip2):
         """Create and return a new MergeState object."""
 
@@ -759,6 +773,11 @@ def main(args):
         help='name to use for this incremental merge',
         )
 
+    parser_list = subparsers.add_parser(
+        'list',
+        help='list names of in-progress merges',
+        )
+
     parser_diagram = subparsers.add_parser(
         'diagram',
         help='compute diagram of conflicts using bisection',
@@ -801,7 +820,10 @@ def main(args):
     except UncleanWorkTreeError, e:
         sys.exit(e.message)
 
-    if options.subcommand == 'start':
+    if options.subcommand == 'list':
+        for name in MergeState.iter_existing_names():
+            sys.stdout.write('%s\n' % (name,))
+    elif options.subcommand == 'start':
         if not options.first_parent:
             parser.error(
                 'The --first-parent option is currently required for the "start" command'
