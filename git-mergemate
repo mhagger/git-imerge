@@ -78,6 +78,7 @@ merging, and git rerere is disabled.
 
 import sys
 import os
+import shutil
 import subprocess
 import argparse
 from cStringIO import StringIO
@@ -586,7 +587,7 @@ class MergeState(object):
     """The state of an in-progress merge."""
 
     @staticmethod
-    def get_filename(name):
+    def get_state_filename(name):
         GIT_DIR = check_output(['git', 'rev-parse', '--git-dir']).rstrip()
         return os.path.join(GIT_DIR, 'imerge', name, 'state')
 
@@ -594,7 +595,7 @@ class MergeState(object):
     def start(klass, name, goal, tip1, tip2):
         """Create and return a new MergeState object."""
 
-        filename = klass.get_filename(name)
+        filename = klass.get_state_filename(name)
         if os.path.exists(filename):
             raise RuntimeError('Name %r is already in use!' % (name,))
         if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
@@ -619,9 +620,9 @@ class MergeState(object):
     def load(klass, name):
         """Load an existing MergeState from disk."""
 
-        f = open(self.get_filename(name), 'rb')
+        f = open(klass.get_state_filename(name), 'rb')
         state = json.load(f)
-        version = map(int, state[version].split('.'))
+        version = map(int, state['version'].split('.'))
         if version[0] != STATE_VERSION[0] or version > STATE_VERSION:
             raise RuntimeError('Version of state is not compatible with this script version.')
         return klass(state['name'], state['goal'], state['commits1'], state['commits2'])
@@ -633,7 +634,7 @@ class MergeState(object):
         self.commits2 = commits2
 
     def save(self):
-        filename = self.get_filename(self.name)
+        filename = self.get_state_filename(self.name)
         dirname = os.path.dirname(filename)
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
@@ -649,6 +650,48 @@ class MergeState(object):
         f.close()
         os.rename('%s.lock' % (filename,), filename)
 
+    @classmethod
+    def iter_refs(klass, name):
+        for line in check_output([
+                'git', 'for-each-ref', 'refs/imerge/%s' % (name,)
+                ]).splitlines():
+            (sha1, type, refname) = line.split()
+            yield (sha1, type, refname)
+
+    @classmethod
+    def remove(klass, name):
+        filename = klass.get_state_filename(name)
+
+        # Remove state directory:
+        dirname = os.path.dirname(filename)
+        if os.path.isdir(dirname):
+            shutil.rmtree(dirname)
+        else:
+            sys.stderr.write('Warning: no directory %r\n' % (dirname,))
+
+        # Remove 'imerge' directory if it is now empty:
+        imerge_dirname = os.path.dirname(dirname)
+        if not os.listdir(imerge_dirname):
+            try:
+                os.rmdir(imerge_dirname)
+            except Exception, e:
+                sys.stderr.write(
+                    'Warning: Error removing directory %r: %s\n' % (imerge_dirname, e)
+                    )
+
+        # Remove any references associated with this merge:
+        for (sha1, type, refname) in klass.iter_refs(name):
+            try:
+                check_call([
+                        'git', 'update-ref',
+                        '-m', 'imerge: remove merge %r' % (name,),
+                        '-d', refname,
+                        ])
+            except CalledProcessError, e:
+                sys.stderr.write(
+                    'Warning: error removing reference %r: %s' % (refname, e)
+                    )
+
 
 def main(args):
     parser = argparse.ArgumentParser(
@@ -662,7 +705,7 @@ def main(args):
         help='start an incremental merge',
         )
     parser_start.add_argument(
-        '--name', action='store', default='default',
+        '--name', action='store', default='merge',
         help='name to use for this incremental merge',
         )
     parser_start.add_argument(
@@ -684,6 +727,15 @@ def main(args):
     parser_start.add_argument(
         'branch', action='store',
         help='the tip of the branch to be merged into HEAD',
+        )
+
+    parser_remove = subparsers.add_parser(
+        'remove',
+        help='irrevocably remove an incremental merge',
+        )
+    parser_remove.add_argument(
+        '--name', action='store', default=None,
+        help='name to use for this incremental merge',
         )
 
     parser_diagram = subparsers.add_parser(
@@ -729,8 +781,16 @@ def main(args):
         sys.exit(e.message)
 
     if options.subcommand == 'start':
+        if not options.first_parent:
+            parser.error(
+                'The --first-parent option is currently required for the "start" command'
+                )
         state = MergeState.start(options.name, options.goal, 'HEAD', options.branch)
         state.save()
+    elif options.subcommand == 'remove':
+        if options.name is None:
+            parser.error('The "remove" command requires an option --name=NAME')
+        state = MergeState.remove(options.name)
     elif options.subcommand == 'diagram':
         if '...' not in options.range:
             parser.error(
