@@ -81,6 +81,7 @@ import os
 import subprocess
 import argparse
 from cStringIO import StringIO
+import json
 
 # CalledProcessError, check_call, and check_output were not in the
 # original Python 2.4 subprocess library, so implement it here if
@@ -123,6 +124,11 @@ except ImportError:
                 cmd = popenargs[0]
             raise CalledProcessError(retcode, cmd, output=output)
         return output
+
+
+STATE_VERSION = (1, 0, 0)
+
+ZEROS = '0' * 40
 
 
 def call_silently(cmd):
@@ -576,12 +582,109 @@ def incremental_merge(branch):
         sys.exit('Merge of commit %s failed; please resolve manually' % (commit,))
 
 
+class MergeState(object):
+    """The state of an in-progress merge."""
+
+    @staticmethod
+    def get_filename(name):
+        GIT_DIR = check_output(['git', 'rev-parse', '--git-dir']).rstrip()
+        return os.path.join(GIT_DIR, 'imerge', name, 'state')
+
+    @classmethod
+    def start(klass, name, goal, tip1, tip2):
+        """Create and return a new MergeState object."""
+
+        filename = klass.get_filename(name)
+        if os.path.exists(filename):
+            raise RuntimeError('Name %r is already in use!' % (name,))
+        if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
+            raise RuntimeError('Name %r is already in use!' % (name,))
+        if '/' in name:
+            raise RuntimeError('Name %r must not include a slash character!' % (name,))
+        try:
+            call_silently(
+                ['git', 'check-ref-format', 'refs/imerge/%s/%s-%s' % (name, ZEROS, ZEROS)]
+                )
+        except CalledProcessError:
+            raise RuntimeError('Name %r is not a valid refname component!' % (name,))
+
+        commits1 = rev_list('--first-parent', '%s..%s' % (tip2, tip1))
+        commits1.reverse()
+        commits2 = rev_list('--first-parent', '%s..%s' % (tip1, tip2))
+        commits2.reverse()
+
+        return klass(name, goal, commits1, commits2)
+
+    @classmethod
+    def load(klass, name):
+        """Load an existing MergeState from disk."""
+
+        f = open(self.get_filename(name), 'rb')
+        state = json.load(f)
+        version = map(int, state[version].split('.'))
+        if version[0] != STATE_VERSION[0] or version > STATE_VERSION:
+            raise RuntimeError('Version of state is not compatible with this script version.')
+        return klass(state['name'], state['goal'], state['commits1'], state['commits2'])
+
+    def __init__(self, name, goal, commits1, commits2):
+        self.name = name
+        self.goal = goal
+        self.commits1 = commits1
+        self.commits2 = commits2
+
+    def save(self):
+        filename = self.get_filename(self.name)
+        dirname = os.path.dirname(filename)
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
+        f = open('%s.lock' % (filename,), 'wb')
+        state = dict(
+            version='.'.join(map(str, STATE_VERSION)),
+            name=self.name,
+            goal=self.goal,
+            commits1=self.commits1,
+            commits2=self.commits2,
+            )
+        json.dump(state, f, sort_keys=True, indent=4)
+        f.close()
+        os.rename('%s.lock' % (filename,), filename)
+
+
 def main(args):
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         )
     subparsers = parser.add_subparsers(dest='subcommand', help='sub-command')
+
+    parser_start = subparsers.add_parser(
+        'start',
+        help='start an incremental merge',
+        )
+    parser_start.add_argument(
+        '--name', action='store', default='default',
+        help='name to use for this incremental merge',
+        )
+    parser_start.add_argument(
+        '--goal',
+        action='store', default='full',
+        choices=['full', 'rebase-with-history', 'rebase', 'simple'],
+        help='the goal of the incremental merge',
+        )
+    #parser_start.add_argument(
+    #    '--conflicts', ...
+    #    )
+    parser_start.add_argument(
+        '--first-parent', action='store_true', default=None,
+        help=(
+            'handle only the first parent commits '
+            '(this option is currently required)'
+            ),
+        )
+    parser_start.add_argument(
+        'branch', action='store',
+        help='the tip of the branch to be merged into HEAD',
+        )
 
     parser_diagram = subparsers.add_parser(
         'diagram',
@@ -625,7 +728,10 @@ def main(args):
     except UncleanWorkTreeError, e:
         sys.exit(e.message)
 
-    if options.subcommand == 'diagram':
+    if options.subcommand == 'start':
+        state = MergeState.start(options.name, options.goal, 'HEAD', options.branch)
+        state.save()
+    elif options.subcommand == 'diagram':
         if '...' not in options.range:
             parser.error(
                 'diagram subcommand requires an argument BRANCH1...BRANCH2'
