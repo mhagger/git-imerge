@@ -611,10 +611,24 @@ class MergeState(object):
 
         commits1 = rev_list('--first-parent', '%s..%s' % (tip2, tip1))
         commits1.reverse()
+        if not commits1:
+            raise RuntimeError(
+                'There are no commits on %r that are not already in %r' % (tip1, tip2)
+                )
         commits2 = rev_list('--first-parent', '%s..%s' % (tip1, tip2))
         commits2.reverse()
+        if not commits2:
+            raise RuntimeError(
+                'There are no commits on %r that are not already in %r' % (tip2, tip1)
+                )
 
-        return klass(name, goal, commits1, commits2)
+        merge = klass(name, goal, commits1, commits2)
+        # Create refs pointing at the two tips to prevent their being
+        # garbage-collected:
+        merge.set_ref('tip1', commits1[-1], ZEROS, 'adding reference to tip1')
+        merge.set_ref('tip2', commits2[-1], ZEROS, 'adding reference to tip2')
+        merge.save()
+        return merge
 
     @classmethod
     def load(klass, name):
@@ -649,6 +663,13 @@ class MergeState(object):
         json.dump(state, f, sort_keys=True, indent=4)
         f.close()
         os.rename('%s.lock' % (filename,), filename)
+
+    def set_ref(self, refname, sha1, old_sha1, reason):
+        check_call([
+                'git', 'update-ref',
+                '-m', 'imerge %r: %s' % (self.name, reason,),
+                'refs/imerge/%s/%s' % (self.name, refname), sha1, old_sha1,
+                ])
 
     @classmethod
     def iter_refs(klass, name):
@@ -785,8 +806,7 @@ def main(args):
             parser.error(
                 'The --first-parent option is currently required for the "start" command'
                 )
-        state = MergeState.start(options.name, options.goal, 'HEAD', options.branch)
-        state.save()
+        MergeState.start(options.name, options.goal, 'HEAD', options.branch)
     elif options.subcommand == 'remove':
         if options.name is None:
             parser.error('The "remove" command requires an option --name=NAME')
