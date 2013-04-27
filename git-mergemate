@@ -566,7 +566,7 @@ def incremental_merge(branch):
         for (i, commit) in enumerate(commits):
             sys.stderr.write('Merging %s (%d/%d)...\n' % (commit, i + 1, len(commits)))
             merge(commit)
-    except MergeFailedException, e:
+    except MergeFailedException:
         sys.stderr.write('\n')
         sys.stderr.write('Failed to merge the following commits:\n')
         check_call(
