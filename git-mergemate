@@ -205,14 +205,9 @@ def get_commit_sha1(arg):
     If not, raise ValueError."""
 
     try:
-        sha1 = rev_parse(arg)
-        if get_type(arg) != 'commit':
-            raise ValueError(
-                '%r does not refer to a valid git commit' % (parent,)
-                )
+        return rev_parse('%s^{commit}' % (arg,))
     except CalledProcessError:
-        raise ValueError('%r is not a valid object reference' % (arg,))
-    return sha1
+        raise ValueError('%r does not refer to a valid git commit' % (arg,))
 
 
 class TemporaryHead(object):
