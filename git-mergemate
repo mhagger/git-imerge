@@ -80,6 +80,7 @@ import sys
 import os
 import shutil
 import subprocess
+import functools
 import argparse
 from cStringIO import StringIO
 import json
@@ -130,6 +131,31 @@ except ImportError:
 STATE_VERSION = (1, 0, 0)
 
 ZEROS = '0' * 40
+
+
+class Failure(Exception):
+    """An exception that indicates a normal failure of the script.
+
+    Failures are reported at top level via sys.exit(str(e)) rather
+    than via a Python stack dump."""
+
+    @classmethod
+    def wrap(klass, f):
+        """Wrap a function inside a try...except that catches this error.
+
+        If the exception is thrown, call sys.exit().  This function
+        can be used as a decorator."""
+
+        @functools.wraps(f)
+        def wrapper(*args, **kw):
+            try:
+                return f(*args, **kw)
+            except klass, e:
+                sys.exit(str(e))
+
+        return wrapper
+
+    pass
 
 
 def call_silently(cmd):
@@ -759,6 +785,7 @@ class MergeState(object):
                     )
 
 
+@Failure.wrap
 def main(args):
     parser = argparse.ArgumentParser(
         description=__doc__,
