@@ -318,7 +318,7 @@ def reparent(commit, parent_sha1s):
     out, err = process.communicate(new_commit.getvalue())
     retcode = process.poll()
     if retcode:
-        raise RuntimeError('Could not reparent commit %s' % (commit,))
+        raise Failure('Could not reparent commit %s' % (commit,))
     return out.strip()
 
 
@@ -637,28 +637,28 @@ class MergeState(object):
 
         filename = klass.get_state_filename(name)
         if os.path.exists(filename):
-            raise RuntimeError('Name %r is already in use!' % (name,))
+            raise Failure('Name %r is already in use!' % (name,))
         if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
-            raise RuntimeError('Name %r is already in use!' % (name,))
+            raise Failure('Name %r is already in use!' % (name,))
         if '/' in name:
-            raise RuntimeError('Name %r must not include a slash character!' % (name,))
+            raise Failure('Name %r must not include a slash character!' % (name,))
         try:
             call_silently(
                 ['git', 'check-ref-format', 'refs/imerge/%s/%s-%s' % (name, ZEROS, ZEROS)]
                 )
         except CalledProcessError:
-            raise RuntimeError('Name %r is not a valid refname component!' % (name,))
+            raise Failure('Name %r is not a valid refname component!' % (name,))
 
         commits1 = rev_list('--first-parent', '%s..%s' % (tip2, tip1))
         commits1.reverse()
         if not commits1:
-            raise RuntimeError(
+            raise Failure(
                 'There are no commits on %r that are not already in %r' % (tip1, tip2)
                 )
         commits2 = rev_list('--first-parent', '%s..%s' % (tip1, tip2))
         commits2.reverse()
         if not commits2:
-            raise RuntimeError(
+            raise Failure(
                 'There are no commits on %r that are not already in %r' % (tip2, tip1)
                 )
 
@@ -705,7 +705,7 @@ class MergeState(object):
         state = json.load(f)
         version = map(int, state['version'].split('.'))
         if version[0] != STATE_VERSION[0] or version > STATE_VERSION:
-            raise RuntimeError('Version of state is not compatible with this script version.')
+            raise Failure('Version of state is not compatible with this script version.')
         return klass(state['name'], state['goal'], state['commits1'], state['commits2'])
 
     def __init__(self, name, goal, commits1, commits2):
