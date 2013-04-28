@@ -173,7 +173,7 @@ def call_silently(cmd):
         raise CalledProcessError(retcode, cmd, err)
 
 
-class UncleanWorkTreeError(Exception):
+class UncleanWorkTreeError(Failure):
     pass
 
 
@@ -873,10 +873,7 @@ def main(args):
 
     options = parser.parse_args(args)
 
-    try:
-        require_clean_work_tree('proceed')
-    except UncleanWorkTreeError, e:
-        sys.exit(e.message)
+    require_clean_work_tree('proceed')
 
     if options.subcommand == 'list':
         default_merge = MergeState.get_default()
