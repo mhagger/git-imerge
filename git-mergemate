@@ -706,7 +706,7 @@ class MergeState(object):
         version = map(int, state['version'].split('.'))
         if version[0] != STATE_VERSION[0] or version > STATE_VERSION:
             raise Failure('Version of state is not compatible with this script version.')
-        return klass(state['name'], state['goal'], state['commits1'], state['commits2'])
+        return klass(name, state['goal'], state['commits1'], state['commits2'])
 
     def __init__(self, name, goal, commits1, commits2):
         self.name = name
@@ -722,7 +722,6 @@ class MergeState(object):
         f = open('%s.lock' % (filename,), 'wb')
         state = dict(
             version='.'.join(map(str, STATE_VERSION)),
-            name=self.name,
             goal=self.goal,
             commits1=self.commits1,
             commits2=self.commits2,
