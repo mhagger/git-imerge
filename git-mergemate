@@ -808,6 +808,9 @@ def main(args):
         )
     #parser_start.add_argument(
     #    '--conflicts', ...
+    #    action='store', default='jump',
+    #    choices=['pairwise', 'jump'],
+    #    help='what sort of conflicts will be presented to the user',
     #    )
     parser_start.add_argument(
         '--first-parent', action='store_true', default=None,
