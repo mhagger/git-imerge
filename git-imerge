@@ -2,9 +2,9 @@
 
 # Copyright 2012-2013 Michael Haggerty <mhagger@alum.mit.edu>
 #
-# This file is part of git-mergemate.
+# This file is part of git-imerge.
 #
-# git-mergemate is free software: you can redistribute it and/or
+# git-imerge is free software: you can redistribute it and/or
 # modify it under the terms of the GNU General Public License as
 # published by the Free Software Foundation, either version 2 of the
 # License, or (at your option) any later version.
@@ -27,41 +27,6 @@ usage:
         merged together without conflict.  Output the result as a
         PPM-formatted image, where successful merges are shown as
         green pixels and unsuccessful merges as red pixels.
-
-    %(prog)s merge BRANCH
-
-        Merge the commits from BRANCH into HEAD, one commit at a
-        time. In other words, transform this:
-
-            o---o---o---o          HEAD
-                 \
-                  A---B---C---D    BRANCH
-
-        into this:
-
-            o---o---o---o---A'--B'--C'--D'    HEAD
-                 \         /   /   /   /
-                  --------A---B---C---D       BRANCH
-
-        This is like a rebase, except with the history of individual
-        merges retained [1].
-
-        If there is a merge conflict, stop in "conflicted" state (as
-        usual with a git merge).  The user should resolve the
-        conflict, commit, and then re-execute the %(prog)s command to
-        continue.
-
-    %(prog)s find-conflict BRANCH1..BRANCH2
-
-        Use bisection to determine the earliest commit on BRANCH2 that
-        causes a conflict when merged to BRANCH1.  Don't actually
-        retain any merges.
-
-    %(prog)s find-conflict BRANCH1...BRANCH2
-
-        Use bisection to find a pair of earliest commits (one from
-        each branch) that do not merge cleanly.  Don't actually retain
-        any merges.
 
     %(prog)s reparent [PARENT...]
 
@@ -248,7 +213,7 @@ class TemporaryHead(object):
 
     The message is used for the reflog."""
 
-    def __enter__(self, message='mergemate: restoring'):
+    def __enter__(self, message='imerge: restoring'):
         self.message = message
         try:
             self.head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
@@ -397,28 +362,6 @@ def examine_merges(commit1, branch2, commits2):
                failing2, commits2[failing2],)
             )
     return failing2
-
-
-def symmetric_merge(branch1, branch2):
-    commits1 = rev_list('--first-parent', '%s..%s' % (branch2, branch1))
-    commits1.reverse()
-    commits2 = rev_list('--first-parent', '%s..%s' % (branch1, branch2))
-    commits2.reverse()
-
-    sys.stderr.write('%s x %s commits to examine\n' % (len(commits1), len(commits2),))
-
-    failing2 = examine_merges(commits1[-1], branch2, commits2)
-    if failing2 != len(commits2):
-        examine_merges(commits2[failing2], branch1, commits1)
-
-
-def asymmetric_merge(branch1, branch2):
-    commits2 = rev_list('--first-parent', '%s..%s' % (branch1, branch2))
-    commits2.reverse()
-
-    sys.stderr.write('%s commits to examine\n' % (len(commits2),))
-
-    examine_merges(branch1, branch2, commits2)
 
 
 class MergeResults(object):
@@ -578,35 +521,6 @@ def diagram_merge(branch1, branch2, full=False):
 
 class MergeFailedException(Exception):
     pass
-
-
-def merge(commit):
-    try:
-        check_call(
-            ['git', '-c', 'rerere.enabled=false', 'merge', '--no-edit', commit],
-            )
-    except CalledProcessError:
-        raise MergeFailedException('Failed to merge commit %s' % (commit,))
-
-
-def incremental_merge(branch):
-    commits = rev_list('--first-parent', 'HEAD..%s' % (branch,))
-    commits.reverse()
-
-    sys.stderr.write('%s commits to merge\n' % (len(commits),))
-
-    try:
-        for (i, commit) in enumerate(commits):
-            sys.stderr.write('Merging %s (%d/%d)...\n' % (commit, i + 1, len(commits)))
-            merge(commit)
-    except MergeFailedException:
-        sys.stderr.write('\n')
-        sys.stderr.write('Failed to merge the following commits:\n')
-        check_call(
-            ['git', 'log', 'HEAD..%s' % (commit,)],
-            )
-        sys.stderr.write('\n')
-        sys.exit('Merge of commit %s failed; please resolve manually' % (commit,))
 
 
 class MergeState(object):
@@ -851,20 +765,6 @@ def main(args):
         )
     parser_diagram.add_argument('range', help='BRANCH1...BRANCH2')
 
-    parser_merge = subparsers.add_parser(
-        'merge',
-        help='merge a branch into HEAD incrementally',
-        )
-    parser_merge.add_argument('range', help='BRANCH')
-
-    parser_conflict = subparsers.add_parser(
-        'find-conflict',
-        help='find conflicting commits that block a merge',
-        )
-    parser_conflict.add_argument(
-        'range', help='BRANCH1..BRANCH2 | BRANCH1...BRANCH2'
-        )
-
     parser_reparent = subparsers.add_parser(
         'reparent',
         help='change the parents of the HEAD commit',
@@ -903,23 +803,6 @@ def main(args):
         with TemporaryHead():
             (branch1, branch2) = options.range.split('...')
             diagram_merge(branch1, branch2, full=options.full)
-    elif options.subcommand == 'merge':
-        branch = options.range
-        incremental_merge(branch)
-    elif options.subcommand == 'find-conflict':
-        if '...' in options.range:
-            (branch1, branch2) = options.range.split('...')
-            with TemporaryHead():
-                symmetric_merge(branch1, branch2)
-        elif '..' in options.range:
-            (branch1, branch2) = options.range.split('..')
-            with TemporaryHead():
-                asymmetric_merge(branch1, branch2)
-        else:
-            parser.error(
-                'RANGE must be of the form '
-                '"BRANCH1..BRANCH2" or "BRANCH1...BRANCH2"'
-                )
     elif options.subcommand == 'reparent':
         try:
             commit_sha1 = get_commit_sha1('HEAD')
