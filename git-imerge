@@ -288,6 +288,31 @@ def reparent(commit, parent_sha1s):
     return out.strip()
 
 
+class AutomaticMergeFailed(Exception):
+    def __init__(self, commit1, commit2):
+        Exception.__init__(
+            self, 'Automatic merge of %s and %s failed' % (commit1, commit2,)
+            )
+        self.commit1, self.commit2 = commit1, commit2
+
+
+def automerge(commit1, commit2):
+    """Attempt an automatic merge of commit1 and commit2.
+
+    Return the SHA1 of the resulting commit, or raise
+    AutomaticMergeFailed on error.  This must be called with a clean
+    worktree."""
+
+    call_silently(['git', 'checkout', '-f', commit1])
+    try:
+        call_silently(['git', '-c', 'rerere.enabled=false', 'merge', commit2])
+    except CalledProcessError:
+        call_silently(['git', 'merge', '--abort'])
+        raise AutomaticMergeFailed(commit1, commit2)
+    else:
+        return get_commit_sha1('HEAD')
+
+
 class MergeRecord(object):
     # Bits for the flags field:
 
@@ -351,6 +376,12 @@ class MergeRecord(object):
 
     def is_known(self):
         return self.sha1 is not None
+
+
+class UnexpectedMergeFailure(Exception):
+    def __init__(self, msg, i1, i2):
+        Exception.__init__(self, msg)
+        self.i1, self.i2 = i1, i2
 
 
 class Block(object):
@@ -446,7 +477,11 @@ class Block(object):
         if (i1, i2) in self:
             return True
         else:
-            return merge_possible(self[i1, 0].sha1, self[0, i2].sha1)
+            try:
+                automerge(self[i1, 0].sha1, self[0, i2].sha1)
+                return True
+            except AutomaticMergeFailed:
+                return False
 
     def find_mergeable_blocks(self):
         """Return a list of blocks within this block that should be mergeable."""
@@ -491,6 +526,40 @@ class Block(object):
                 break
 
         return mergeable_blocks
+
+    def auto_outline(self):
+        """Complete the outline of this Block.
+
+        raise UnexpectedMergeFailure if automerging fails."""
+
+        # Check that all of the merges go through before recording any
+        # of them permanently.
+        merges = []
+
+        def do_merge(i1, commit1, i2, commit2):
+            try:
+                merge = automerge(commit1, commit2)
+            except AutomaticMergeFailed, e:
+                raise UnexpectedMergeFailure(str(e), i1, i2)
+            merges.append((i1, i2, merge))
+            return merge
+
+        i2 = self.len2 - 1
+        left = self[0, i2].sha1
+        for i1 in range(1, self.len1 - 1):
+            left = do_merge(i1, self[i1,0].sha1, i2, left)
+
+        i1 = self.len1 - 1
+        above = self[i1, 0].sha1
+        for i2 in range(1, self.len2 - 1):
+            above = do_merge(i1, above, i2, self[0,i2].sha1)
+
+        i1, i2 = self.len1 - 1, self.len2 - 1
+        do_merge(i1, above, i2, left)
+
+        # Success!  Now we can record the results:
+        for (i1, i2, merge) in merges:
+            self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
 
 
 class SubBlock(Block):
