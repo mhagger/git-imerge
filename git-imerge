@@ -461,9 +461,15 @@ class SubBlock(Block):
         (start1, len1) = self._convert_to_slice(slice1, block.len1)
         (start2, len2) = self._convert_to_slice(slice2, block.len2)
         Block.__init__(self, len1, len2)
-        self._block = block
-        self._start1 = start1
-        self._start2 = start2
+        if isinstance(block, SubBlock):
+            # Peel away one level of indirection:
+            self._block = block._block
+            self._start1 = start1 + block._start1
+            self._start2 = start2 + block._start2
+        else:
+            self._block = block
+            self._start1 = start1
+            self._start2 = start2
 
     def set_value(self, i1, i2, sha1, flags):
         self._check_indexes(i1, i2)
