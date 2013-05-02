@@ -384,6 +384,112 @@ class UnexpectedMergeFailure(Exception):
         self.i1, self.i2 = i1, i2
 
 
+class MergeFrontier(object):
+    """Represents the merge frontier within a Block.
+
+    A MergeFrontier is represented by a list of SubBlocks, each of
+    which is thought to be completely mergeable.  The list is kept in
+    normalized form:
+
+    * Only non-empty blocks are retained
+
+    * Blocks are sorted from bottom left to upper right
+
+    * No redundant blocks
+
+    """
+
+    def __init__(self, block, blocks=None):
+        self.block = block
+        blocks = list(self._iter_non_empty_blocks(blocks or []))
+        blocks.sort(key=lambda block: block.len1)
+        self.blocks = list(self._iter_non_redundant_blocks(blocks))
+
+    def __iter__(self):
+        """Iterate over blocks from bottom left to upper right."""
+
+        return iter(self.blocks)
+
+    def __nonzero__(self):
+        """Return True iff this frontier has no completed parts."""
+
+        return bool(self.blocks)
+
+    @staticmethod
+    def _iter_non_empty_blocks(blocks):
+        for block in blocks:
+            if block.len1 > 1 and block.len2 > 1:
+                yield block
+
+    @staticmethod
+    def _iter_non_redundant_blocks(blocks):
+        def contains(block1, block2):
+            """Return true if block1 contains block2."""
+
+            return block1.len1 >= block2.len1 and block1.len2 >= block2.len2
+
+        i = iter(blocks)
+        try:
+            last = i.next()
+        except StopIteration:
+            return
+
+        for block in i:
+            if contains(last, block):
+                pass
+            elif contains(block, last):
+                last = block
+            else:
+                yield last
+                last = block
+
+        yield last
+
+    def remove_failure(self, i1, i2):
+        """Refine the merge frontier given that the specified merge fails."""
+
+        shrunk_block = False
+        for (i, block) in enumerate(self.blocks):
+            if i1 < block.len1 and i2 < block.len2:
+                self.blocks[i] = block[:i1, :i2]
+                shrunk_block = True
+
+        if shrunk_block:
+            self.blocks = list(self._iter_non_redundant_blocks(self.blocks))
+
+    def partition(self, block):
+        """Return two MergeFrontier instances partitioned by block.
+
+        Return (frontier1, frontier2), where each frontier is limited
+        to each side of the argument.
+
+        block must be contained in this MergeFrontier and already be
+        outlined."""
+
+        # Remember that the new blocks have to include the outlined
+        # edge of the partitioning block to satisfy the invariant that
+        # the left and upper edge of a block has to be known.
+
+        left = []
+        right = []
+        for b in self.blocks:
+            if b.len1 == block.len1 and b.len2 == block.len2:
+                # That's the block we're partitioning on; just skip it.
+                pass
+            elif b.len1 < block.len1 and b.len2 > block.len2:
+                left.append(b[:, block.len2 - 1:])
+            elif b.len1 > block.len1 and b.len2 < block.len2:
+                right.append(b[block.len1 - 1:, :])
+            else:
+                raise ValueError(
+                    'MergeFrontier partitioned with inappropriate block'
+                    )
+        return (
+            MergeFrontier(self.block[:block.len1, block.len2 - 1:], left),
+            MergeFrontier(self.block[block.len1 - 1:, :block.len2], right),
+            )
+
+
 class Block(object):
     """A rectangular range of commits, indexed by (i1,i2).
 
@@ -483,11 +589,18 @@ class Block(object):
             except AutomaticMergeFailed:
                 return False
 
-    def find_mergeable_blocks(self):
-        """Return a list of blocks within this block that should be mergeable."""
+    def compute_merge_frontier(self, known_failing_indexes=()):
+        """Return a MergeFrontier instance for this block."""
 
         if self.len1 <= 1 or self.len2 <= 1:
-            return []
+            return MergeFrontier(self, [])
+
+        def mergeable(i1, i2):
+            for (f1, f2) in known_failing_indexes:
+                if i1 >= f1 and i2 >= f2:
+                    return False
+            else:
+                return self.is_mergeable(i1, i2)
 
         mergeable_blocks = []
 
@@ -499,11 +612,11 @@ class Block(object):
         # and fall back to bisection otherwise.
         while True:
             # Find the width of the success rectangle at row (i2-1) and fill it in:
-            if self.is_mergeable(self.len1 - 1, i2 - 1):
+            if mergeable(self.len1 - 1, i2 - 1):
                 newi1 = self.len1
             else:
                 newi1 = find_first_false(
-                    lambda i: self.is_mergeable(i, i2 - 1),
+                    lambda i: mergeable(i, i2 - 1),
                     i1, self.len1 - 1,
                     )
             mergeable_blocks.append(self[:newi1,:i2])
@@ -513,11 +626,11 @@ class Block(object):
                 break
 
             # Find the height of the conflict rectangle at column i1 and fill it in:
-            if not self.is_mergeable(i1, 1):
+            if not mergeable(i1, 1):
                 newi2 = 1
             else:
                 newi2 = find_first_false(
-                    lambda i: self.is_mergeable(i1, i),
+                    lambda i: mergeable(i1, i),
                     2, i2,
                     )
             i2 = newi2
@@ -525,7 +638,7 @@ class Block(object):
             if i2 == 1:
                 break
 
-        return mergeable_blocks
+        return MergeFrontier(self, mergeable_blocks)
 
     def auto_outline(self):
         """Complete the outline of this Block.
@@ -562,6 +675,42 @@ class Block(object):
         # Success!  Now we can record the results:
         for (i1, i2, merge) in merges:
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
+
+    def auto_outline_frontier(self, merge_frontier=None):
+        if merge_frontier is None:
+            merge_frontier = self.compute_merge_frontier()
+
+        if not merge_frontier:
+            # Nothing to do.
+            return
+
+        # Determine which block has the largest area:
+        def area(block):
+            return (block.len1 - 1) * (block.len2 - 1)
+
+        best_block = None
+        best_area = 0
+
+        for block in merge_frontier:
+            a = area(block)
+            if a > best_area:
+                best_block = block
+                best_area = a
+
+        try:
+            best_block.auto_outline()
+        except UnexpectedMergeFailure, e:
+            # One of the merges that we expected to succeed in
+            # fact failed.
+            i1, i2 = e.i1, e.i1
+            merge_frontier.remove_failure(e.i1, e.i2)
+            self.auto_outline_frontier(merge_frontier)
+        else:
+            f1, f2 = merge_frontier.partition(best_block)
+            if f1:
+                f1.block.auto_outline_frontier(f1)
+            if f2:
+                f2.block.auto_outline_frontier(f2)
 
 
 class SubBlock(Block):
