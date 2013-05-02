@@ -436,6 +436,62 @@ class Block(object):
     def __contains__(self, index):
         return self[index].is_known()
 
+    def is_mergeable(self, i1, i2):
+        """Determine whether (i1,i2) can be merged automatically.
+
+        If we already have a merge record for (i1,i2), return True.
+        Otherwise, attempt a merge (discarding the result)."""
+
+        (i1, i2) = self._normalize_indexes((i1, i2))
+        if (i1, i2) in self:
+            return True
+        else:
+            return merge_possible(self[i1, 0].sha1, self[0, i2].sha1)
+
+    def find_mergeable_blocks(self):
+        """Return a list of blocks within this block that should be mergeable."""
+
+        if self.len1 <= 1 or self.len2 <= 1:
+            return []
+
+        mergeable_blocks = []
+
+        i1 = 1
+        i2 = self.len2
+
+        # Given that these diagrams typically have few blocks, check the
+        # end of a range first to see if the whole range can be filled in,
+        # and fall back to bisection otherwise.
+        while True:
+            # Find the width of the success rectangle at row (i2-1) and fill it in:
+            if self.is_mergeable(self.len1 - 1, i2 - 1):
+                newi1 = self.len1
+            else:
+                newi1 = find_first_false(
+                    lambda i: self.is_mergeable(i, i2 - 1),
+                    i1, self.len1 - 1,
+                    )
+            mergeable_blocks.append(self[:newi1,:i2])
+            i1 = newi1
+
+            if i1 == self.len1:
+                break
+
+            # Find the height of the conflict rectangle at column i1 and fill it in:
+            if not self.is_mergeable(i1, 1):
+                newi2 = 1
+            else:
+                newi2 = find_first_false(
+                    lambda i: self.is_mergeable(i1, i),
+                    2, i2,
+                    )
+            i2 = newi2
+
+            if i2 == 1:
+                break
+
+        return mergeable_blocks
+
 
 class SubBlock(Block):
     @staticmethod
