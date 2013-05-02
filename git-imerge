@@ -537,6 +537,8 @@ class Block(object):
         merges = []
 
         def do_merge(i1, commit1, i2, commit2):
+            if (i1, i2) in self:
+                return self[i1,i2].sha1
             try:
                 merge = automerge(commit1, commit2)
             except AutomaticMergeFailed, e:
