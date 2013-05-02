@@ -217,7 +217,6 @@ class TemporaryHead(object):
         self.message = message
         try:
             self.head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
-            sys.stderr.write('head_name = %r\n' % (self.head_name,))
         except CalledProcessError:
             self.head_name = None
         self.orig_head = get_commit_sha1('HEAD')
@@ -232,7 +231,7 @@ class TemporaryHead(object):
                     self.head_name,
                     ])
             except Exception, e:
-                sys.stderr.write(
+                raise Failure(
                     'Could not restore HEAD to %r!:    %s\n'
                     % (self.head_name, e.message,)
                     )
@@ -240,7 +239,7 @@ class TemporaryHead(object):
                 try:
                     check_call(['git', 'reset', '--hard', self.orig_head])
                 except Exception, e:
-                    sys.stderr.write(
+                    raise Failure(
                         'Could not restore HEAD to %r!:    %s\n'
                         % (self.orig_head, e.message,)
                         )
@@ -254,7 +253,7 @@ def reparent(commit, parent_sha1s):
     list of SHA1s.  Create a new commit exactly like that one, except
     that it has the specified parent commits.  Return the SHA1 of the
     resulting commit object, which is already stored in the object
-    database but not yet referenced by anything."""
+    database but is not yet referenced by anything."""
 
     old_commit = check_output(['git', 'cat-file', 'commit', commit])
     separator = old_commit.index('\n\n')
@@ -285,6 +284,147 @@ def reparent(commit, parent_sha1s):
     if retcode:
         raise Failure('Could not reparent commit %s' % (commit,))
     return out.strip()
+
+
+class Block(object):
+    """A rectangular range of commits, indexed by (i1,i2).
+
+    The commits block[0,1:] and block[1:,0] are always all known.
+    block[0,0] may or may not be known; it is usually unneeded (except
+    maybe implicitly).
+
+    Members:
+
+        len1, len2 -- the dimensions of the block.
+
+    """
+
+    def __init__(self, len1, len2):
+        self.len1 = len1
+        self.len2 = len2
+
+    def check_index(self, i1, i2):
+        if not (0 <= i1 < self.len1):
+            raise IndexError('first index (%s) is out of range 0:%d' % (i1, self.len1,))
+        if not (0 <= i2 < self.len2):
+            raise IndexError('second index (%s) is out of range 0:%d' % (i2, self.len2,))
+
+    def set_value(self, i1, i2, value):
+        """Set the value for integer indexes (i1, i2).
+
+        i1 and i2 must be non-negative."""
+
+        raise NotImplementedError()
+
+    def __setitem__(self, index, value):
+        """Return the value for indexes (i1, i2).
+
+        i1 and i2 must be integers, but they may be negative."""
+
+        try:
+            (i1, i2) = index
+        except TypeError:
+            raise IndexError('Block indexing requires exactly two indexes')
+
+        if i1 < 0:
+            i1 += self.len1
+        if i2 < 0:
+            i2 += self.len2
+        self.set_value(i1, i2, value)
+
+    def get_value(self, i1, i2):
+        """Return the value for integer indexes (i1, i2).
+
+        i1 and i2 must be non-negative."""
+
+        raise NotImplementedError()
+
+    def __getitem__(self, index):
+        """Return the element at (i1, i2) (requires two indexes).
+
+        If either index is a slice, return a SubBlock."""
+
+        try:
+            (i1, i2) = index
+        except TypeError:
+            raise IndexError('Block indexing requires exactly two indexes')
+        if isinstance(i1, slice) or isinstance(i2, slice):
+            return SubBlock(self, i1, i2)
+        else:
+            if i1 < 0:
+                i1 += self.len1
+            if i2 < 0:
+                i2 += self.len2
+            return self.get_value(i1, i2)
+
+
+class SubBlock(Block):
+    @staticmethod
+    def _convert_to_slice(i, len):
+        """Return (start, len) for the specified index.
+
+        i may be an integer or a slice with step equal to 1."""
+
+        if isinstance(i, int):
+            if i < 0:
+                i += len
+            i = slice(i, i + 1)
+        elif isinstance(i, slice):
+            if i.step is not None and i.step != 1:
+                raise ValueError('Index has a non-zero step size')
+        else:
+            raise ValueError('Index cannot be converted to a slice')
+
+        (start, stop, step) = i.indices(len)
+        return (start, stop - start)
+
+    def __init__(self, block, slice1, slice2):
+        (start1, len1) = self._convert_to_slice(slice1, block.len1)
+        (start2, len2) = self._convert_to_slice(slice2, block.len2)
+        Block.__init__(self, len1, len2)
+        self._block = block
+        self._start1 = start1
+        self._start2 = start2
+
+    def set_value(self, i1, i2, value):
+        self.check_index(i1, i2)
+        self._block.set_value(i1, i2, value)
+
+    def __setitem__(self, index, value):
+        try:
+            (i1, i2) = index
+        except TypeError:
+            raise IndexError('Block indexing requires exactly two indexes')
+
+        if i1 < 0:
+            i1 += self.len1
+        if i2 < 0:
+            i2 += self.len2
+
+        self.set_value(i1 + self._start1, i2 + self._start2, value)
+
+    def get_value(self, i1, i2):
+        self.check_index(i1, i2)
+        return self._block.get_value(i1 + self._start1, i2 + self._start2)
+
+
+class MergeState(Block):
+    def __init__(self, commits1, commits2):
+        Block.__init__(self, len(commits1) + 1, len(commits2) + 1)
+
+        # A simulated 2D array.  Values are None or SHA1 values.
+        self._data = [[None] * self.len2 for i1 in range(self.len1)]
+
+        for (i1, commit) in enumerate(commits1, 1):
+            self.set_value(i1, 0, commit)
+        for (i2, commit) in enumerate(commits2, 1):
+            self.set_value(0, i2, commit)
+
+    def set_value(self, i1, i2, value):
+        self._data[i1][i2] = value
+
+    def get_value(self, i1, i2):
+        return self._data[i1][i2]
 
 
 def merge_possible(commit1, commit2):
