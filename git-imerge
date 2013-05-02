@@ -286,6 +286,71 @@ def reparent(commit, parent_sha1s):
     return out.strip()
 
 
+class MergeRecord(object):
+    # Bits for the flags field:
+
+    # There is a saved successful auto merge:
+    SAVED_AUTO = 0x01
+
+    # An auto merge (which may have been unsuccessful) has been done:
+    NEW_AUTO = 0x02
+
+    # There is a saved successful manual merge:
+    SAVED_MANUAL = 0x04
+
+    # A manual merge (which may have been unsuccessful) has been done:
+    NEW_MANUAL = 0x08
+
+    # Some useful bit combinations:
+    SAVED = SAVED_AUTO | SAVED_MANUAL
+    NEW = NEW_AUTO | NEW_MANUAL
+
+    AUTO = SAVED_AUTO | NEW_AUTO
+    MANUAL = SAVED_MANUAL | NEW_MANUAL
+
+    def __init__(self, sha1=None, flags=0):
+        # The currently believed correct merge, or None if it is
+        # unknown or the best attempt was unsuccessful.
+        self.sha1 = sha1
+
+        # See bits above.
+        self.flags = flags
+
+    def record_merge(self, sha1, source):
+        """Record a merge at this position.
+
+        source must be SAVED_AUTO, SAVED_MANUAL, NEW_AUTO, or NEW_MANUAL."""
+
+        if source == self.SAVED_AUTO:
+            # SAVED_AUTO is recorded in any case, but only used if it
+            # is the only info available.
+            if self.flags & (self.MANUAL | self.NEW) == 0:
+                self.sha1 = sha1
+            self.flags |= source
+        elif source == self.NEW_AUTO:
+            # NEW_AUTO is silently ignored if any MANUAL value is
+            # already recorded.
+            if self.flags & self.MANUAL == 0:
+                self.sha1 = sha1
+                self.flags |= source
+        elif source == self.SAVED_MANUAL:
+            # SAVED_MANUAL is recorded in any case, but only used if
+            # no NEW_MANUAL is available.
+            if self.flags & self.NEW_MANUAL == 0:
+                self.sha1 = sha1
+            self.flags |= source
+        elif source == self.NEW_MANUAL:
+            # NEW_MANUAL is always used, and also causes NEW_AUTO to
+            # be forgotten if present.
+            self.sha1 = sha1
+            self.flags = (self.flags | source) & ~self.NEW_AUTO
+        else:
+            raise ValueError('Undefined source: %s' % (source,))
+
+    def is_known(self):
+        return self.sha1 is not None
+
+
 class Block(object):
     """A rectangular range of commits, indexed by (i1,i2).
 
