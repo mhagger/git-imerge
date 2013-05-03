@@ -903,14 +903,7 @@ class Block(object):
             # Nothing to do.
             return
 
-        best_block = None
-        best_area = 0
-
-        for block in merge_frontier:
-            area = block.get_area()
-            if area > best_area:
-                best_block = block
-                best_area = area
+        best_block = max(merge_frontier, key=lambda block: block.get_area())
 
         try:
             best_block.auto_outline()
