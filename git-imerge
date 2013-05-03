@@ -912,10 +912,15 @@ class Block(object):
         if (i1, i2) in self:
             return True
         else:
+            sys.stderr.write(
+                'Attempting automerge of %d-%d...' % self.get_original_indexes(i1, i2)
+                )
             try:
                 automerge(self[i1, 0].sha1, self[0, i2].sha1)
+                sys.stderr.write('success.\n')
                 return True
             except AutomaticMergeFailed:
+                sys.stderr.write('failure.\n')
                 return False
 
     def auto_outline(self):
