@@ -976,6 +976,33 @@ class MergeState(Block):
                     yield m.group('name')
 
     @staticmethod
+    def set_default_name(name):
+        """Set the default merge to the specified one.
+
+        name can be None to cause the default to be cleared."""
+
+        if name is None:
+            try:
+                check_call(['git', 'config', '--unset', 'imerge.default'])
+            except CalledProcessError, e:
+                if e.returncode == 5:
+                    # Value was not set
+                    pass
+                else:
+                    raise
+        else:
+            check_call(['git', 'config', 'imerge.default', name])
+
+    @staticmethod
+    def get_default_name():
+        """Get the name of the default merge, or None if none is currently set."""
+
+        try:
+            return check_output(['git', 'config', 'imerge.default']).rstrip()
+        except CalledProcessError:
+            return None
+
+    @staticmethod
     def read(name):
         merge_ref_re = re.compile(
             r"""
@@ -1164,33 +1191,6 @@ class MergeState(object):
         return merge
 
     @classmethod
-    def set_default(klass, name):
-        """Set the default merge to the specified one.
-
-        name can be None to cause the default to be cleared."""
-
-        if name is None:
-            try:
-                check_call(['git', 'config', '--unset', 'imerge.default'])
-            except CalledProcessError, e:
-                if e.returncode == 5:
-                    # Value was not set
-                    pass
-                else:
-                    raise
-        else:
-            check_call(['git', 'config', 'imerge.default', name])
-
-    @classmethod
-    def get_default(klass):
-        """Get the name of the default merge, or None if none is currently set."""
-
-        try:
-            return check_output(['git', 'config', 'imerge.default']).rstrip()
-        except CalledProcessError:
-            return None
-
-    @classmethod
     def load(klass, name):
         """Load an existing MergeState from disk."""
 
@@ -1228,8 +1228,8 @@ class MergeState(object):
         filename = klass.get_state_filename(name)
 
         # If this merge is the default, unset the default:
-        if klass.get_default() == name:
-            klass.set_default(None)
+        if klass.get_default_name() == name:
+            klass.set_default_name(None)
 
         # Remove state directory:
         dirname = os.path.dirname(filename)
@@ -1342,7 +1342,7 @@ def main(args):
     require_clean_work_tree('proceed')
 
     if options.subcommand == 'list':
-        default_merge = MergeState.get_default()
+        default_merge = MergeState.get_default_name()
         for name in MergeState.iter_existing_names():
             if name == default_merge:
                 sys.stdout.write('* %s\n' % (name,))
@@ -1354,7 +1354,7 @@ def main(args):
                 'The --first-parent option is currently required for the "start" command'
                 )
         MergeState.start(options.name, options.goal, 'HEAD', options.branch)
-        MergeState.set_default(options.name)
+        MergeState.set_default_name(options.name)
     elif options.subcommand == 'remove':
         if options.name is None:
             parser.error('The "remove" command requires an option --name=NAME')
