@@ -1058,6 +1058,8 @@ class MergeState(Block):
         if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
             raise Failure('Name %r is already in use!' % (name,))
 
+        merge_base = check_output(['git', 'merge-base', tip1, tip2]).strip()
+
         commits1 = rev_list('--first-parent', '%s..%s' % (tip2, tip1))
         commits1.reverse()
         if not commits1:
@@ -1071,7 +1073,7 @@ class MergeState(Block):
                 'There are no commits on %r that are not already in %r' % (tip2, tip1)
                 )
 
-        merge = MergeState(name, goal, commits1, commits2, MergeRecord.NEW_MANUAL)
+        merge = MergeState(name, goal, merge_base, commits1, commits2, MergeRecord.NEW_MANUAL)
         merge.save()
         return merge
 
@@ -1154,7 +1156,10 @@ class MergeState(Block):
                 % (name, '\n    '.join(unexpected),)
                 )
 
-        # Find commits1 and commits2:
+        # Find merge_base, commits1, and commits2:
+        (merge_base, source) = merges.pop((0, 0))
+        if source != MergeRecord.SAVED_MANUAL:
+            raise Failure('Merge base should be manual!')
         commits1 = []
         for i1 in itertools.count(1):
             try:
@@ -1175,7 +1180,7 @@ class MergeState(Block):
             except KeyError:
                 break
 
-        state = MergeState(name, goal, commits1, commits2, MergeRecord.SAVED_MANUAL)
+        state = MergeState(name, goal, merge_base, commits1, commits2, MergeRecord.SAVED_MANUAL)
 
         # Now write the rest of the merges to state:
         for ((i1, i2), (sha1, source)) in merges.iteritems():
@@ -1214,7 +1219,7 @@ class MergeState(Block):
                     'Warning: error removing reference %r: %s' % (refname, e)
                     )
 
-    def __init__(self, name, goal, commits1, commits2, source):
+    def __init__(self, name, goal, merge_base, commits1, commits2, source):
         Block.__init__(self, len(commits1) + 1, len(commits2) + 1)
         self.name = name
         self.goal = goal
@@ -1222,6 +1227,7 @@ class MergeState(Block):
         # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
 
+        self.get_value(0, 0).record_merge(merge_base, source)
         for (i1, commit) in enumerate(commits1, 1):
             self.get_value(i1, 0).record_merge(commit, source)
         for (i2, commit) in enumerate(commits2, 1):
