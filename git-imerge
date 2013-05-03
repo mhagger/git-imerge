@@ -99,6 +99,9 @@ STATE_VERSION = (1, 0, 0)
 
 ZEROS = '0' * 40
 
+ALLOWED_GOALS = ['full', 'rebase-with-history', 'rebase', 'simple']
+DEFAULT_GOAL = 'simple'
+
 
 class Failure(Exception):
     """An exception that indicates a normal failure of the script.
@@ -1067,6 +1070,8 @@ class MergeState(Block):
             raise Failure('Version of state is not compatible with this script version.')
 
         goal = state['goal']
+        if goal not in ALLOWED_GOALS:
+            raise Failure('Goal %r, read from state, is not recognized.' % (goal,))
 
         if unexpected:
             raise Failure(
@@ -1274,8 +1279,8 @@ def main(args):
         )
     parser_start.add_argument(
         '--goal',
-        action='store', default='full',
-        choices=['full', 'rebase-with-history', 'rebase', 'simple'],
+        action='store', default=DEFAULT_GOAL,
+        choices=ALLOWED_GOALS,
         help='the goal of the incremental merge',
         )
     #parser_start.add_argument(
