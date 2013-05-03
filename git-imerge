@@ -1450,7 +1450,7 @@ def main(args):
     elif options.subcommand == 'remove':
         if options.name is None:
             parser.error('The "remove" command requires an option --name=NAME')
-        state = MergeState.remove(options.name)
+        MergeState.remove(options.name)
     elif options.subcommand == 'autofill':
         if not options.name:
             options.name = MergeState.get_default_name()
