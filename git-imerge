@@ -140,6 +140,26 @@ def iter_neighbors(iterable):
         last = x
 
 
+def find_first_false(f, lo, hi):
+    """Return the smallest i in lo <= i < hi for which f(i) returns False using bisection.
+
+    If there is no such i, return hi.
+
+    """
+
+    # Loop invariant: f(i) returns True for i < lo; f(i) returns False
+    # for i >= hi.
+
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if f(mid):
+            lo = mid + 1
+        else:
+            hi = mid
+
+    return lo
+
+
 def call_silently(cmd):
     try:
         NULL = open('/dev/null', 'w')
@@ -1063,26 +1083,6 @@ def merge_possible(commit1, commit2):
         return True
     finally:
         call_silently(['git', 'merge', '--abort'])
-
-
-def find_first_false(f, lo, hi):
-    """Return the smallest i in lo <= i < hi for which f(i) returns False using bisection.
-
-    If there is no such i, return hi.
-
-    """
-
-    # Loop invariant: f(i) returns True for i < lo; f(i) returns False
-    # for i >= hi.
-
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if f(mid):
-            lo = mid + 1
-        else:
-            hi = mid
-
-    return lo
 
 
 def find_first_failing_merge(commit1, commits2):
