@@ -645,6 +645,22 @@ class MergeFrontier(object):
 
         return bool(self.blocks)
 
+    def write(self, f):
+        """Write this frontier to file-like object f."""
+
+        output = [['?'] * self.block.len2 for i1 in range(self.block.len1)]
+        for block in self:
+            for i1 in range(block.len1 - 1):
+                output[i1][block.len2 - 1] = '+'
+            for i2 in range(block.len2 - 1):
+                output[block.len1 - 1][i2] = '+'
+            output[block.len1 - 1][block.len2 - 1] = '#'
+
+        for i2 in range(self.block.len2):
+            for i1 in range(self.block.len1):
+                f.write(output[i1][i2])
+            f.write('\n')
+
     @staticmethod
     def _iter_non_empty_blocks(blocks):
         for block in blocks:
@@ -1368,6 +1384,10 @@ def main(args):
                 raise Failure('Please specify the name of the merge to diagram')
         merge_state = MergeState.read(options.name)
         merge_state.write(sys.stdout)
+        sys.stdout.write('\n')
+        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+        merge_frontier.write(sys.stdout)
+        sys.stdout.write('\n')
     elif options.subcommand == 'reparent':
         try:
             commit_sha1 = get_commit_sha1('HEAD')
