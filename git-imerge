@@ -1289,13 +1289,9 @@ def main(args):
         help='compute diagram of conflicts using bisection',
         )
     parser_diagram.add_argument(
-        '--full', action='store_true',
-        help=(
-            'compute diagram of conflicts by computing all possible merges '
-            '(otherwise a much faster bisection-based algorithm is used)'
-            ),
+        '--name', action='store', default=None,
+        help='name of merge to diagram',
         )
-    parser_diagram.add_argument('range', help='BRANCH1...BRANCH2')
 
     parser_reparent = subparsers.add_parser(
         'reparent',
@@ -1328,13 +1324,12 @@ def main(args):
             parser.error('The "remove" command requires an option --name=NAME')
         state = MergeState.remove(options.name)
     elif options.subcommand == 'diagram':
-        if '...' not in options.range:
-            parser.error(
-                'diagram subcommand requires an argument BRANCH1...BRANCH2'
-                )
-        with TemporaryHead():
-            (branch1, branch2) = options.range.split('...')
-            diagram_merge(branch1, branch2, full=options.full)
+        if not options.name:
+            options.name = MergeState.get_default_name()
+            if not options.name:
+                raise Failure('Please specify the name of the merge to diagram')
+        merge_state = MergeState.read(options.name)
+        merge_state.write(sys.stdout)
     elif options.subcommand == 'reparent':
         try:
             commit_sha1 = get_commit_sha1('HEAD')
