@@ -1306,7 +1306,7 @@ def main(args):
 
     parser_diagram = subparsers.add_parser(
         'diagram',
-        help='compute diagram of conflicts using bisection',
+        help='display diagram of current state of merge',
         )
     parser_diagram.add_argument(
         '--name', action='store', default=None,
