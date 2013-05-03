@@ -589,18 +589,11 @@ class Block(object):
             except AutomaticMergeFailed:
                 return False
 
-    def compute_merge_frontier(self, known_failing_indexes=()):
+    def compute_merge_frontier(self):
         """Return a MergeFrontier instance for this block."""
 
         if self.len1 <= 1 or self.len2 <= 1:
             return MergeFrontier(self, [])
-
-        def mergeable(i1, i2):
-            for (f1, f2) in known_failing_indexes:
-                if i1 >= f1 and i2 >= f2:
-                    return False
-            else:
-                return self.is_mergeable(i1, i2)
 
         mergeable_blocks = []
 
@@ -612,11 +605,11 @@ class Block(object):
         # and fall back to bisection otherwise.
         while True:
             # Find the width of the success rectangle at row (i2-1) and fill it in:
-            if mergeable(self.len1 - 1, i2 - 1):
+            if self.is_mergeable(self.len1 - 1, i2 - 1):
                 newi1 = self.len1
             else:
                 newi1 = find_first_false(
-                    lambda i: mergeable(i, i2 - 1),
+                    lambda i: self.is_mergeable(i, i2 - 1),
                     i1, self.len1 - 1,
                     )
             mergeable_blocks.append(self[:newi1,:i2])
@@ -626,11 +619,11 @@ class Block(object):
                 break
 
             # Find the height of the conflict rectangle at column i1 and fill it in:
-            if not mergeable(i1, 1):
+            if not self.is_mergeable(i1, 1):
                 newi2 = 1
             else:
                 newi2 = find_first_false(
-                    lambda i: mergeable(i1, i),
+                    lambda i: self.is_mergeable(i1, i),
                     2, i2,
                     )
             i2 = newi2
