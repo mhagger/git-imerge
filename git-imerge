@@ -953,6 +953,28 @@ class MergeState(Block):
         'manual' : MergeRecord.SAVED_MANUAL,
         }
 
+    MERGE_STATE_RE = re.compile(
+        r"""
+        ^
+        refs\/imerge\/
+        (?P<name>[^\/]+)
+        \/state
+        $
+        """,
+        re.VERBOSE,
+        )
+
+    @staticmethod
+    def iter_existing_names():
+        """Iterate over the names of existing MergeStates in this repo."""
+
+        for line in check_output(['git', 'for-each-ref', 'refs/imerge',]).splitlines():
+            (sha1, type, refname) = line.split()
+            if type == 'blob':
+                m = MergeState.MERGE_STATE_RE.match(refname)
+                if m:
+                    yield m.group('name')
+
     @staticmethod
     def read(name):
         merge_ref_re = re.compile(
@@ -1101,20 +1123,6 @@ class MergeState(Block):
 
 class MergeState(object):
     """The state of an in-progress merge."""
-
-    @classmethod
-    def iter_existing_names(klass):
-        """Iterate over the names of existing MergeStates in this repo."""
-
-        GIT_DIR = check_output(['git', 'rev-parse', '--git-dir']).rstrip()
-        imerge_dir = os.path.join(GIT_DIR, 'imerge')
-        if not os.path.isdir(imerge_dir):
-            return
-        names = os.listdir(imerge_dir)
-        for name in names:
-            state_filename = os.path.join(imerge_dir, name, 'state')
-            if os.path.isfile(state_filename):
-                yield name
 
     @classmethod
     def start(klass, name, goal, tip1, tip2):
