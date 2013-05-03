@@ -488,11 +488,8 @@ class BlockCompleteError(Exception):
 
 
 class FrontierBlockedError(Exception):
-    def __init__(self, i1, i2):
-        Exception.__init__(
-            self,
-            'Frontier blocked; suggest manual merge of %d-%d' % (i1, i2)
-            )
+    def __init__(self, msg, i1, i2):
+        Exception.__init__(self, msg)
         self.i1 = i1
         self.i2 = i2
 
@@ -789,8 +786,11 @@ class MergeFrontier(object):
             # None of the blocks could be expanded.  Suggest that the
             # caller do a manual merge of the commit that is blocking
             # the *smallest* blocker block.
-            block = blocks[-1]
-            raise FrontierBlockedError(*block.get_original_indexes(1, 1))
+            i1, i2 = blocks[-1].get_original_indexes(1, 1)
+            raise FrontierBlockedError(
+                'Frontier blocked; suggest manual merge of %d-%d' % (i1, i2),
+                i1, i2
+                )
 
 
 class Block(object):
@@ -1317,6 +1317,33 @@ class MergeState(Block):
         value = self._data[i1][i2]
         return (value is not None) and value.is_known()
 
+    def auto_complete_frontier(self):
+        """Complete the frontier using automerges.
+
+        If progress is blocked before the frontier is complete, raise
+        a FrontierBlockedError.  Save the state as progress is
+        made."""
+
+        progress_made = False
+        try:
+            while True:
+                frontier = MergeFrontier.map_known_frontier(self)
+                frontier.auto_expand()
+                self.save()
+                progress_made = True
+        except BlockCompleteError:
+            return
+        except FrontierBlockedError, e:
+            if not progress_made:
+                # Adjust the error message:
+                raise FrontierBlockedError(
+                    'No progress was possible; suggest manual merge of %d-%d'
+                    % (e.i1, e.i2),
+                    e.i1, e.i2,
+                    )
+            else:
+                raise
+
     def save(self):
         """Write the current MergeState to the repository."""
 
@@ -1458,18 +1485,10 @@ def main(args):
                 raise Failure('Please specify the name of the merge to autofill')
         merge_state = MergeState.read(options.name)
         with TemporaryHead():
-            progress = False
-            while True:
-                frontier = MergeFrontier.map_known_frontier(merge_state)
-                try:
-                    frontier.auto_expand()
-                    progress = True
-                except FrontierBlockedError, e:
-                    sys.stderr.write(str(e))
-                    break
-        merge_state.save()
-        if not progress:
-            raise Failure('No progress was made')
+            try:
+                merge_state.auto_complete_frontier()
+            except FrontierBlockedError, e:
+                raise Failure(str(e))
     elif options.subcommand == 'diagram':
         if not options.name:
             options.name = MergeState.get_default_name()
