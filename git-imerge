@@ -399,6 +399,51 @@ class MergeFrontier(object):
 
     """
 
+    @staticmethod
+    def compute_by_bisection(block):
+        """Return a MergeFrontier instance for block."""
+
+        if block.len1 <= 1 or block.len2 <= 1:
+            return MergeFrontier(block, [])
+
+        blocks = []
+
+        i1 = 1
+        i2 = block.len2
+
+        # Given that these diagrams typically have few blocks, check the
+        # end of a range first to see if the whole range can be filled in,
+        # and fall back to bisection otherwise.
+        while True:
+            # Find the width of the success rectangle at row (i2-1) and fill it in:
+            if block.is_mergeable(block.len1 - 1, i2 - 1):
+                newi1 = block.len1
+            else:
+                newi1 = find_first_false(
+                    lambda i: block.is_mergeable(i, i2 - 1),
+                    i1, block.len1 - 1,
+                    )
+            blocks.append(block[:newi1,:i2])
+            i1 = newi1
+
+            if i1 == block.len1:
+                break
+
+            # Find the height of the conflict rectangle at column i1 and fill it in:
+            if not block.is_mergeable(i1, 1):
+                newi2 = 1
+            else:
+                newi2 = find_first_false(
+                    lambda i: block.is_mergeable(i1, i),
+                    2, i2,
+                    )
+            i2 = newi2
+
+            if i2 == 1:
+                break
+
+        return MergeFrontier(block, blocks)
+
     def __init__(self, block, blocks=None):
         self.block = block
         blocks = list(self._iter_non_empty_blocks(blocks or []))
@@ -589,50 +634,6 @@ class Block(object):
             except AutomaticMergeFailed:
                 return False
 
-    def compute_merge_frontier(self):
-        """Return a MergeFrontier instance for this block."""
-
-        if self.len1 <= 1 or self.len2 <= 1:
-            return MergeFrontier(self, [])
-
-        mergeable_blocks = []
-
-        i1 = 1
-        i2 = self.len2
-
-        # Given that these diagrams typically have few blocks, check the
-        # end of a range first to see if the whole range can be filled in,
-        # and fall back to bisection otherwise.
-        while True:
-            # Find the width of the success rectangle at row (i2-1) and fill it in:
-            if self.is_mergeable(self.len1 - 1, i2 - 1):
-                newi1 = self.len1
-            else:
-                newi1 = find_first_false(
-                    lambda i: self.is_mergeable(i, i2 - 1),
-                    i1, self.len1 - 1,
-                    )
-            mergeable_blocks.append(self[:newi1,:i2])
-            i1 = newi1
-
-            if i1 == self.len1:
-                break
-
-            # Find the height of the conflict rectangle at column i1 and fill it in:
-            if not self.is_mergeable(i1, 1):
-                newi2 = 1
-            else:
-                newi2 = find_first_false(
-                    lambda i: self.is_mergeable(i1, i),
-                    2, i2,
-                    )
-            i2 = newi2
-
-            if i2 == 1:
-                break
-
-        return MergeFrontier(self, mergeable_blocks)
-
     def auto_outline(self):
         """Complete the outline of this Block.
 
@@ -671,7 +672,7 @@ class Block(object):
 
     def auto_outline_frontier(self, merge_frontier=None):
         if merge_frontier is None:
-            merge_frontier = self.compute_merge_frontier()
+            merge_frontier = MergeFrontier.compute_by_bisection(self)
 
         if not merge_frontier:
             # Nothing to do.
