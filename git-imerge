@@ -735,6 +735,25 @@ class MergeFrontier(object):
             MergeFrontier(self.block[block.len1 - 1:, :block.len2], right),
             )
 
+    def iter_blocker_blocks(self):
+        """Iterate over the blocks on the far side of this frontier.
+
+        This must only be called for an outlined frontier."""
+
+        if not self:
+            yield self.block
+            return
+
+        blockruns = []
+        if self.blocks[0].len2 < self.block.len2:
+            blockruns.append([self.block[0,:]])
+        blockruns.append(self)
+        if self.blocks[-1].len1 < self.block.len1:
+            blockruns.append([self.block[:,0]])
+
+        for block1, block2 in iter_neighbors(itertools.chain(*blockruns)):
+            yield self.block[block1.len1 - 1:block2.len1, block2.len2 - 1: block1.len2]
+
 
 class Block(object):
     """A rectangular range of commits, indexed by (i1,i2).
