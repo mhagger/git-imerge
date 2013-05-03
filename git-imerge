@@ -799,6 +799,13 @@ class Block(object):
         self._check_indexes(i1, i2)
         return (i1, i2)
 
+    def get_original_indexes(self, i1, i2):
+        """Return the original indexes corresponding to (i1,i2) in this block.
+
+        This function supports negative indexes."""
+
+        return self._normalize_indexes((i1, i2))
+
     def set_value(self, i1, i2, value):
         """Set the MergeRecord for integer indexes (i1, i2).
 
@@ -982,6 +989,10 @@ class SubBlock(Block):
             self._block = block
             self._start1 = start1
             self._start2 = start2
+
+    def get_original_indexes(self, i1, i2):
+        i1, i2 = self._normalize_indexes((i1, i2))
+        return self._block.get_original_indexes(i1 + self._start1, i2 + self._start2)
 
     def set_value(self, i1, i2, sha1, flags):
         self._check_indexes(i1, i2)
