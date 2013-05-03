@@ -903,12 +903,16 @@ class Block(object):
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
 
     def auto_outline_frontier(self, merge_frontier=None):
+        """Try to outline the merge frontier of this block.
+
+        Return True iff some progress was made."""
+
         if merge_frontier is None:
             merge_frontier = MergeFrontier.compute_by_bisection(self)
 
         if not merge_frontier:
             # Nothing to do.
-            return
+            return False
 
         best_block = max(merge_frontier, key=lambda block: block.get_area())
 
@@ -919,13 +923,14 @@ class Block(object):
             # fact failed.
             i1, i2 = e.i1, e.i1
             merge_frontier.remove_failure(e.i1, e.i2)
-            self.auto_outline_frontier(merge_frontier)
+            return self.auto_outline_frontier(merge_frontier)
         else:
             f1, f2 = merge_frontier.partition(best_block)
             if f1:
                 f1.block.auto_outline_frontier(f1)
             if f2:
                 f2.block.auto_outline_frontier(f2)
+            return True
 
     def _write(self, f, manual='*', auto='+', unknown='?', sep='', linesep='\n'):
         for i2 in range(self.len2):
