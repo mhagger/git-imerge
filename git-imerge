@@ -1006,6 +1006,40 @@ class MergeState(Block):
             return None
 
     @staticmethod
+    def start(name, goal, tip1, tip2):
+        """Create and return a new MergeState object."""
+
+        if '/' in name:
+            raise Failure('Name %r must not include a slash character!' % (name,))
+
+        try:
+            call_silently(
+                ['git', 'check-ref-format', 'refs/imerge/%s' % (name,)]
+                )
+        except CalledProcessError:
+            raise Failure('Name %r is not a valid refname component!' % (name,))
+
+        if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
+            raise Failure('Name %r is already in use!' % (name,))
+
+        commits1 = rev_list('--first-parent', '%s..%s' % (tip2, tip1))
+        commits1.reverse()
+        if not commits1:
+            raise Failure(
+                'There are no commits on %r that are not already in %r' % (tip1, tip2)
+                )
+        commits2 = rev_list('--first-parent', '%s..%s' % (tip1, tip2))
+        commits2.reverse()
+        if not commits2:
+            raise Failure(
+                'There are no commits on %r that are not already in %r' % (tip2, tip1)
+                )
+
+        merge = MergeState(name, goal, commits1, commits2, MergeRecord.NEW_MANUAL)
+        merge.save()
+        return merge
+
+    @staticmethod
     def read(name):
         merge_ref_re = re.compile(
             r"""
@@ -1194,55 +1228,6 @@ class MergeState(Block):
                 'refs/imerge/%s/state' % (self.name,),
                 sha1,
                 ])
-
-
-class MergeState(object):
-    """The state of an in-progress merge."""
-
-    @classmethod
-    def start(klass, name, goal, tip1, tip2):
-        """Create and return a new MergeState object."""
-
-        filename = klass.get_state_filename(name)
-        if os.path.exists(filename):
-            raise Failure('Name %r is already in use!' % (name,))
-        if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
-            raise Failure('Name %r is already in use!' % (name,))
-        if '/' in name:
-            raise Failure('Name %r must not include a slash character!' % (name,))
-        try:
-            call_silently(
-                ['git', 'check-ref-format', 'refs/imerge/%s/%s-%s' % (name, ZEROS, ZEROS)]
-                )
-        except CalledProcessError:
-            raise Failure('Name %r is not a valid refname component!' % (name,))
-
-        commits1 = rev_list('--first-parent', '%s..%s' % (tip2, tip1))
-        commits1.reverse()
-        if not commits1:
-            raise Failure(
-                'There are no commits on %r that are not already in %r' % (tip1, tip2)
-                )
-        commits2 = rev_list('--first-parent', '%s..%s' % (tip1, tip2))
-        commits2.reverse()
-        if not commits2:
-            raise Failure(
-                'There are no commits on %r that are not already in %r' % (tip2, tip1)
-                )
-
-        merge = klass(name, goal, commits1, commits2)
-        # Create refs pointing at the two tips to prevent their being
-        # garbage-collected:
-        merge.set_ref('tip1', commits1[-1], ZEROS, 'adding reference to tip1')
-        merge.set_ref('tip2', commits2[-1], ZEROS, 'adding reference to tip2')
-        merge.save()
-        return merge
-
-    def __init__(self, name, goal, commits1, commits2):
-        self.name = name
-        self.goal = goal
-        self.commits1 = commits1
-        self.commits2 = commits2
 
 
 @Failure.wrap
