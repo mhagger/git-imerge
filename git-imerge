@@ -125,6 +125,21 @@ class Failure(Exception):
     pass
 
 
+def iter_neighbors(iterable):
+    """For an iterable (x0, x1, x2, ...) generate [(x0,x1), (x1,x2), ...]."""
+
+    i = iter(iterable)
+
+    try:
+        last = i.next()
+    except StopIteration:
+        return
+
+    for x in i:
+        yield (last, x)
+        last = x
+
+
 def call_silently(cmd):
     try:
         NULL = open('/dev/null', 'w')
@@ -398,6 +413,92 @@ class MergeFrontier(object):
     * No redundant blocks
 
     """
+
+    @staticmethod
+    def map_known_frontier(block):
+        """Return the MergeFrontier describing existing successful merges in block.
+
+        The return value only includes the part that is fully outlined
+        and whose outline consists of rectangles reaching back to
+        (0,0)."""
+
+        # FIXME: This algorithm can take combinatorial time, for
+        # example if there is a big block of merges that is a dead
+        # end:
+        #
+        #     +++++++
+        #     +?+++++
+        #     +?+++++
+        #     +?+++++
+        #     +?*++++
+        #
+        # The problem is that the algorithm will explore all of the
+        # ways of getting to commit *, and the number of paths grows
+        # like a binomial coefficient.  The solution would be to
+        # remember dead-ends and reject any curves that visit a point
+        # to the right of a dead-end.
+        #
+        # For now we don't intend to allow a situation like this to be
+        # created, so we ignore the problem.
+
+        # A list (i1, i2, down) of points in the path so far.  down is
+        # True iff the attempted step following this one was
+        # downwards.
+        path = []
+
+        def create_frontier(path):
+            blocks = []
+            for ((i1old, i2old, downold), (i1new, i2new, downnew)) in iter_neighbors(path):
+                if downold == True and downnew == False:
+                    blocks.append(block[:i1new + 1, :i2new + 1])
+            return MergeFrontier(block, blocks)
+
+        # Loop invariants:
+        #
+        # * path is a valid path
+        #
+        # * (i1, i2) is in block but it not yet added to path
+        #
+        # * down is True if a step downwards from (i1, i2) has not yet
+        #   been attempted
+        (i1, i2) = (block.len1 - 1, 0)
+        down = True
+        while True:
+            if down:
+                if i2 == block.len2 - 1:
+                    # Hit edge of block; can't move down:
+                    down = False
+                elif (i1, i2 + 1) in block:
+                    # Can move down
+                    path.append((i1, i2, True))
+                    i2 += 1
+                else:
+                    # Can't move down.
+                    down = False
+            else:
+                if i1 == 0:
+                    # Success!
+                    path.append((i1, i2, False))
+                    return create_frontier(path)
+                elif (i1 - 1, i2) in block:
+                    # Can move left
+                    path.append((i1, i2, False))
+                    down = True
+                    i1 -= 1
+                else:
+                    # There's no way to go forward; backtrack until we
+                    # find a place where we can still try going left:
+                    while True:
+                        try:
+                            (i1, i2, down) = path.pop()
+                        except IndexError:
+                            # This shouldn't happen because, in the
+                            # worst case, there is a valid path across
+                            # the top edge of the merge diagram.
+                            raise RuntimeError('Block is improperly formed!')
+                        if down:
+                            down = False
+                            break
 
     @staticmethod
     def compute_by_bisection(block):
