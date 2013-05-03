@@ -772,6 +772,11 @@ class Block(object):
         self.len1 = len1
         self.len2 = len2
 
+    def get_area(self):
+        """Return the area of this block, ignoring the known edges."""
+
+        return (self.len1 - 1) * (self.len2 - 1)
+
     def _check_indexes(self, i1, i2):
         if not (0 <= i1 < self.len1):
             raise IndexError('first index (%s) is out of range 0:%d' % (i1, self.len1,))
@@ -898,18 +903,14 @@ class Block(object):
             # Nothing to do.
             return
 
-        # Determine which block has the largest area:
-        def area(block):
-            return (block.len1 - 1) * (block.len2 - 1)
-
         best_block = None
         best_area = 0
 
         for block in merge_frontier:
-            a = area(block)
-            if a > best_area:
+            area = block.get_area()
+            if area > best_area:
                 best_block = block
-                best_area = a
+                best_area = area
 
         try:
             best_block.auto_outline()
