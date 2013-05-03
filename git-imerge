@@ -978,6 +978,13 @@ class SubBlock(Block):
         self._check_indexes(i1, i2)
         return self._block.get_value(i1 + self._start1, i2 + self._start2)
 
+    def __str__(self):
+        return '%s[%d:%d,%d:%d]' % (
+            self._block,
+            self._start1, self._start1 + self.len1,
+            self._start2, self._start2 + self.len2,
+            )
+
 
 class MergeState(Block):
     SOURCE_TABLE = {
@@ -1264,6 +1271,9 @@ class MergeState(Block):
                 'refs/imerge/%s/state' % (self.name,),
                 sha1,
                 ])
+
+    def __str__(self):
+        return 'MergeState(%r, goal=%r)' % (self.name, self.goal,)
 
 
 @Failure.wrap
