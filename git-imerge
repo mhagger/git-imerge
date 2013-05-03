@@ -1115,6 +1115,28 @@ class MergeState(Block):
                     )
             state[i1, i2].record_merge(sha1, source)
 
+    @staticmethod
+    def remove(name):
+        # If this merge is the default, unset the default:
+        if MergeState.get_default_name() == name:
+            MergeState.set_default_name(None)
+
+        # Remove any references associated with this merge:
+        for line in check_output([
+                'git', 'for-each-ref', 'refs/imerge/%s' % (name,)
+                ]).splitlines():
+            (sha1, type, refname) = line.split()
+            try:
+                check_call([
+                        'git', 'update-ref',
+                        '-m', 'imerge: remove merge %r' % (name,),
+                        '-d', refname,
+                        ])
+            except CalledProcessError, e:
+                sys.stderr.write(
+                    'Warning: error removing reference %r: %s' % (refname, e)
+                    )
+
     def __init__(self, name, goal, commits1, commits2, source):
         Block.__init__(self, len(commits1) + 1, len(commits2) + 1)
         self.name = name
@@ -1221,44 +1243,6 @@ class MergeState(object):
         self.goal = goal
         self.commits1 = commits1
         self.commits2 = commits2
-
-    @classmethod
-    def remove(klass, name):
-        filename = klass.get_state_filename(name)
-
-        # If this merge is the default, unset the default:
-        if klass.get_default_name() == name:
-            klass.set_default_name(None)
-
-        # Remove state directory:
-        dirname = os.path.dirname(filename)
-        if os.path.isdir(dirname):
-            shutil.rmtree(dirname)
-        else:
-            sys.stderr.write('Warning: no directory %r\n' % (dirname,))
-
-        # Remove 'imerge' directory if it is now empty:
-        imerge_dirname = os.path.dirname(dirname)
-        if not os.listdir(imerge_dirname):
-            try:
-                os.rmdir(imerge_dirname)
-            except Exception, e:
-                sys.stderr.write(
-                    'Warning: Error removing directory %r: %s\n' % (imerge_dirname, e)
-                    )
-
-        # Remove any references associated with this merge:
-        for (sha1, type, refname) in klass.iter_refs(name):
-            try:
-                check_call([
-                        'git', 'update-ref',
-                        '-m', 'imerge: remove merge %r' % (name,),
-                        '-d', refname,
-                        ])
-            except CalledProcessError, e:
-                sys.stderr.write(
-                    'Warning: error removing reference %r: %s' % (refname, e)
-                    )
 
 
 @Failure.wrap
