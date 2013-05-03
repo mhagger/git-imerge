@@ -483,6 +483,20 @@ class UnexpectedMergeFailure(Exception):
         self.i1, self.i2 = i1, i2
 
 
+class BlockCompleteError(Exception):
+    pass
+
+
+class FrontierBlockedError(Exception):
+    def __init__(self, i1, i2):
+        Exception.__init__(
+            self,
+            'Frontier blocked; suggest manual merge of %d-%d' % (i1, i2)
+            )
+        self.i1 = i1
+        self.i2 = i2
+
+
 class MergeFrontier(object):
     """Represents the merge frontier within a Block.
 
@@ -753,6 +767,30 @@ class MergeFrontier(object):
 
         for block1, block2 in iter_neighbors(itertools.chain(*blockruns)):
             yield self.block[block1.len1 - 1:block2.len1, block2.len2 - 1: block1.len2]
+
+    def auto_expand(self):
+        """Try pushing out one of the blocks on this frontier.
+
+        Raise BlockCompleteError if the whole block has already been
+        solved.  Raise FrontierBlockedError if the frontier is blocked
+        everywhere.  This method does *not* update self; if it returns
+        successfully you should recompute the frontier from
+        scratch."""
+
+        blocks = list(self.iter_blocker_blocks())
+        if not blocks:
+            raise BlockCompleteError('The block is already complete')
+        # Try blocks from biggest to smallest:
+        blocks.sort(key=lambda block: block.get_area(), reverse=True)
+        for block in blocks:
+            if block.auto_outline_frontier():
+                return
+        else:
+            # None of the blocks could be expanded.  Suggest that the
+            # caller do a manual merge of the commit that is blocking
+            # the *smallest* blocker block.
+            block = blocks[-1]
+            raise FrontierBlockedError(*block.get_original_indexes(1, 1))
 
 
 class Block(object):
@@ -1420,8 +1458,18 @@ def main(args):
                 raise Failure('Please specify the name of the merge to autofill')
         merge_state = MergeState.read(options.name)
         with TemporaryHead():
-            merge_state.auto_outline_frontier()
+            progress = False
+            while True:
+                frontier = MergeFrontier.map_known_frontier(merge_state)
+                try:
+                    frontier.auto_expand()
+                    progress = True
+                except FrontierBlockedError, e:
+                    sys.stderr.write(str(e))
+                    break
         merge_state.save()
+        if not progress:
+            raise Failure('No progress was made')
     elif options.subcommand == 'diagram':
         if not options.name:
             options.name = MergeState.get_default_name()
