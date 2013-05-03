@@ -875,6 +875,34 @@ class Block(object):
             if f2:
                 f2.block.auto_outline_frontier(f2)
 
+    def _write(self, f, manual='*', auto='+', unknown='?', sep='', linesep='\n'):
+        for i2 in range(self.len2):
+            for i1 in range(self.len1):
+                if i1 != 0:
+                    f.write(sep)
+                if (i1,i2) in self:
+                    if self.get_value(i1, i2).flags & MergeRecord.MANUAL:
+                        f.write(manual)
+                    else:
+                        f.write(auto)
+                else:
+                    f.write(unknown)
+            f.write(linesep)
+
+    def write(self, f):
+        self._write(f)
+
+    def writeppm(self, f):
+        f.write('P3\n')
+        f.write('%d %d 255\n' % (self.n1, self.n2,))
+        self._write(
+            f,
+            manual='0 255 0',
+            auto='0 127 0',
+            unknown='127 127 0',
+            sep='  ',
+            )
+
 
 class SubBlock(Block):
     @staticmethod
@@ -1186,37 +1214,6 @@ class MergeResults(object):
     def __setitem__(self, index, value):
         value = int(bool(value)) | MergeResults.INFERRED
         self._setitem_impl(index, value)
-
-    OUTPUT_CHARS = {
-        UNKNOWN : '?',
-        SUCCESSFUL | TESTED : '+',
-        SUCCESSFUL | INFERRED : '.',
-        CONFLICT | TESTED : 'X',
-        CONFLICT | INFERRED : 'x',
-        }
-
-    def write(self, f):
-        for i2 in range(self.n2):
-            for i1 in range(self.n1):
-                f.write(self.OUTPUT_CHARS[self._data[i1][i2]])
-            f.write('\n')
-
-    OUTPUT_COLORS = {
-        UNKNOWN : (63, 63, 63),
-        SUCCESSFUL | TESTED : (0, 255, 0),
-        SUCCESSFUL | INFERRED : (0, 127, 0),
-        CONFLICT | TESTED : (255, 0, 0),
-        CONFLICT | INFERRED : (127, 0, 0),
-        }
-
-    def writeppm(self, f):
-        f.write('P3\n')
-        f.write('%d %d 255\n' % (self.n1, self.n2,))
-        for i2 in range(self.n2):
-            f.write('%d %d %d' % self.OUTPUT_COLORS[self._data[0][i2]])
-            for i1 in range(1, self.n1):
-                f.write(' %d %d %d' % self.OUTPUT_COLORS[self._data[i1][i2]])
-            f.write('\n')
 
 
 def fill_full(results):
