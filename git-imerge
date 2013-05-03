@@ -656,16 +656,30 @@ class MergeFrontier(object):
 
         return bool(self.blocks)
 
+    ADD_VERTICAL = {
+        '?' : '|',
+        '-' : '+',
+        '+' : '+',
+        }
+
+    ADD_HORIZONTAL = {
+        '?' : '-',
+        '|' : '+',
+        '+' : '+',
+        }
+
     def write(self, f):
         """Write this frontier to file-like object f."""
 
         output = [['?'] * self.block.len2 for i1 in range(self.block.len1)]
         for block in self:
+            i2 = block.len2 - 1
             for i1 in range(block.len1 - 1):
-                output[i1][block.len2 - 1] = '+'
+                output[i1][i2] = self.ADD_HORIZONTAL[output[i1][i2]]
+            i1 = block.len1 - 1
             for i2 in range(block.len2 - 1):
-                output[block.len1 - 1][i2] = '+'
-            output[block.len1 - 1][block.len2 - 1] = '#'
+                output[i1][i2] = self.ADD_VERTICAL[output[i1][i2]]
+            output[block.len1 - 1][block.len2 - 1] = '*'
 
         for i2 in range(self.block.len2):
             for i1 in range(self.block.len1):
