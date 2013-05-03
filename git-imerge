@@ -392,6 +392,54 @@ class MergeRecord(object):
     def is_known(self):
         return self.sha1 is not None
 
+    def save(self, name, i1, i2):
+        """If this record has changed, save it."""
+
+        def set_ref(source):
+            check_call([
+                    'git', 'update-ref',
+                    '-m', 'imerge %r: Record %s merge' % (name, source,),
+                    'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
+                    self.sha1,
+                    ])
+
+        def clear_ref(source):
+            check_call([
+                    'git', 'update-ref',
+                    '-d', 'imerge %r: Remove obsolete %s merge' % (name, source,),
+                    'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
+                    ])
+
+        if self.flags & self.MANUAL:
+            if self.flags & self.AUTO:
+                # Any MANUAL obsoletes any AUTO:
+                if self.flags & self.SAVED_AUTO:
+                    clear_ref('auto')
+
+                self.flags &= ~self.AUTO
+
+            if self.flags & self.NEW_MANUAL:
+                # Convert NEW_MANUAL to SAVED_MANUAL.
+                if self.sha1:
+                    set_ref('manual')
+                    self.flags |= self.SAVED_MANUAL
+                elif self.flags & self.SAVED_MANUAL:
+                    # Delete any existing SAVED_MANUAL:
+                    clear_ref('manual')
+                    self.flags &= ~self.SAVED_MANUAL
+                self.flags &= ~self.NEW_MANUAL
+
+        elif self.flags & self.NEW_AUTO:
+            # Convert NEW_AUTO to SAVED_AUTO.
+            if self.sha1:
+                set_ref('auto')
+                self.flags |= self.SAVED_AUTO
+            elif self.flags & self.SAVED_AUTO:
+                # Delete any existing SAVED_AUTO:
+                clear_ref('auto')
+                self.flags &= ~self.SAVED_AUTO
+            self.flags &= ~self.NEW_AUTO
+
 
 class UnexpectedMergeFailure(Exception):
     def __init__(self, msg, i1, i2):
@@ -979,6 +1027,28 @@ class MergeState(Block):
         (i1, i2) = self._normalize_indexes(index)
         value = self._data[i1][i2]
         return (value is not None) and value.is_known()
+
+    def save(self):
+        """Write the current MergeState to the repository."""
+
+        for i2 in range(0, self.len2):
+            for i1 in range(0, self.len1):
+                if (i1, i2) in self:
+                    self[i1,i2].save(self.name, i1, i2)
+
+        cmd = ['git', 'hash-object', '-t', 'blob', '-w', '--stdin']
+        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        (out, err) = p.communicate('')
+        retcode = p.poll()
+        if retcode:
+            raise CalledProcessError(retcode, cmd, output=out)
+        sha1 = out.strip()
+        check_call([
+                'git', 'update-ref',
+                '-m', 'imerge %r: Record state' % (self.name,),
+                'refs/imerge/%s/state' % (self.name,),
+                sha1,
+                ])
 
 
 def merge_possible(commit1, commit2):
