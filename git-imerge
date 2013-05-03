@@ -1304,6 +1304,15 @@ def main(args):
         help='list names of in-progress merges',
         )
 
+    parser_autofill = subparsers.add_parser(
+        'autofill',
+        help='autofill non-conflicting merges',
+        )
+    parser_autofill.add_argument(
+        '--name', action='store', default=None,
+        help='name of merge to autofill',
+        )
+
     parser_diagram = subparsers.add_parser(
         'diagram',
         help='display diagram of current state of merge',
@@ -1343,6 +1352,15 @@ def main(args):
         if options.name is None:
             parser.error('The "remove" command requires an option --name=NAME')
         state = MergeState.remove(options.name)
+    elif options.subcommand == 'autofill':
+        if not options.name:
+            options.name = MergeState.get_default_name()
+            if not options.name:
+                raise Failure('Please specify the name of the merge to autofill')
+        merge_state = MergeState.read(options.name)
+        with TemporaryHead():
+            merge_state.auto_outline_frontier()
+        merge_state.save()
     elif options.subcommand == 'diagram':
         if not options.name:
             options.name = MergeState.get_default_name()
