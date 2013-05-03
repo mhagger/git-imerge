@@ -373,10 +373,23 @@ class MergeRecord(object):
     AUTO = SAVED_AUTO | NEW_AUTO
     MANUAL = SAVED_MANUAL | NEW_MANUAL
 
+    ALLOWED_INITIAL_FLAGS = [
+        SAVED_AUTO,
+        SAVED_MANUAL,
+        NEW_AUTO,
+        NEW_MANUAL,
+        ]
+
     def __init__(self, sha1=None, flags=0):
         # The currently believed correct merge, or None if it is
         # unknown or the best attempt was unsuccessful.
         self.sha1 = sha1
+
+        if self.sha1 is None:
+            if flags != 0:
+                raise ValueError('Initial flags (%s) for sha1=None should be 0' % (flags,))
+        elif flags not in self.ALLOWED_INITIAL_FLAGS:
+            raise ValueError('Initial flags (%s) is invalid' % (flags,))
 
         # See bits above.
         self.flags = flags
@@ -1067,8 +1080,13 @@ class MergeState(Block):
             )
 
         state_string = None
+
+        # A map {(i1, i2) : (sha1, source)}:
         merges = {}
+
+        # refnames that were found but not understood:
         unexpected = []
+
         for line in check_output([
                 'git', 'for-each-ref', 'refs/imerge/%s' % (name,)
                 ]).splitlines():
@@ -1079,7 +1097,7 @@ class MergeState(Block):
                     raise Failure('Reference %r is not a commit!' % (refname,))
                 i1, i2 = int(m.group('i1')), int(m.group('i2'))
                 source = MergeState.SOURCE_TABLE[m.group('source')]
-                merges[i1, i2].record_merge(sha1, source)
+                merges[i1, i2] = (sha1, source)
                 continue
 
             m = state_ref_re.match(refname)
@@ -1117,8 +1135,8 @@ class MergeState(Block):
         commits1 = []
         for i1 in itertools.count(1):
             try:
-                (source, sha1) = merges.pop((i1, 0))
-                if source != 'manual':
+                (sha1, source) = merges.pop((i1, 0))
+                if source != MergeRecord.SAVED_MANUAL:
                     raise Failure('Merge (%d,0) should be manual!' % (i1,))
                 commits1.append(sha1)
             except KeyError:
@@ -1127,8 +1145,8 @@ class MergeState(Block):
         commits2 = []
         for i2 in itertools.count(1):
             try:
-                (source, sha1) = merges.pop((i2, 0))
-                if source != 'manual':
+                (sha1, source) = merges.pop((0, i2))
+                if source != MergeRecord.SAVED_MANUAL:
                     raise Failure('Merge (0,%d) should be manual!' % (i2,))
                 commits2.append(sha1)
             except KeyError:
@@ -1137,7 +1155,7 @@ class MergeState(Block):
         state = MergeState(name, goal, commits1, commits2, MergeRecord.SAVED_MANUAL)
 
         # Now write the rest of the merges to state:
-        for ((i1, i2), (source, sha1)) in merges.iteritems():
+        for ((i1, i2), (sha1, source)) in merges.iteritems():
             if i1 == 0 and i2 >= state.len2:
                 raise Failure('Merge (0,%d) is missing!' % (state.len2,))
             if i1 >= state.len1 and i2 == 0:
@@ -1148,6 +1166,8 @@ class MergeState(Block):
                     % (i1, i2, state.len1, state.len2)
                     )
             state[i1, i2].record_merge(sha1, source)
+
+        return state
 
     @staticmethod
     def remove(name):
