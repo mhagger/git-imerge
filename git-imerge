@@ -1054,6 +1054,20 @@ class MergeState(Block):
 
             unexpected.append(refname)
 
+        if state_string is None:
+            raise Failure(
+                'No state found; it should have been a blob reference at '
+                '"refs/imerge/%s/state' % (name,)
+                )
+
+        state = json.loads(state_string)
+
+        version = map(int, state['version'].split('.'))
+        if version[0] != STATE_VERSION[0] or version > STATE_VERSION:
+            raise Failure('Version of state is not compatible with this script version.')
+
+        goal = state['goal']
+
         if unexpected:
             raise Failure(
                 'Unexpected reference(s) found in "refs/imerge/%s" namespace:\n    %s\n'
@@ -1081,7 +1095,7 @@ class MergeState(Block):
             except KeyError:
                 break
 
-        state = MergeState(name, commits1, commits2, MergeRecord.SAVED_MANUAL)
+        state = MergeState(name, goal, commits1, commits2, MergeRecord.SAVED_MANUAL)
 
         # Now write the rest of the merges to state:
         for ((i1, i2), (source, sha1)) in merges.iteritems():
@@ -1096,9 +1110,10 @@ class MergeState(Block):
                     )
             state[i1, i2].record_merge(sha1, source)
 
-    def __init__(self, name, commits1, commits2, source):
+    def __init__(self, name, goal, commits1, commits2, source):
         Block.__init__(self, len(commits1) + 1, len(commits2) + 1)
         self.name = name
+        self.goal = goal
 
         # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
@@ -1133,9 +1148,15 @@ class MergeState(Block):
                 if (i1, i2) in self:
                     self[i1,i2].save(self.name, i1, i2)
 
+        state = dict(
+            version='.'.join(map(str, STATE_VERSION)),
+            goal=self.goal,
+            )
+        state_string = json.dumps(state, sort_keys=True, indent=4)
+
         cmd = ['git', 'hash-object', '-t', 'blob', '-w', '--stdin']
         p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        (out, err) = p.communicate('')
+        (out, err) = p.communicate(state_string)
         retcode = p.poll()
         if retcode:
             raise CalledProcessError(retcode, cmd, output=out)
@@ -1190,38 +1211,11 @@ class MergeState(object):
         merge.save()
         return merge
 
-    @classmethod
-    def load(klass, name):
-        """Load an existing MergeState from disk."""
-
-        f = open(klass.get_state_filename(name), 'rb')
-        state = json.load(f)
-        version = map(int, state['version'].split('.'))
-        if version[0] != STATE_VERSION[0] or version > STATE_VERSION:
-            raise Failure('Version of state is not compatible with this script version.')
-        return klass(name, state['goal'], state['commits1'], state['commits2'])
-
     def __init__(self, name, goal, commits1, commits2):
         self.name = name
         self.goal = goal
         self.commits1 = commits1
         self.commits2 = commits2
-
-    def save(self):
-        filename = self.get_state_filename(self.name)
-        dirname = os.path.dirname(filename)
-        if not os.path.isdir(dirname):
-            os.makedirs(dirname)
-        f = open('%s.lock' % (filename,), 'wb')
-        state = dict(
-            version='.'.join(map(str, STATE_VERSION)),
-            goal=self.goal,
-            commits1=self.commits1,
-            commits2=self.commits2,
-            )
-        json.dump(state, f, sort_keys=True, indent=4)
-        f.close()
-        os.rename('%s.lock' % (filename,), filename)
 
     @classmethod
     def remove(klass, name):
