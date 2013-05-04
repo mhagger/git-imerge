@@ -95,8 +95,13 @@ STATE_VERSION = (1, 0, 0)
 
 ZEROS = '0' * 40
 
-ALLOWED_GOALS = ['full', 'rebase-with-history', 'rebase', 'simple']
-DEFAULT_GOAL = 'simple'
+ALLOWED_GOALS = [
+    #'full',
+    'rebase-with-history',
+    'rebase',
+    'merge',
+    ]
+DEFAULT_GOAL = 'merge'
 
 
 class Failure(Exception):
