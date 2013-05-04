@@ -368,7 +368,7 @@ class Block(object):
         self.len1 = len1
         self.len2 = len2
 
-    def check_index(self, i1, i2):
+    def _check_indexes(self, i1, i2):
         if not (0 <= i1 < self.len1):
             raise IndexError('first index (%s) is out of range 0:%d' % (i1, self.len1,))
         if not (0 <= i2 < self.len2):
@@ -452,7 +452,7 @@ class SubBlock(Block):
         self._start2 = start2
 
     def set_value(self, i1, i2, value):
-        self.check_index(i1, i2)
+        self._check_indexes(i1, i2)
         self._block.set_value(i1, i2, value)
 
     def __setitem__(self, index, value):
@@ -469,7 +469,7 @@ class SubBlock(Block):
         self.set_value(i1 + self._start1, i2 + self._start2, value)
 
     def get_value(self, i1, i2):
-        self.check_index(i1, i2)
+        self._check_indexes(i1, i2)
         return self._block.get_value(i1 + self._start1, i2 + self._start2)
 
 
