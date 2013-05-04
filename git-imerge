@@ -18,24 +18,20 @@
 # along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
 
-r"""Tools to help handle git nightmare merges.
+r"""Git incremental merge
 
-usage:
-    %(prog)s diagram [--full] BRANCH1...BRANCH2 >diagram.ppm
+Perform the merge between two branches incrementally.  If conflicts
+are encountered, figure out exactly which pairs of commits conflict,
+and present the user with one pairwise conflict at a time.
 
-        Determine which pairs of commits from the two branchs can be
-        merged together without conflict.  Output the result as a
-        PPM-formatted image, where successful merges are shown as
-        green pixels and unsuccessful merges as red pixels.
+Multiple incremental merges can be in progress at the same time.  Each
+incremental merge has a name, and its progress is recorded in the Git
+repository as references under 'refs/imerge/NAME'.  The current state
+of an incremental merge can (crudely) be visualized using the
+"diagram" command.
 
-    %(prog)s reparent [PARENT...]
-
-        Change the parents of the HEAD commit to the specified list.
-        Write the name of the new commit object to stdout without
-        actually pointing HEAD at it.
-
-In all cases, only the --first-parent commits are considered for
-merging, and git rerere is disabled.
+An incremental merge can be interrupted and resumed arbitrarily, or
+even pushed to a server to allow somebody else to work on it.
 
 [1] http://softwareswirl.blogspot.de/2009/04/truce-in-merge-vs-rebase-war.html
 
