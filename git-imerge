@@ -728,6 +728,26 @@ class MergeFrontier(object):
         if shrunk_block:
             self.blocks = list(self._iter_non_redundant_blocks(self.blocks))
 
+    def add_success(self, i1, i2):
+        """Return True iff the specified merge affects this frontier.
+
+        This method does *not* update self; if it returns True you
+        should recompute the frontier from scratch."""
+
+        for block in self.iter_blocker_blocks():
+            try:
+                (block_i1, block_i2) = block.convert_original_indexes(i1, i2)
+            except IndexError:
+                pass
+            else:
+                if (block_i1, block_i2) == (1,1):
+                    # That's the one we need to improve this block:
+                    return True
+                else:
+                    return False
+        else:
+            return False
+
     def partition(self, block):
         """Return two MergeFrontier instances partitioned by block.
 
@@ -805,6 +825,21 @@ class MergeFrontier(object):
                 'Frontier blocked; suggest manual merge of %d-%d' % (i1, i2),
                 i1, i2
                 )
+
+
+class ManualMergeUnusableError(Exception):
+    def __init__(self, msg, commit):
+        Exception.__init__(self, 'Commit %s is not usable; %s' % (commit, msg))
+        self.commit = commit
+
+
+class CommitNotFoundError(Exception):
+    def __init__(self, commit):
+        Exception.__init__(
+            self,
+            'Commit %s was not found among the known merge commits' % (commit,),
+            )
+        self.commit = commit
 
 
 class Block(object):
@@ -1336,6 +1371,9 @@ class MergeState(Block):
         for (i2, commit) in enumerate(commits2, 1):
             self.get_value(0, i2).record_merge(commit, source)
 
+    def get_scratch_refname(self):
+        return 'refs/heads/imerge/%s' % (self.name,)
+
     def set_value(self, i1, i2, value):
         self._data[i1][i2] = value
 
@@ -1380,6 +1418,58 @@ class MergeState(Block):
             else:
                 raise
 
+    def find_index(self, commit):
+        """Return (i1,i2) for the specified commit.
+
+        Raise CommitNotFoundError if it is not known."""
+
+        for i2 in range(0, self.len2):
+            for i1 in range(0, self.len1):
+                if (i1, i2) in self:
+                    record = self[i1,i2]
+                    if record.sha1 == commit:
+                        return (i1, i2)
+        raise CommitNotFoundError(commit)
+
+    def incorporate_manual_merge(self, commit):
+        """Record commit as a manual merge of its parents.
+
+        Return the indexes (i1,i2) where it was recorded.  If the
+        commit is not usable for some reason, raise
+        ManualMergeUnusableError."""
+
+        parents = check_output(
+            ['git', 'log', '--no-walk', '--pretty=format:%P', commit]
+            ).strip().split()
+        if len(parents) < 2:
+            raise ManualMergeUnusableError('it is not a merge', commit)
+        if len(parents) > 2:
+            raise ManualMergeUnusableError('it is an octopus merge', commit)
+        # Find the parents among our contents...
+        try:
+            (i1first, i2first) = self.find_index(parents[0])
+            (i1second, i2second) = self.find_index(parents[1])
+        except CommitNotFoundError:
+            raise ManualMergeUnusableError(
+                'its parents are not known merge commits', commit,
+                )
+        swapped = False
+        if i1first < i1second:
+            # Swap parents to make the parent from above the first parent:
+            (i1first, i2first, i1second, i2second) = (i1second, i2second, i2first, i1first)
+            swapped = True
+        if i1first != i1second + 1 or i2first != i2second - 1:
+            raise ManualMergeUnusableError(
+                'it is not a pairwise merge of adjacent parents', commit,
+                )
+        if swapped:
+            # Create a new merge with the parents in the conventional order:
+            commit = reparent(commit, [parents[1], parents[0]])
+
+        i1, i2 = i1first, i2second
+        self[i1, i2].record_merge(commit, MergeRecord.NEW_MANUAL)
+        return (i1, i2)
+
     def save(self):
         """Write the current MergeState to the repository."""
 
@@ -1410,6 +1500,90 @@ class MergeState(Block):
 
     def __str__(self):
         return 'MergeState(%r, goal=%r)' % (self.name, self.goal,)
+
+
+def request_user_merge(merge_state, i1, i2):
+    """Prepare the working tree for the user to do a manual merge.
+
+    It is assumed that the merge above and to the left of (i1, i2) are
+    already done."""
+
+    above = merge_state[i1, i2 - 1]
+    left = merge_state[i1 - 1, i2]
+    if not above.is_known() or not left.is_known():
+        raise RuntimeError('The parents of merge %d-%d are not ready' % (i1, i2))
+    refname = merge_state.get_scratch_refname()
+    check_call([
+            'git', 'update-ref',
+            '-m', 'imerge %r: Prepare merge %d-%d' % (merge_state.name, i1, i2,),
+            refname, above.sha1,
+            ])
+    assert refname.startswith('refs/heads/')
+    branchname = refname[len('refs/heads/'):]
+    check_call(['git', 'checkout', branchname])
+    try:
+        check_call([
+                'git', 'merge', '--no-commit',
+                '-m', 'Merge %d-%d of incremental merge \'%s\'' % (i1, i2, merge_state.name,),
+                left.sha1,
+                ])
+    except CalledProcessError, e:
+        # We expect an error (otherwise we would have automerged!)
+        pass
+    sys.stdout.write('Original first commit:\n')
+    check_call(['git', 'log', '--no-walk', merge_state[i1,0].sha1])
+    sys.stdout.write('Original second commit:\n')
+    check_call(['git', 'log', '--no-walk', merge_state[0,i2].sha1])
+    sys.stdout.write(
+        'Please prepare a merge of the above commits, commit the result,\n'
+        'then type\n'
+        '    git-imerge continue\n'
+        )
+
+def incorporate_user_merge(merge_state):
+    """If the user has done a merge for us, incorporate the results.
+
+    If reference refs/heads/imerge/NAME exists, try to incorporate it
+    into merge_state, auto-fill if possible, and delete the reference.
+    If the reference exists but cannot be used, raise a
+    ManualMergeUnusableError.  This function must be called with a
+    clean work tree."""
+
+    refname = merge_state.get_scratch_refname()
+    try:
+        commit = get_commit_sha1(refname)
+    except ValueError:
+        return False
+
+    merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+
+    # This might throw ManualMergeUnusableError:
+    (i1, i2) = merge_state.incorporate_manual_merge(commit)
+
+    merge_state.save()
+
+    try:
+        headref = check_output(['git', 'symbolic-ref', '-q', 'HEAD']).strip()
+    except CalledProcessError:
+        pass
+    else:
+        if headref == refname:
+            # Detach head so that we can delete refname.
+            check_call([
+                    'git', 'update-ref', '--no-deref',
+                    '-m', 'Detach HEAD from %s' % (refname,),
+                    'HEAD', commit,
+                    ])
+
+    check_call([
+            'git', 'update-ref',
+            '-m', 'imerge %s: remove scratch reference' % (merge_state.name,),
+            '-d', refname,
+            ])
+
+    # Now expand the merge frontier based on the new information (if
+    # possible):
+    return merge_frontier.add_success(i1, i2)
 
 
 def read_merge_state(name=None):
@@ -1474,6 +1648,15 @@ def main(args):
         help='list names of in-progress merges',
         )
 
+    parser_continue = subparsers.add_parser(
+        'continue',
+        help='record the merge at branch imerge/NAME and do the next step of the merge',
+        )
+    parser_continue.add_argument(
+        '--name', action='store', default=None,
+        help='name of merge to continue',
+        )
+
     parser_autofill = subparsers.add_parser(
         'autofill',
         help='autofill non-conflicting merges',
@@ -1522,6 +1705,18 @@ def main(args):
         if options.name is None:
             parser.error('The "remove" command requires an option --name=NAME')
         MergeState.remove(options.name)
+    elif options.subcommand == 'continue':
+        merge_state = read_merge_state(options.name)
+        try:
+            incorporate_user_merge(merge_state)
+        except ManualMergeUnusableError, e:
+            raise Failure(str(e))
+        try:
+            merge_state.auto_complete_frontier()
+        except FrontierBlockedError, e:
+            request_user_merge(merge_state, e.i1, e.i2)
+        else:
+            sys.stderr.write('Merge is complete!\n')
     elif options.subcommand == 'autofill':
         merge_state = read_merge_state(options.name)
         with TemporaryHead():
