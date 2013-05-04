@@ -1153,6 +1153,20 @@ class MergeState(Block):
                     yield m.group('name')
 
     @staticmethod
+    def _read_state(name, sha1):
+        state_string = check_output(['git', 'cat-file', 'blob', sha1])
+        state = json.loads(state_string)
+
+        version = tuple(map(int, state['version'].split('.')))
+        if version[0] != STATE_VERSION[0] or version > STATE_VERSION:
+            raise Failure(
+                'The format of imerge %s (%s) is not compatible with this script version.'
+                % (name, state['version'],)
+                )
+        state['version'] = version
+        return state
+
+    @staticmethod
     def set_default_name(name):
         """Set the default merge to the specified one.
 
@@ -1242,7 +1256,7 @@ class MergeState(Block):
             re.VERBOSE,
             )
 
-        state_string = None
+        state = None
 
         # A map {(i1, i2) : (sha1, source)}:
         merges = {}
@@ -1267,22 +1281,16 @@ class MergeState(Block):
             if m:
                 if type != 'blob':
                     raise Failure('Reference %r is not a blob!' % (refname,))
-                state_string = check_output(['git', 'cat-file', 'blob', sha1])
+                state = MergeState._read_state(name, sha1)
                 continue
 
             unexpected.append(refname)
 
-        if state_string is None:
+        if state is None:
             raise Failure(
                 'No state found; it should have been a blob reference at '
                 '"refs/imerge/%s/state' % (name,)
                 )
-
-        state = json.loads(state_string)
-
-        version = map(int, state['version'].split('.'))
-        if version[0] != STATE_VERSION[0] or version > STATE_VERSION:
-            raise Failure('Version of state is not compatible with this script version.')
 
         goal = state['goal']
         if goal not in ALLOWED_GOALS:
