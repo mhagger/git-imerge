@@ -1395,6 +1395,14 @@ class MergeState(Block):
         return 'MergeState(%r, goal=%r)' % (self.name, self.goal,)
 
 
+def read_merge_state(name=None):
+    if name is None:
+        name = MergeState.get_default_name()
+        if not name:
+            raise Failure('Please specify the name of the merge to autofill')
+    return MergeState.read(name)
+
+
 @Failure.wrap
 def main(args):
     parser = argparse.ArgumentParser(
@@ -1498,22 +1506,14 @@ def main(args):
             parser.error('The "remove" command requires an option --name=NAME')
         MergeState.remove(options.name)
     elif options.subcommand == 'autofill':
-        if not options.name:
-            options.name = MergeState.get_default_name()
-            if not options.name:
-                raise Failure('Please specify the name of the merge to autofill')
-        merge_state = MergeState.read(options.name)
+        merge_state = read_merge_state(options.name)
         with TemporaryHead():
             try:
                 merge_state.auto_complete_frontier()
             except FrontierBlockedError, e:
                 raise Failure(str(e))
     elif options.subcommand == 'diagram':
-        if not options.name:
-            options.name = MergeState.get_default_name()
-            if not options.name:
-                raise Failure('Please specify the name of the merge to diagram')
-        merge_state = MergeState.read(options.name)
+        merge_state = read_merge_state(options.name)
         merge_state.write(sys.stdout)
         sys.stdout.write('\n')
         merge_frontier = MergeFrontier.map_known_frontier(merge_state)
