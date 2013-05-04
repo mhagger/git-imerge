@@ -259,6 +259,16 @@ def get_commit_sha1(arg):
         raise ValueError('%r does not refer to a valid git commit' % (arg,))
 
 
+def get_log_message(commit):
+    contents = check_output([
+            'git', 'cat-file', 'commit', commit
+            ]).splitlines(True)
+    contents = contents[contents.index('\n') + 1:]
+    if contents and contents[-1][-1:] != '\n':
+        contents.append('\n')
+    return ''.join(contents)
+
+
 class TemporaryHead(object):
     """A context manager that records the current HEAD state then restores it.
 
@@ -1423,6 +1433,11 @@ class MergeState(Block):
         for (i2, commit) in enumerate(commits2, 1):
             self.get_value(0, i2).record_merge(commit, source)
 
+    def set_goal(self, goal):
+        if goal not in ALLOWED_GOALS:
+            raise ValueError('%r is not an allowed goal' % (goal,))
+        self.goal = goal
+
     def get_scratch_refname(self):
         return 'refs/heads/imerge/%s' % (self.name,)
 
@@ -1521,6 +1536,135 @@ class MergeState(Block):
         i1, i2 = i1first, i2second
         self[i1, i2].record_merge(commit, MergeRecord.NEW_MANUAL)
         return (i1, i2)
+
+    @staticmethod
+    def _is_ancestor(commit1, commit2):
+        """Return True iff commit1 is an ancestor (or equal to) commit2."""
+
+        if commit1 == commit2:
+            return True
+        else:
+            return int(
+                check_output([
+                        'git', 'rev-list', '--count', '--ancestry-path',
+                        '%s..%s' % (commit1, commit2,),
+                        ]).strip()
+                ) != 0
+
+    @staticmethod
+    def _set_refname(refname, commit, force=False):
+        try:
+            ref_oldval = get_commit_sha1(refname)
+        except ValueError:
+            # refname doesn't already exist; simply point it at commit:
+            check_call(['git', 'update-ref', refname, commit])
+            checkout(refname)
+        else:
+            # refname already exists.  This has two ramifications:
+            # 1. HEAD might point at it
+            # 2. We may only fast-forward it (unless force is set)
+            try:
+                head_refname = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
+            except CalledProcessError:
+                head_refname = None
+
+            if not force:
+                if not self._is_ancestor(ref_oldval, commit):
+                    raise Failure(
+                        '%s cannot be fast-forwarded to %s!' % (refname, commit)
+                        )
+
+            if head_refname == refname:
+                check_call(['git', 'reset', '--hard', commit])
+            else:
+                check_call([
+                        'git', 'update-ref',
+                        '-m', 'imerge: recording final merge',
+                        refname, commit,
+                        ])
+                checkout(refname)
+
+    def simplify_to_rebase_with_history(self, refname, force=False):
+        i1 = self.len1 - 1
+        for i2 in range(1, self.len2):
+            if not (i1, i2) in self:
+                raise Failure(
+                    'Cannot simplify to rebase-with-history because '
+                    'merge %d-%d is not yet done'
+                    % (i1, i2)
+                    )
+
+        commit = self[i1, 0].sha1
+        for i2 in range(1, self.len2):
+            orig = self[0, i2].sha1
+            tree = rev_parse('%s^{tree}' % (self[i1, i2].sha1,))
+
+            # Create a commit, copying the old log message:
+            commit = check_output([
+                    'git', 'commit-tree',
+                    '-m', get_log_message(orig),
+                    '-p', commit, '-p', orig, tree,
+                    ]).strip()
+
+        self._set_refname(refname, commit, force=force)
+
+    def simplify_to_rebase(self, refname, force=False):
+        i1 = self.len1 - 1
+        for i2 in range(1, self.len2):
+            if not (i1, i2) in self:
+                raise Failure(
+                    'Cannot simplify to rebase because merge %d-%d is not yet done'
+                    % (i1, i2)
+                    )
+
+        commit = self[i1, 0].sha1
+        for i2 in range(1, self.len2):
+            orig = self[0, i2].sha1
+            tree = rev_parse('%s^{tree}' % (self[i1, i2].sha1,))
+
+            # Create a commit, copying the old log message:
+            commit = check_output([
+                    'git', 'commit-tree',
+                    '-m', get_log_message(orig),
+                    '-p', commit, tree,
+                    ]).strip()
+
+        self._set_refname(refname, commit, force=force)
+
+    def simplify_to_merge(self, refname, force=False):
+        if not (-1, -1) in self:
+            raise Failure(
+                'Cannot simplify to merge because merge %d-%d is not yet done'
+                % (self.len1 - 1, self.len2 - 1)
+                )
+        tree = rev_parse('%s^{tree}' % (self[-1, -1].sha1,))
+        parents = [self[-1,0].sha1, self[0,-1].sha1]
+
+        # Create a preliminary commit with a generic commit message:
+        sha1 = check_output([
+                'git', 'commit-tree',
+                '-m', 'Merge commit %s into commit %s' % (parents[1], parents[0]),
+                '-p', parents[0], '-p', parents[1], tree,
+                ]).strip()
+
+        self._set_refname(refname, sha1, force=force)
+
+        # Now let the user edit the commit log message:
+        check_call(['git', 'commit', '--amend'])
+
+    def simplify(self, refname, force=False):
+        """Simplify this MergeState and save the result to refname.
+
+        The merge must be complete before calling this method."""
+
+        if self.goal == 'rebase-with-history':
+            self.simplify_to_rebase_with_history(refname, force=force)
+        elif self.goal == 'rebase':
+            self.simplify_to_rebase(refname, force=force)
+        elif self.goal == 'merge':
+            self.simplify_to_merge(refname, force=force)
+        else:
+            raise ValueError('Invalid value for goal (%r)' % (goal,))
 
     def save(self):
         """Write the current MergeState to the repository."""
@@ -1786,6 +1930,44 @@ def main(args):
         help='name of merge to autofill',
         )
 
+    parser_simplify = subparsers.add_parser(
+        'simplify',
+        help=(
+            'simplify a completed incremental merge by discarding unneeded '
+            'intermediate merges and cleaning up the ancestry of the commits '
+            'that are retained'
+            ),
+        )
+    parser_simplify.add_argument(
+        '--name', action='store', default=None,
+        help='name of merge to simplify',
+        )
+    parser_simplify.add_argument(
+        '--goal',
+        action='store', default=None,
+        choices=ALLOWED_GOALS,
+        help=(
+            'the type of simplification to be made '
+            '(default is the value provided to "init" or "start")'
+            ),
+        )
+    parser_simplify.add_argument(
+        '--branch',
+        action='store', default=None,
+        help=(
+            'the name of the branch to which to store the result '
+            '(default is the name of the merge).   If '
+            'BRANCH already exists then it must be able to be '
+            'fast-forwarded to the result unless the --force option is '
+            'specified.'
+            ),
+        )
+    parser_simplify.add_argument(
+        '--force',
+        action='store_true', default=False,
+        help='allow the target branch to be updated in a non-fast-forward manner',
+        )
+
     parser_diagram = subparsers.add_parser(
         'diagram',
         help='display diagram of current state of merge',
@@ -1887,6 +2069,16 @@ def main(args):
                 merge_state.auto_complete_frontier()
             except FrontierBlockedError, e:
                 raise Failure(str(e))
+    elif options.subcommand == 'simplify':
+        merge_state = read_merge_state(options.name)
+        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+        if not merge_frontier.is_complete():
+            raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
+        refname = 'refs/heads/%s' % ((options.branch or merge_state.name),)
+        if options.goal is not None:
+            merge_state.set_goal(options.goal)
+            merge_state.save()
+        merge_state.simplify(refname, force=options.force)
     elif options.subcommand == 'diagram':
         merge_state = read_merge_state(options.name)
         merge_state.write(sys.stdout)
