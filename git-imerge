@@ -238,6 +238,16 @@ def get_type(arg):
     return check_output(['git', 'cat-file', '-t', arg]).strip()
 
 
+BRANCH_PREFIX = 'refs/heads/'
+
+def checkout(refname):
+    if refname.startswith(BRANCH_PREFIX):
+        target = refname[len(BRANCH_PREFIX):]
+    else:
+        target = '%s^0' % (refname,)
+    check_call(['git', 'checkout', target])
+
+
 def get_commit_sha1(arg):
     """Convert arg into a SHA1 and verify that it refers to a commit.
 
@@ -1560,9 +1570,7 @@ def request_user_merge(merge_state, i1, i2):
             '-m', 'imerge %r: Prepare merge %d-%d' % (merge_state.name, i1, i2,),
             refname, above.sha1,
             ])
-    assert refname.startswith('refs/heads/')
-    branchname = refname[len('refs/heads/'):]
-    check_call(['git', 'checkout', branchname])
+    checkout(refname)
     try:
         check_call([
                 'git', 'merge', '--no-commit',
