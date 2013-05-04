@@ -43,8 +43,10 @@ merging, and git rerere is disabled.
 
 import sys
 import os
+import re
 import shutil
 import subprocess
+import itertools
 import functools
 import argparse
 from cStringIO import StringIO
@@ -473,6 +475,105 @@ class SubBlock(Block):
 
 
 class MergeState(Block):
+    SOURCE_TABLE = {
+        'auto' : MergeRecord.SAVED_AUTO,
+        'manual' : MergeRecord.SAVED_MANUAL,
+        }
+
+    @staticmethod
+    def read(name):
+        merge_ref_re = re.compile(
+            r"""
+            ^
+            refs\/imerge\/
+            """ + re.escape(name) + r"""
+            \/(?P<source>auto|manual)\/
+            (?P<i1>0|[1-9][0-9]*)
+            \-
+            (?P<i2>0|[1-9][0-9]*)
+            $
+            """,
+            re.VERBOSE,
+            )
+
+        state_ref_re = re.compile(
+            r"""
+            ^
+            refs\/imerge\/
+            """ + re.escape(name) + r"""
+            \/state
+            $
+            """,
+            re.VERBOSE,
+            )
+
+        state_string = None
+        merges = {}
+        unexpected = []
+        for line in check_output([
+                'git', 'for-each-ref', 'refs/imerge/%s' % (name,)
+                ]).splitlines():
+            (sha1, type, refname) = line.split()
+            m = merge_ref_re.match(refname)
+            if m:
+                if type != 'commit':
+                    raise Failure('Reference %r is not a commit!' % (refname,))
+                i1, i2 = int(m.group('i1')), int(m.group('i2'))
+                source = MergeState.SOURCE_TABLE[m.group('source')]
+                merges[i1, i2].record_merge(sha1, source)
+                continue
+
+            m = state_ref_re.match(refname)
+            if m:
+                if type != 'blob':
+                    raise Failure('Reference %r is not a blob!' % (refname,))
+                state_string = check_output(['git', 'cat-file', 'blob', sha1])
+                continue
+
+            unexpected.append(refname)
+
+        if unexpected:
+            raise Failure(
+                'Unexpected reference(s) found in "refs/imerge/%s" namespace:\n    %s\n'
+                % (name, '\n    '.join(unexpected),)
+                )
+
+        # Find commits1 and commits2:
+        commits1 = []
+        for i1 in itertools.count(1):
+            try:
+                (source, sha1) = merges.pop((i1, 0))
+                if source != 'manual':
+                    raise Failure('Merge (%d,0) should be manual!' % (i1,))
+                commits1.append(sha1)
+            except KeyError:
+                break
+
+        commits2 = []
+        for i2 in itertools.count(1):
+            try:
+                (source, sha1) = merges.pop((i2, 0))
+                if source != 'manual':
+                    raise Failure('Merge (0,%d) should be manual!' % (i2,))
+                commits2.append(sha1)
+            except KeyError:
+                break
+
+        state = MergeState(commits1, commits2, MergeRecord.SAVED_MANUAL)
+
+        # Now write the rest of the merges to state:
+        for ((i1, i2), (source, sha1)) in merges.iteritems():
+            if i1 == 0 and i2 >= state.len2:
+                raise Failure('Merge (0,%d) is missing!' % (state.len2,))
+            if i1 >= state.len1 and i2 == 0:
+                raise Failure('Merge (%d,0) is missing!' % (state.len1,))
+            if i1 >= state.len1 or i2 >= state.len2:
+                raise Failure(
+                    'Merge (%d,%d) is out of range [0:%d,0:%d]'
+                    % (i1, i2, state.len1, state.len2)
+                    )
+            state[i1, i2].record_merge(sha1, source)
+
     def __init__(self, commits1, commits2, source):
         Block.__init__(self, len(commits1) + 1, len(commits2) + 1)
 
