@@ -1670,7 +1670,7 @@ def main(args):
         help='start an incremental merge',
         )
     parser_start.add_argument(
-        '--name', action='store', default='merge',
+        '--name', action='store', default=None,
         help='name to use for this incremental merge',
         )
     parser_start.add_argument(
@@ -1761,6 +1761,10 @@ def main(args):
         if not options.first_parent:
             parser.error(
                 'The --first-parent option is currently required for the "start" command'
+                )
+        if not options.name:
+            parser.error(
+                'Please specify the --name to be used for this incremental merge'
                 )
         MergeState.start(options.name, options.goal, 'HEAD', options.branch)
         MergeState.set_default_name(options.name)
