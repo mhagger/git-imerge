@@ -1663,6 +1663,38 @@ def main(args):
         )
     subparsers = parser.add_subparsers(dest='subcommand', help='sub-command')
 
+    parser_init = subparsers.add_parser(
+        'init',
+        help='initialize an incremental merge',
+        )
+    parser_init.add_argument(
+        '--name', action='store', default=None,
+        help='name to use for this incremental merge',
+        )
+    parser_init.add_argument(
+        '--goal',
+        action='store', default=DEFAULT_GOAL,
+        choices=ALLOWED_GOALS,
+        help='the goal of the incremental merge',
+        )
+    #parser_init.add_argument(
+    #    '--conflicts', ...
+    #    action='store', default='pairwise',
+    #    choices=['pairwise', 'fewest'],
+    #    help='what sort of conflicts will be presented to the user',
+    #    )
+    parser_init.add_argument(
+        '--first-parent', action='store_true', default=None,
+        help=(
+            'handle only the first parent commits '
+            '(this option is currently required)'
+            ),
+        )
+    parser_init.add_argument(
+        'branch', action='store',
+        help='the tip of the branch to be merged into HEAD',
+        )
+
     parser_start = subparsers.add_parser(
         'start',
         help='start an incremental merge',
@@ -1755,6 +1787,20 @@ def main(args):
                 sys.stdout.write('* %s\n' % (name,))
             else:
                 sys.stdout.write('  %s\n' % (name,))
+    elif options.subcommand == 'init':
+        if not options.first_parent:
+            parser.error(
+                'The --first-parent option is currently required for the "init" command'
+                )
+        if not options.name:
+            parser.error(
+                'Please specify the --name to be used for this incremental merge'
+                )
+        merge_state = MergeState.initialize(
+            options.name, options.goal, 'HEAD', options.branch,
+            )
+        merge_state.save()
+        MergeState.set_default_name(options.name)
     elif options.subcommand == 'start':
         if not options.first_parent:
             parser.error(
@@ -1769,6 +1815,13 @@ def main(args):
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
+
+        try:
+            merge_state.auto_complete_frontier()
+        except FrontierBlockedError, e:
+            request_user_merge(merge_state, e.i1, e.i2)
+        else:
+            sys.stderr.write('Merge is complete!\n')
     elif options.subcommand == 'remove':
         MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
     elif options.subcommand == 'continue':
