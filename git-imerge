@@ -1220,7 +1220,7 @@ class MergeState(Block):
             return None
 
     @staticmethod
-    def start(name, goal, tip1, tip2):
+    def initialize(name, goal, tip1, tip2):
         """Create and return a new MergeState object."""
 
         if '/' in name:
@@ -1251,9 +1251,7 @@ class MergeState(Block):
                 'There are no commits on %r that are not already in %r' % (tip2, tip1)
                 )
 
-        merge = MergeState(name, goal, merge_base, commits1, commits2, MergeRecord.NEW_MANUAL)
-        merge.save()
-        return merge
+        return MergeState(name, goal, merge_base, commits1, commits2, MergeRecord.NEW_MANUAL)
 
     @staticmethod
     def read(name):
@@ -1766,7 +1764,10 @@ def main(args):
             parser.error(
                 'Please specify the --name to be used for this incremental merge'
                 )
-        MergeState.start(options.name, options.goal, 'HEAD', options.branch)
+        merge_state = MergeState.initialize(
+            options.name, options.goal, 'HEAD', options.branch,
+            )
+        merge_state.save()
         MergeState.set_default_name(options.name)
     elif options.subcommand == 'remove':
         MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
