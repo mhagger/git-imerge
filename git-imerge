@@ -1750,6 +1750,15 @@ def main(args):
         help='name of merge to continue',
         )
 
+    parser_record = subparsers.add_parser(
+        'record',
+        help='record the merge at branch imerge/NAME',
+        )
+    parser_record.add_argument(
+        '--name', action='store', default=None,
+        help='name of merge to which the merge should be added',
+        )
+
     parser_autofill = subparsers.add_parser(
         'autofill',
         help='autofill non-conflicting merges',
@@ -1834,6 +1843,23 @@ def main(args):
             merge_state.auto_complete_frontier()
         except FrontierBlockedError, e:
             request_user_merge(merge_state, e.i1, e.i2)
+        else:
+            sys.stderr.write('Merge is complete!\n')
+    elif options.subcommand == 'record':
+        merge_state = read_merge_state(options.name)
+        try:
+            if incorporate_user_merge(merge_state):
+                sys.stderr.write('Merge has been recorded.\n')
+            else:
+                raise Failure(
+                    'There was no merge at %s!' % (merge_state.get_scratch_refname(),)
+                    )
+        except ManualMergeUnusableError, e:
+            raise Failure(str(e))
+        try:
+            merge_state.auto_complete_frontier()
+        except FrontierBlockedError, e:
+            pass
         else:
             sys.stderr.write('Merge is complete!\n')
     elif options.subcommand == 'autofill':
