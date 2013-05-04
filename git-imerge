@@ -374,6 +374,22 @@ class Block(object):
         if not (0 <= i2 < self.len2):
             raise IndexError('second index (%s) is out of range 0:%d' % (i2, self.len2,))
 
+    def _normalize_indexes(self, index):
+        """Return a pair of non-negative integers (i1, i2)."""
+
+        try:
+            (i1, i2) = index
+        except TypeError:
+            raise IndexError('Block indexing requires exactly two indexes')
+
+        if i1 < 0:
+            i1 += self.len1
+        if i2 < 0:
+            i2 += self.len2
+
+        self._check_indexes(i1, i2)
+        return (i1, i2)
+
     def set_value(self, i1, i2, value):
         """Set the value for integer indexes (i1, i2).
 
@@ -386,11 +402,7 @@ class Block(object):
 
         i1 and i2 must be integers, but they may be negative."""
 
-        try:
-            (i1, i2) = index
-        except TypeError:
-            raise IndexError('Block indexing requires exactly two indexes')
-
+        (i1, i2) = self._normalize_indexes(index)
         if i1 < 0:
             i1 += self.len1
         if i2 < 0:
@@ -416,11 +428,7 @@ class Block(object):
         if isinstance(i1, slice) or isinstance(i2, slice):
             return SubBlock(self, i1, i2)
         else:
-            if i1 < 0:
-                i1 += self.len1
-            if i2 < 0:
-                i2 += self.len2
-            return self.get_value(i1, i2)
+            return self.get_value(*self._normalize_indexes((i1, i2)))
 
 
 class SubBlock(Block):
@@ -456,15 +464,7 @@ class SubBlock(Block):
         self._block.set_value(i1, i2, value)
 
     def __setitem__(self, index, value):
-        try:
-            (i1, i2) = index
-        except TypeError:
-            raise IndexError('Block indexing requires exactly two indexes')
-
-        if i1 < 0:
-            i1 += self.len1
-        if i2 < 0:
-            i2 += self.len2
+        (i1, i2) = self._normalize_indexes(index)
 
         self.set_value(i1 + self._start1, i2 + self._start2, value)
 
