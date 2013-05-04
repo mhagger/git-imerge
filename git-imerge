@@ -652,6 +652,15 @@ class MergeFrontier(object):
 
         return bool(self.blocks)
 
+    def is_complete(self):
+        """Return True iff the frontier covers the whole block."""
+
+        return (
+            len(self.blocks) == 1
+            and self.blocks[0].len1 == self.block.len1
+            and self.blocks[0].len2 == self.block.len2
+            )
+
     ADD_VERTICAL = {
         '?' : '|',
         '-' : '+',
