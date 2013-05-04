@@ -936,7 +936,7 @@ class MergeState(Block):
             except KeyError:
                 break
 
-        state = MergeState(commits1, commits2, MergeRecord.SAVED_MANUAL)
+        state = MergeState(name, commits1, commits2, MergeRecord.SAVED_MANUAL)
 
         # Now write the rest of the merges to state:
         for ((i1, i2), (source, sha1)) in merges.iteritems():
@@ -951,8 +951,9 @@ class MergeState(Block):
                     )
             state[i1, i2].record_merge(sha1, source)
 
-    def __init__(self, commits1, commits2, source):
+    def __init__(self, name, commits1, commits2, source):
         Block.__init__(self, len(commits1) + 1, len(commits2) + 1)
+        self.name = name
 
         # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
