@@ -391,14 +391,14 @@ class Block(object):
         return (i1, i2)
 
     def set_value(self, i1, i2, value):
-        """Set the value for integer indexes (i1, i2).
+        """Set the MergeRecord for integer indexes (i1, i2).
 
         i1 and i2 must be non-negative."""
 
         raise NotImplementedError()
 
     def __setitem__(self, index, value):
-        """Return the value for indexes (i1, i2).
+        """Return the MergeRecord for indexes (i1, i2).
 
         i1 and i2 must be integers, but they may be negative."""
 
@@ -410,16 +410,17 @@ class Block(object):
         self.set_value(i1, i2, value)
 
     def get_value(self, i1, i2):
-        """Return the value for integer indexes (i1, i2).
+        """Return the MergeRecord for integer indexes (i1, i2).
 
         i1 and i2 must be non-negative."""
 
         raise NotImplementedError()
 
     def __getitem__(self, index):
-        """Return the element at (i1, i2) (requires two indexes).
+        """Return the MergeRecord at (i1, i2) (requires two indexes).
 
-        If either index is a slice, return a SubBlock."""
+        If i1 and i2 are integers but the merge is unknown, return
+        None.  If either index is a slice, return a SubBlock."""
 
         try:
             (i1, i2) = index
@@ -429,6 +430,9 @@ class Block(object):
             return SubBlock(self, i1, i2)
         else:
             return self.get_value(*self._normalize_indexes((i1, i2)))
+
+    def __contains__(self, index):
+        return self[index].is_known()
 
 
 class SubBlock(Block):
@@ -459,14 +463,9 @@ class SubBlock(Block):
         self._start1 = start1
         self._start2 = start2
 
-    def set_value(self, i1, i2, value):
+    def set_value(self, i1, i2, sha1, flags):
         self._check_indexes(i1, i2)
-        self._block.set_value(i1, i2, value)
-
-    def __setitem__(self, index, value):
-        (i1, i2) = self._normalize_indexes(index)
-
-        self.set_value(i1 + self._start1, i2 + self._start2, value)
+        self._block.set_value(i1 + self._start1, i2 + self._start2, sha1, flags)
 
     def get_value(self, i1, i2):
         self._check_indexes(i1, i2)
@@ -474,22 +473,33 @@ class SubBlock(Block):
 
 
 class MergeState(Block):
-    def __init__(self, commits1, commits2):
+    def __init__(self, commits1, commits2, source):
         Block.__init__(self, len(commits1) + 1, len(commits2) + 1)
 
-        # A simulated 2D array.  Values are None or SHA1 values.
+        # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
 
         for (i1, commit) in enumerate(commits1, 1):
-            self.set_value(i1, 0, commit)
+            self.get_value(i1, 0).record_merge(commit, source)
         for (i2, commit) in enumerate(commits2, 1):
-            self.set_value(0, i2, commit)
+            self.get_value(0, i2).record_merge(commit, source)
 
     def set_value(self, i1, i2, value):
         self._data[i1][i2] = value
 
     def get_value(self, i1, i2):
-        return self._data[i1][i2]
+        value = self._data[i1][i2]
+        # Missing values spring to life on first access:
+        if value is None:
+            value = MergeRecord()
+            self._data[i1][i2] = value
+        return value
+
+    def __contains__(self, index):
+        # Avoid creating new MergeRecord objects here.
+        (i1, i2) = self._normalize_indexes(index)
+        value = self._data[i1][i2]
+        return (value is not None) and value.is_known()
 
 
 def merge_possible(commit1, commit2):
