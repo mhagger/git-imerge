@@ -858,6 +858,14 @@ class Block(object):
 
         return self._normalize_indexes((i1, i2))
 
+    def convert_original_indexes(self, i1, i2):
+        """Return the indexes in this block corresponding to original indexes (i1,i2).
+
+        raise IndexError if they are not within this block.  This
+        method does not support negative indices."""
+
+        return (i1, i2)
+
     def set_value(self, i1, i2, value):
         """Set the MergeRecord for integer indexes (i1, i2).
 
@@ -1055,6 +1063,15 @@ class SubBlock(Block):
     def get_original_indexes(self, i1, i2):
         i1, i2 = self._normalize_indexes((i1, i2))
         return self._block.get_original_indexes(i1 + self._start1, i2 + self._start2)
+
+    def convert_original_indexes(self, i1, i2):
+        (i1, i2) = self._block.convert_original_indexes(i1, i2)
+        if not (
+            self._start1 <= i1 < self._start1 + self.len1
+            and self._start2 <= i2 < self._start2 + self.len2
+            ):
+            raise IndexError('Indexes are not within block')
+        return (i1 - self._start1, i2 - self._start2)
 
     def set_value(self, i1, i2, sha1, flags):
         self._check_indexes(i1, i2)
