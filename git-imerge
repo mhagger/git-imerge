@@ -1294,6 +1294,10 @@ class MergeState(Block):
                     yield m.group('name')
 
     @staticmethod
+    def get_scratch_refname(name):
+        return 'refs/heads/imerge/%s' % (name,)
+
+    @staticmethod
     def _read_state(name, sha1):
         state_string = check_output(['git', 'cat-file', 'blob', sha1])
         state = json.loads(state_string)
@@ -1573,9 +1577,6 @@ class MergeState(Block):
 
         self.goal = goal
 
-    def get_scratch_refname(self):
-        return 'refs/heads/imerge/%s' % (self.name,)
-
     def set_value(self, i1, i2, value):
         self._data[i1][i2] = value
 
@@ -1841,7 +1842,7 @@ def request_user_merge(merge_state, i1, i2):
     left = merge_state[i1 - 1, i2]
     if not above.is_known() or not left.is_known():
         raise RuntimeError('The parents of merge %d-%d are not ready' % (i1, i2))
-    refname = merge_state.get_scratch_refname()
+    refname = MergeState.get_scratch_refname(merge_state.name)
     check_call([
             'git', 'update-ref',
             '-m', 'imerge %r: Prepare merge %d-%d' % (merge_state.name, i1, i2,),
@@ -1876,7 +1877,7 @@ def incorporate_user_merge(merge_state):
     ManualMergeUnusableError.  This function must be called with a
     clean work tree."""
 
-    refname = merge_state.get_scratch_refname()
+    refname = MergeState.get_scratch_refname(merge_state.name)
     try:
         commit = get_commit_sha1(refname)
     except ValueError:
@@ -2247,7 +2248,8 @@ def main(args):
                 sys.stderr.write('Merge has been recorded.\n')
             else:
                 raise Failure(
-                    'There was no merge at %s!' % (merge_state.get_scratch_refname(),)
+                    'There was no merge at %s!'
+                    % (MergeState.get_scratch_refname(merge_state.name),)
                     )
         except ManualMergeUnusableError, e:
             raise Failure(str(e))
