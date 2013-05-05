@@ -2165,8 +2165,6 @@ def main(args):
 
     options = parser.parse_args(args)
 
-    require_clean_work_tree('proceed')
-
     if options.subcommand == 'list':
         default_merge = MergeState.get_default_name()
         for name in MergeState.iter_existing_names():
@@ -2175,6 +2173,8 @@ def main(args):
             else:
                 sys.stdout.write('  %s\n' % (name,))
     elif options.subcommand == 'init':
+        require_clean_work_tree('proceed')
+
         if not options.first_parent:
             parser.error(
                 'The --first-parent option is currently required for the "init" command'
@@ -2189,6 +2189,8 @@ def main(args):
         merge_state.save()
         MergeState.set_default_name(options.name)
     elif options.subcommand == 'start':
+        require_clean_work_tree('proceed')
+
         if not options.first_parent:
             parser.error(
                 'The --first-parent option is currently required for the "start" command'
@@ -2210,8 +2212,10 @@ def main(args):
         else:
             sys.stderr.write('Merge is complete!\n')
     elif options.subcommand == 'remove':
+        require_clean_work_tree('proceed')
         MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
     elif options.subcommand == 'continue':
+        require_clean_work_tree('proceed')
         merge_state = read_merge_state(options.name)
         try:
             incorporate_user_merge(merge_state)
@@ -2224,6 +2228,7 @@ def main(args):
         else:
             sys.stderr.write('Merge is complete!\n')
     elif options.subcommand == 'record':
+        require_clean_work_tree('proceed')
         merge_state = read_merge_state(options.name)
         try:
             if incorporate_user_merge(merge_state):
@@ -2241,6 +2246,7 @@ def main(args):
         else:
             sys.stderr.write('Merge is complete!\n')
     elif options.subcommand == 'autofill':
+        require_clean_work_tree('proceed')
         merge_state = read_merge_state(options.name)
         with TemporaryHead():
             try:
@@ -2248,6 +2254,7 @@ def main(args):
             except FrontierBlockedError, e:
                 raise Failure(str(e))
     elif options.subcommand == 'simplify':
+        require_clean_work_tree('proceed')
         merge_state = read_merge_state(options.name)
         merge_frontier = MergeFrontier.map_known_frontier(merge_state)
         if not merge_frontier.is_complete():
@@ -2258,6 +2265,7 @@ def main(args):
             merge_state.save()
         merge_state.simplify(refname, force=options.force)
     elif options.subcommand == 'finish':
+        require_clean_work_tree('proceed')
         options.name = choose_merge_name(options.name, default_to_unique=False)
         merge_state = read_merge_state(options.name)
         merge_frontier = MergeFrontier.map_known_frontier(merge_state)
