@@ -1498,7 +1498,7 @@ class MergeState(Block):
             try:
                 (sha1, source) = merges.pop((i1, 0))
                 if source != MergeRecord.SAVED_MANUAL:
-                    raise Failure('Merge (%d,0) should be manual!' % (i1,))
+                    raise Failure('Merge %d-0 should be manual!' % (i1,))
                 commits1.append(sha1)
             except KeyError:
                 break
@@ -1518,12 +1518,12 @@ class MergeState(Block):
         # Now write the rest of the merges to state:
         for ((i1, i2), (sha1, source)) in merges.iteritems():
             if i1 == 0 and i2 >= state.len2:
-                raise Failure('Merge (0,%d) is missing!' % (state.len2,))
+                raise Failure('Merge 0-%d is missing!' % (state.len2,))
             if i1 >= state.len1 and i2 == 0:
-                raise Failure('Merge (%d,0) is missing!' % (state.len1,))
+                raise Failure('Merge %d-0 is missing!' % (state.len1,))
             if i1 >= state.len1 or i2 >= state.len2:
                 raise Failure(
-                    'Merge (%d,%d) is out of range [0:%d,0:%d]'
+                    'Merge %d-%d is out of range [0:%d,0:%d]'
                     % (i1, i2, state.len1, state.len2)
                     )
             state[i1, i2].record_merge(sha1, source)
