@@ -259,6 +259,14 @@ def get_commit_sha1(arg):
         raise ValueError('%r does not refer to a valid git commit' % (arg,))
 
 
+def get_commit_parents(commit):
+    """Return a list containing the parents of commit."""
+
+    return check_output(
+        ['git', 'log', '--no-walk', '--pretty=format:%P', commit]
+        ).strip().split()
+
+
 def get_log_message(commit):
     contents = check_output([
             'git', 'cat-file', 'commit', commit
@@ -1505,9 +1513,7 @@ class MergeState(Block):
         commit is not usable for some reason, raise
         ManualMergeUnusableError."""
 
-        parents = check_output(
-            ['git', 'log', '--no-walk', '--pretty=format:%P', commit]
-            ).strip().split()
+        parents = get_commit_parents(commit)
         if len(parents) < 2:
             raise ManualMergeUnusableError('it is not a merge', commit)
         if len(parents) > 2:
