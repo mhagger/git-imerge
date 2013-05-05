@@ -280,7 +280,14 @@ def require_clean_work_tree(action):
     if retcode:
         raise UncleanWorkTreeError(err.rstrip())
 
-    check_call(['git', 'update-index', '-q', '--ignore-submodules', '--refresh'])
+    process = subprocess.Popen(
+        ['git', 'update-index', '-q', '--ignore-submodules', '--refresh'],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+    out, err = process.communicate()
+    retcode = process.poll()
+    if retcode:
+        raise UncleanWorkTreeError(err.rstrip() or out.rstrip())
 
     error = []
     try:
