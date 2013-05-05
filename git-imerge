@@ -1937,41 +1937,12 @@ def main(args):
         )
     subparsers = parser.add_subparsers(dest='subcommand', help='sub-command')
 
-    parser_init = subparsers.add_parser(
-        'init',
-        help='initialize an incremental merge',
-        )
-    parser_init.add_argument(
-        '--name', action='store', default=None,
-        help='name to use for this incremental merge',
-        )
-    parser_init.add_argument(
-        '--goal',
-        action='store', default=DEFAULT_GOAL,
-        choices=ALLOWED_GOALS,
-        help='the goal of the incremental merge',
-        )
-    #parser_init.add_argument(
-    #    '--conflicts', ...
-    #    action='store', default='pairwise',
-    #    choices=['pairwise', 'fewest'],
-    #    help='what sort of conflicts will be presented to the user',
-    #    )
-    parser_init.add_argument(
-        '--first-parent', action='store_true', default=None,
-        help=(
-            'handle only the first parent commits '
-            '(this option is currently required)'
-            ),
-        )
-    parser_init.add_argument(
-        'branch', action='store',
-        help='the tip of the branch to be merged into HEAD',
-        )
-
     parser_start = subparsers.add_parser(
         'start',
-        help='start an incremental merge',
+        help=(
+            'start a new incremental merge '
+            '(equivalent to "init" followed by "continue")'
+            ),
         )
     parser_start.add_argument(
         '--name', action='store', default=None,
@@ -2001,27 +1972,105 @@ def main(args):
         help='the tip of the branch to be merged into HEAD',
         )
 
-    parser_remove = subparsers.add_parser(
-        'remove',
-        help='irrevocably remove an incremental merge',
-        )
-    parser_remove.add_argument(
-        '--name', action='store', default=None,
-        help='name of incremental merge to remove',
-        )
-
-    parser_list = subparsers.add_parser(
-        'list',
-        help='list names of in-progress merges',
-        )
-
     parser_continue = subparsers.add_parser(
         'continue',
-        help='record the merge at branch imerge/NAME and do the next step of the merge',
+        help=(
+            'record the merge at branch imerge/NAME '
+            'and start the next step of the merge '
+            '(equivalent to "record" followed by "autofill" '
+            'and then sets up the working copy with the next '
+            'conflict that has to be resolved manually)'
+            ),
         )
     parser_continue.add_argument(
         '--name', action='store', default=None,
         help='name of merge to continue',
+        )
+
+    parser_finish = subparsers.add_parser(
+        'finish',
+        help=(
+            'simplify then remove a completed incremental merge '
+            '(equivalent to "simplify" followed by "remove")'
+            ),
+        )
+    parser_finish.add_argument(
+        '--name', action='store', default=None,
+        help='name of merge to finish',
+        )
+    parser_finish.add_argument(
+        '--goal',
+        action='store', default=None,
+        choices=ALLOWED_GOALS,
+        help=(
+            'the type of simplification to be made '
+            '(default is the value provided to "init" or "start")'
+            ),
+        )
+    parser_finish.add_argument(
+        '--branch',
+        action='store', default=None,
+        help=(
+            'the name of the branch to which to store the result '
+            '(default is the name of the merge).   If '
+            'BRANCH already exists then it must be able to be '
+            'fast-forwarded to the result unless the --force option is '
+            'specified.'
+            ),
+        )
+    parser_finish.add_argument(
+        '--force',
+        action='store_true', default=False,
+        help='allow the target branch to be updated in a non-fast-forward manner',
+        )
+
+    parser_diagram = subparsers.add_parser(
+        'diagram',
+        help='display a diagram of the current state of a merge',
+        )
+    parser_diagram.add_argument(
+        '--name', action='store', default=None,
+        help='name of merge to diagram',
+        )
+
+    parser_list = subparsers.add_parser(
+        'list',
+        help=(
+            'list the names of incremental merges that are currently in progress.  '
+            'The active merge is shown with an asterisk next to it.'
+            ),
+        )
+
+    parser_init = subparsers.add_parser(
+        'init',
+        help='initialize a new incremental merge',
+        )
+    parser_init.add_argument(
+        '--name', action='store', default=None,
+        help='name to use for this incremental merge',
+        )
+    parser_init.add_argument(
+        '--goal',
+        action='store', default=DEFAULT_GOAL,
+        choices=ALLOWED_GOALS,
+        help='the goal of the incremental merge',
+        )
+    #parser_init.add_argument(
+    #    '--conflicts', ...
+    #    action='store', default='pairwise',
+    #    choices=['pairwise', 'fewest'],
+    #    help='what sort of conflicts will be presented to the user',
+    #    )
+    parser_init.add_argument(
+        '--first-parent', action='store_true', default=None,
+        help=(
+            'handle only the first parent commits '
+            '(this option is currently required)'
+            ),
+        )
+    parser_init.add_argument(
+        'branch', action='store',
+        help='the tip of the branch to be merged into HEAD',
         )
 
     parser_record = subparsers.add_parser(
@@ -2080,50 +2129,13 @@ def main(args):
         help='allow the target branch to be updated in a non-fast-forward manner',
         )
 
-    parser_finish = subparsers.add_parser(
-        'finish',
-        help=(
-            'simplify then remove a completed incremental merge.  '
-            'See the "simplify" command for more information.'
-            ),
+    parser_remove = subparsers.add_parser(
+        'remove',
+        help='irrevocably remove an incremental merge',
         )
-    parser_finish.add_argument(
+    parser_remove.add_argument(
         '--name', action='store', default=None,
-        help='name of merge to finish',
-        )
-    parser_finish.add_argument(
-        '--goal',
-        action='store', default=None,
-        choices=ALLOWED_GOALS,
-        help=(
-            'the type of simplification to be made '
-            '(default is the value provided to "init" or "start")'
-            ),
-        )
-    parser_finish.add_argument(
-        '--branch',
-        action='store', default=None,
-        help=(
-            'the name of the branch to which to store the result '
-            '(default is the name of the merge).   If '
-            'BRANCH already exists then it must be able to be '
-            'fast-forwarded to the result unless the --force option is '
-            'specified.'
-            ),
-        )
-    parser_finish.add_argument(
-        '--force',
-        action='store_true', default=False,
-        help='allow the target branch to be updated in a non-fast-forward manner',
-        )
-
-    parser_diagram = subparsers.add_parser(
-        'diagram',
-        help='display diagram of current state of merge',
-        )
-    parser_diagram.add_argument(
-        '--name', action='store', default=None,
-        help='name of merge to diagram',
+        help='name of incremental merge to remove',
         )
 
     parser_reparent = subparsers.add_parser(
