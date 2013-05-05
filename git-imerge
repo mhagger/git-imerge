@@ -1998,6 +1998,43 @@ def main(args):
         help='allow the target branch to be updated in a non-fast-forward manner',
         )
 
+    parser_finish = subparsers.add_parser(
+        'finish',
+        help=(
+            'simplify then remove a completed incremental merge.  '
+            'See the "simplify" command for more information.'
+            ),
+        )
+    parser_finish.add_argument(
+        '--name', action='store', default=None,
+        help='name of merge to finish',
+        )
+    parser_finish.add_argument(
+        '--goal',
+        action='store', default=None,
+        choices=ALLOWED_GOALS,
+        help=(
+            'the type of simplification to be made '
+            '(default is the value provided to "init" or "start")'
+            ),
+        )
+    parser_finish.add_argument(
+        '--branch',
+        action='store', default=None,
+        help=(
+            'the name of the branch to which to store the result '
+            '(default is the name of the merge).   If '
+            'BRANCH already exists then it must be able to be '
+            'fast-forwarded to the result unless the --force option is '
+            'specified.'
+            ),
+        )
+    parser_finish.add_argument(
+        '--force',
+        action='store_true', default=False,
+        help='allow the target branch to be updated in a non-fast-forward manner',
+        )
+
     parser_diagram = subparsers.add_parser(
         'diagram',
         help='display diagram of current state of merge',
@@ -2109,6 +2146,18 @@ def main(args):
             merge_state.set_goal(options.goal)
             merge_state.save()
         merge_state.simplify(refname, force=options.force)
+    elif options.subcommand == 'finish':
+        options.name = choose_merge_name(options.name, default_to_unique=False)
+        merge_state = read_merge_state(options.name)
+        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+        if not merge_frontier.is_complete():
+            raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
+        refname = 'refs/heads/%s' % ((options.branch or merge_state.name),)
+        if options.goal is not None:
+            merge_state.set_goal(options.goal)
+            merge_state.save()
+        merge_state.simplify(refname, force=options.force)
+        MergeState.remove(options.name)
     elif options.subcommand == 'diagram':
         merge_state = read_merge_state(options.name)
         merge_state.write(sys.stdout)
