@@ -780,30 +780,39 @@ class MergeFrontier(object):
         '?' : '|',
         '-' : '+',
         '+' : '+',
+        '*' : '*',
+        '.' : '|',
         }
 
     ADD_HORIZONTAL = {
         '?' : '-',
         '|' : '+',
         '+' : '+',
+        '*' : '*',
+        '.' : '-',
         }
 
     def write(self, f):
         """Write this frontier to file-like object f."""
 
-        output = [['?'] * self.block.len2 for i1 in range(self.block.len1)]
+        output = StringIO()
+        self.block._write(output, manual='*', auto='.', unknown='?', sep='', linesep='\n')
+        output = [
+            list(s)
+            for s in output.getvalue().splitlines()
+            ]
         for block in self:
             i2 = block.len2 - 1
             for i1 in range(block.len1 - 1):
-                output[i1][i2] = self.ADD_HORIZONTAL[output[i1][i2]]
+                output[i2][i1] = self.ADD_HORIZONTAL[output[i2][i1]]
             i1 = block.len1 - 1
             for i2 in range(block.len2 - 1):
-                output[i1][i2] = self.ADD_VERTICAL[output[i1][i2]]
-            output[block.len1 - 1][block.len2 - 1] = '*'
+                output[i2][i1] = self.ADD_VERTICAL[output[i2][i1]]
+            output[block.len2 - 1][block.len1 - 1] = '+'
 
         for i2 in range(self.block.len2):
             for i1 in range(self.block.len1):
-                f.write(output[i1][i2])
+                f.write(output[i2][i1])
             f.write('\n')
 
     @staticmethod
@@ -1152,7 +1161,7 @@ class Block(object):
                 f2.block.auto_outline_frontier(f2)
             return True
 
-    def _write(self, f, manual='*', auto='+', unknown='?', sep='', linesep='\n'):
+    def _write(self, f, manual='*', auto='.', unknown='?', sep='', linesep='\n'):
         for i2 in range(self.len2):
             for i1 in range(self.len1):
                 if i1 != 0:
@@ -2032,6 +2041,14 @@ def main(args):
         '--name', action='store', default=None,
         help='name of merge to diagram',
         )
+    parser_diagram.add_argument(
+        '--commits', action='store_true', default=False,
+        help='show the merges that have been made so far',
+        )
+    parser_diagram.add_argument(
+        '--frontier', action='store_true', default=False,
+        help='show the current merge frontier',
+        )
 
     parser_list = subparsers.add_parser(
         'list',
@@ -2253,12 +2270,30 @@ def main(args):
         merge_state.simplify(refname, force=options.force)
         MergeState.remove(options.name)
     elif options.subcommand == 'diagram':
+        if not (options.commits or options.frontier):
+            options.frontier = True
+
         merge_state = read_merge_state(options.name)
-        merge_state.write(sys.stdout)
-        sys.stdout.write('\n')
-        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-        merge_frontier.write(sys.stdout)
-        sys.stdout.write('\n')
+        if options.commits:
+            merge_state.write(sys.stdout)
+            sys.stdout.write('\n')
+        if options.frontier:
+            merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+            merge_frontier.write(sys.stdout)
+            sys.stdout.write('\n')
+        sys.stdout.write(
+            'Key:\n'
+            )
+        if options.frontier:
+            sys.stdout.write(
+                '  |,-,+ = rectangles forming current merge frontier\n'
+                )
+        sys.stdout.write(
+            '  * = merge done manually\n'
+            '  . = merge done automatically\n'
+            '  ? = no merge recorded\n'
+            '\n'
+            )
     elif options.subcommand == 'reparent':
         try:
             commit_sha1 = get_commit_sha1('HEAD')
