@@ -1,0 +1,31 @@
+#! /bin/sh
+
+# This should be executed in a clean working copy of the test repo.
+
+set -e
+set -x
+
+GIT_IMERGE="../git/git-imerge"
+
+# Clean up detritus from possible previous runs:
+git co master
+"$GIT_IMERGE" remove --name=a-b || true
+for b in a-b-merge a-b-rebase a-b-rebase-with-history
+do
+    git br -D $b || true
+done
+
+git checkout a
+"$GIT_IMERGE" start --first-parent --name=a-b b
+"$GIT_IMERGE" list
+"$GIT_IMERGE" diagram
+GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=a-b-merge
+"$GIT_IMERGE" simplify --goal=rebase --branch=a-b-rebase
+"$GIT_IMERGE" remove
+
+git checkout a
+"$GIT_IMERGE" start --first-parent --name=a-b b
+"$GIT_IMERGE" list
+"$GIT_IMERGE" diagram
+"$GIT_IMERGE" finish --goal=rebase-with-history --branch=a-b-rebase-with-history
+
