@@ -1258,6 +1258,21 @@ class MergeState(Block):
             return None
 
     @staticmethod
+    def _check_no_merges(commits):
+        multiparent_commits = [
+            commit
+            for commit in commits
+            if len(get_commit_parents(commit)) > 1
+            ]
+        if multiparent_commits:
+            raise Failure(
+                'The following commits on the to-be-merged branch are merge commits:\n'
+                '    %s\n'
+                '--goal=\'rebase\' is not yet supported for branches that include merges.\n'
+                % ('\n    '.join(multiparent_commits),)
+                )
+
+    @staticmethod
     def initialize(name, goal, tip1, tip2):
         """Create and return a new MergeState object."""
 
@@ -1288,6 +1303,9 @@ class MergeState(Block):
             raise Failure(
                 'There are no commits on %r that are not already in %r' % (tip2, tip1)
                 )
+
+        if goal == 'rebase':
+            MergeState._check_no_merges(commits2)
 
         return MergeState(name, goal, merge_base, commits1, commits2, MergeRecord.NEW_MANUAL)
 
@@ -1444,6 +1462,12 @@ class MergeState(Block):
     def set_goal(self, goal):
         if goal not in ALLOWED_GOALS:
             raise ValueError('%r is not an allowed goal' % (goal,))
+
+        if goal == 'rebase':
+            self._check_no_merges(
+                [self[0,i2].sha1 for i2 in range(1,self.len2)]
+                )
+
         self.goal = goal
 
     def get_scratch_refname(self):
