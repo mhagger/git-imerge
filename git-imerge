@@ -1532,11 +1532,33 @@ class MergeState(Block):
 
     @staticmethod
     def remove(name):
-        # If this merge is the default, unset the default:
-        if MergeState.get_default_name() == name:
-            MergeState.set_default_name(None)
+        # If HEAD is the scratch refname, abort any in-progress
+        # commits and detach HEAD:
+        scratch_refname = MergeState.get_scratch_refname(name)
+        try:
+            head_refname = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
+        except CalledProcessError:
+            head_refname = None
+        if head_refname == scratch_refname:
+            try:
+                check_call(['git', 'merge', '--abort'])
+            except CalledProcessError:
+                pass
+            # Detach head so that we can delete scratch_refname:
+            check_call([
+                    'git', 'update-ref', '--no-deref',
+                    '-m', 'Detach HEAD from %s' % (scratch_refname,),
+                    'HEAD', get_commit_sha1('HEAD'),
+                    ])
 
-        # Remove any references associated with this merge:
+        # Delete the scratch refname:
+        check_call([
+                'git', 'update-ref',
+                '-m', 'imerge %s: remove scratch reference' % (name,),
+                '-d', scratch_refname,
+                ])
+
+        # Remove any references referring to intermediate merges:
         for line in check_output([
                 'git', 'for-each-ref', 'refs/imerge/%s' % (name,)
                 ]).splitlines():
@@ -1551,6 +1573,10 @@ class MergeState(Block):
                 sys.stderr.write(
                     'Warning: error removing reference %r: %s' % (refname, e)
                     )
+
+        # If this merge was the default, unset the default:
+        if MergeState.get_default_name() == name:
+            MergeState.set_default_name(None)
 
     def __init__(self, name, goal, merge_base, commits1, commits2, source):
         Block.__init__(self, len(commits1) + 1, len(commits2) + 1)
@@ -2225,7 +2251,6 @@ def main(args):
         else:
             sys.stderr.write('Merge is complete!\n')
     elif options.subcommand == 'remove':
-        require_clean_work_tree('proceed')
         MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
     elif options.subcommand == 'continue':
         require_clean_work_tree('proceed')
