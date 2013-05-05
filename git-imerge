@@ -24,6 +24,10 @@ Perform the merge between two branches incrementally.  If conflicts
 are encountered, figure out exactly which pairs of commits conflict,
 and present the user with one pairwise conflict at a time.
 
+The theory and benefits of incremental merging are described in minute
+detail in a series of blog posts [1], as are the benefits of retaining
+history when doing a rebase [2].
+
 Multiple incremental merges can be in progress at the same time.  Each
 incremental merge has a name, and its progress is recorded in the Git
 repository as references under 'refs/imerge/NAME'.  The current state
@@ -33,7 +37,85 @@ of an incremental merge can (crudely) be visualized using the
 An incremental merge can be interrupted and resumed arbitrarily, or
 even pushed to a server to allow somebody else to work on it.
 
-[1] http://softwareswirl.blogspot.de/2009/04/truce-in-merge-vs-rebase-war.html
+When an incremental merge is finished, you can discard the
+intermediate merge commits and create a simpler history to record
+permanently in your project repository using either the "finish" or
+"simplify" command.  The incremental merge can be simplified in one of
+three ways:
+
+  * merge
+      keep only a simple merge of the second branch into the first
+      branch, discarding all intermediate merges.  The result is
+      similar to what you would get from
+
+          git checkout BRANCH1
+          git merge BRANCH2
+
+  * rebase
+      keep the versions of the commits from the second branch rebased
+      onto the first branch.  The result is similar to what you would
+      get from
+
+          git checkout BRANCH2
+          git rebase BRANCH1
+
+  * rebase-with-history
+      like rebase, except that each of the rebased commits is recorded
+      as a merge from its original version to its rebased predecessor.
+      This is a style of rebasing that does not discard the old
+      version of the branch, and allows an already-published branch to
+      be rebased.  See [2] for more information.
+
+Simple operation:
+
+For basic operation, you only need to know three git-imerge commands.
+To merge BRANCH into MASTER or rebase BRANCH onto MASTER,
+
+    git checkout MASTER
+    git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH
+    while not done:
+        <fix conflict presented to you>
+        git commit
+        git-imerge continue
+    git-imerge finish
+
+where
+
+    NAME is the name for this merge (and also the default name of the
+        branch to which the results will be saved)
+
+    GOAL describes how you want to simplify the results:
+
+        "merge" for a simple merge
+
+        "rebase" for a simple rebase
+
+        "rebase-with-history" for a rebase that retains history.  This
+        is equivalent to merging the commits from BRANCH into MASTER,
+        one commit at a time. In other words, it transforms this::
+
+            o---o---o---o          MASTER
+                 \
+                  A---B---C---D    BRANCH
+
+        into this::
+
+            o---o---o---o---A'--B'--C'--D'    MASTER
+                 \         /   /   /   /
+                  --------A---B---C---D       BRANCH
+
+        This is like a rebase, except that it retains the history of
+        individual merges.  See [2] for more information.
+
+
+[1] http://softwareswirl.blogspot.com/2012/12/the-conflict-frontier-of-nightmare-merge.html
+    http://softwareswirl.blogspot.com/2012/12/mapping-merge-conflict-frontier.html
+    http://softwareswirl.blogspot.com/2012/12/real-world-conflict-diagrams.html
+    http://softwareswirl.blogspot.com/
+    http://softwareswirl.blogspot.com/
+[2] http://softwareswirl.blogspot.com/2009/04/truce-in-merge-vs-rebase-war.html
+    http://softwareswirl.blogspot.com/2009/08/upstream-rebase-just-works-if-history.html
+    http://softwareswirl.blogspot.com/2009/08/rebase-with-history-implementation.html
 
 """
 
