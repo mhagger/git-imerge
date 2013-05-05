@@ -1108,8 +1108,13 @@ class Block(object):
             if (i1, i2) in self:
                 return self[i1,i2].sha1
             try:
+                sys.stderr.write(
+                    'Autofilling %d-%d...' % self.get_original_indexes(i1, i2)
+                    )
                 merge = automerge(commit1, commit2)
+                sys.stderr.write('success.\n')
             except AutomaticMergeFailed, e:
+                sys.stderr.write('unexpected failure.\n')
                 raise UnexpectedMergeFailure(str(e), i1, i2)
             merges.append((i1, i2, merge))
             return merge
