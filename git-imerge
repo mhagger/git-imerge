@@ -1728,7 +1728,7 @@ class MergeState(Block):
                 head_refname = None
 
             if not force:
-                if not self._is_ancestor(ref_oldval, commit):
+                if not MergeState._is_ancestor(ref_oldval, commit):
                     raise Failure(
                         '%s cannot be fast-forwarded to %s!' % (refname, commit)
                         )
