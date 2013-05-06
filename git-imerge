@@ -1172,19 +1172,33 @@ class Block(object):
                 f2.block.auto_outline_frontier(f2)
             return True
 
-    def _write(self, f, manual='*', auto='.', unknown='?', sep='', linesep='\n'):
+    def fill_diagram(self, diagram=None, manual='*', auto='.', unknown='?'):
+        """Write this Block to diagram using the specified strings.
+
+        diagram, if provided, must be readable/writeable using
+        notation diagram[i1][i2]; otherwise it is initialized to a
+        nested list of strings initialized to unknown."""
+
+        if diagram is None:
+            diagram = [
+                [unknown] * self.len2
+                for i1 in range(self.len1)
+                ]
+
         for i2 in range(self.len2):
             for i1 in range(self.len1):
-                if i1 != 0:
-                    f.write(sep)
                 if (i1,i2) in self:
                     if self.get_value(i1, i2).flags & MergeRecord.MANUAL:
-                        f.write(manual)
+                        diagram[i1][i2] = manual
                     else:
-                        f.write(auto)
-                else:
-                    f.write(unknown)
-            f.write(linesep)
+                        diagram[i1][i2] = auto
+
+        return diagram
+
+    def _write(self, f, manual='*', auto='.', unknown='?', sep='', linesep='\n'):
+        diagram = self.fill_diagram(manual=manual, auto=auto, unknown=unknown)
+        for i2 in range(self.len2):
+            f.write(sep.join(diagram[i1][i2] for i1 in range(self.len1)) + linesep)
 
     def write(self, f):
         self._write(f)
