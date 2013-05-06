@@ -798,27 +798,31 @@ class MergeFrontier(object):
         '.' : '-',
         }
 
-    def write(self, f):
-        """Write this frontier to file-like object f."""
+    def fill_diagram(self, diagram=None):
+        """Write this frontier to diagram.
 
-        output = StringIO()
-        self.block._write(output, manual='*', auto='.', unknown='?', sep='', linesep='\n')
-        output = [
-            list(s)
-            for s in output.getvalue().splitlines()
-            ]
+        diagram is a 2-d array of strings; see Block.fill_diagram()
+        for more info."""
+
+        diagram = self.block.fill_diagram(diagram=diagram)
         for block in self:
             i2 = block.len2 - 1
             for i1 in range(block.len1 - 1):
-                output[i2][i1] = self.ADD_HORIZONTAL[output[i2][i1]]
+                diagram[i1][i2] = self.ADD_HORIZONTAL[diagram[i1][i2]]
             i1 = block.len1 - 1
             for i2 in range(block.len2 - 1):
-                output[i2][i1] = self.ADD_VERTICAL[output[i2][i1]]
-            output[block.len2 - 1][block.len1 - 1] = '+'
+                diagram[i1][i2] = self.ADD_VERTICAL[diagram[i1][i2]]
+            diagram[block.len1 - 1][block.len2 - 1] = '+'
 
+        return diagram
+
+    def write(self, f):
+        """Write this frontier to file-like object f."""
+
+        diagram = self.fill_diagram()
         for i2 in range(self.block.len2):
             for i1 in range(self.block.len1):
-                f.write(output[i2][i1])
+                f.write(diagram[i1][i2])
             f.write('\n')
 
     @staticmethod
@@ -1172,19 +1176,33 @@ class Block(object):
                 f2.block.auto_outline_frontier(f2)
             return True
 
-    def _write(self, f, manual='*', auto='.', unknown='?', sep='', linesep='\n'):
+    def fill_diagram(self, diagram=None, manual='*', auto='.', unknown='?'):
+        """Write this Block to diagram using the specified strings.
+
+        diagram, if provided, must be readable/writeable using
+        notation diagram[i1][i2]; otherwise it is initialized to a
+        nested list of strings initialized to unknown."""
+
+        if diagram is None:
+            diagram = [
+                [unknown] * self.len2
+                for i1 in range(self.len1)
+                ]
+
         for i2 in range(self.len2):
             for i1 in range(self.len1):
-                if i1 != 0:
-                    f.write(sep)
                 if (i1,i2) in self:
                     if self.get_value(i1, i2).flags & MergeRecord.MANUAL:
-                        f.write(manual)
+                        diagram[i1][i2] = manual
                     else:
-                        f.write(auto)
-                else:
-                    f.write(unknown)
-            f.write(linesep)
+                        diagram[i1][i2] = auto
+
+        return diagram
+
+    def _write(self, f, manual='*', auto='.', unknown='?', sep='', linesep='\n'):
+        diagram = self.fill_diagram(manual=manual, auto=auto, unknown=unknown)
+        for i2 in range(self.len2):
+            f.write(sep.join(diagram[i1][i2] for i1 in range(self.len1)) + linesep)
 
     def write(self, f):
         self._write(f)
