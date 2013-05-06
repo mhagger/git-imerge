@@ -121,9 +121,7 @@ where
 """
 
 import sys
-import os
 import re
-import shutil
 import subprocess
 import itertools
 import functools
