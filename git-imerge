@@ -1279,7 +1279,10 @@ class Block(object):
                 f2.block.auto_outline_frontier(f2)
             return True
 
-    def fill_diagram(self, diagram=None, manual='*', auto='.', unknown='?'):
+    def fill_diagram(
+        self, diagram=None,
+        manual='*', auto='.', unknown='?', blocked='#', unblocked='@',
+        ):
         """Write this Block to diagram using the specified strings.
 
         diagram, if provided, must be readable/writeable using
@@ -1292,13 +1295,25 @@ class Block(object):
                 for i1 in range(self.len1)
                 ]
 
+        # A map {(is_known(), manual, is_blocked()) : char}
+        table = {
+            (False, False, False) : None,
+            (False, False, True) : blocked,
+            (True, False, True) : unblocked,
+            (True, True, True) : unblocked,
+            (True, False, False) : auto,
+            (True, True, False) : manual,
+            }
+
         for i2 in range(self.len2):
             for i1 in range(self.len1):
-                if (i1,i2) in self:
-                    if self.get_value(i1, i2).flags & MergeRecord.MANUAL:
-                        diagram[i1][i2] = manual
-                    else:
-                        diagram[i1][i2] = auto
+                record = self.get_value(i1, i2)
+                c = table[
+                    record.is_known(), bool(record.flags & MergeRecord.MANUAL),
+                    record.is_blocked(),
+                    ]
+                if c is not None:
+                    diagram[i1][i2] = c
 
         return diagram
 
@@ -2481,6 +2496,8 @@ def main(args):
         sys.stdout.write(
             '  * = merge done manually\n'
             '  . = merge done automatically\n'
+            '  # = conflict that is currently blocking progress\n'
+            '  @ = merge was blocked but has been resolved\n'
             '  ? = no merge recorded\n'
             '\n'
             )
