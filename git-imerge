@@ -1880,7 +1880,7 @@ def request_user_merge(merge_state, i1, i2):
                 '-m', 'Merge %d-%d of incremental merge \'%s\'' % (i1, i2, merge_state.name,),
                 left.sha1,
                 ])
-    except CalledProcessError, e:
+    except CalledProcessError:
         # We expect an error (otherwise we would have automerged!)
         pass
     sys.stdout.write('Original first commit:\n')
