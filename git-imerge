@@ -1040,24 +1040,12 @@ class Block(object):
 
         return (i1, i2)
 
-    def set_value(self, i1, i2, value):
+    def _set_value(self, i1, i2, value):
         """Set the MergeRecord for integer indexes (i1, i2).
 
         i1 and i2 must be non-negative."""
 
         raise NotImplementedError()
-
-    def __setitem__(self, index, value):
-        """Return the MergeRecord for indexes (i1, i2).
-
-        i1 and i2 must be integers, but they may be negative."""
-
-        (i1, i2) = self._normalize_indexes(index)
-        if i1 < 0:
-            i1 += self.len1
-        if i2 < 0:
-            i2 += self.len2
-        self.set_value(i1, i2, value)
 
     def get_value(self, i1, i2):
         """Return the MergeRecord for integer indexes (i1, i2).
@@ -1266,9 +1254,9 @@ class SubBlock(Block):
             raise IndexError('Indexes are not within block')
         return (i1 - self._start1, i2 - self._start2)
 
-    def set_value(self, i1, i2, sha1, flags):
+    def _set_value(self, i1, i2, sha1, flags):
         self._check_indexes(i1, i2)
-        self._block.set_value(i1 + self._start1, i2 + self._start2, sha1, flags)
+        self._block._set_value(i1 + self._start1, i2 + self._start2, sha1, flags)
 
     def get_value(self, i1, i2):
         self._check_indexes(i1, i2)
@@ -1620,7 +1608,7 @@ class MergeState(Block):
 
         self.goal = goal
 
-    def set_value(self, i1, i2, value):
+    def _set_value(self, i1, i2, value):
         self._data[i1][i2] = value
 
     def get_value(self, i1, i2):
