@@ -121,9 +121,7 @@ where
 """
 
 import sys
-import os
 import re
-import shutil
 import subprocess
 import itertools
 import functools
@@ -1730,7 +1728,7 @@ class MergeState(Block):
                 head_refname = None
 
             if not force:
-                if not self._is_ancestor(ref_oldval, commit):
+                if not MergeState._is_ancestor(ref_oldval, commit):
                     raise Failure(
                         '%s cannot be fast-forwarded to %s!' % (refname, commit)
                         )
@@ -1825,7 +1823,7 @@ class MergeState(Block):
         elif self.goal == 'merge':
             self.simplify_to_merge(refname, force=force)
         else:
-            raise ValueError('Invalid value for goal (%r)' % (goal,))
+            raise ValueError('Invalid value for goal (%r)' % (self.goal,))
 
     def save(self):
         """Write the current MergeState to the repository."""
@@ -1882,7 +1880,7 @@ def request_user_merge(merge_state, i1, i2):
                 '-m', 'Merge %d-%d of incremental merge \'%s\'' % (i1, i2, merge_state.name,),
                 left.sha1,
                 ])
-    except CalledProcessError, e:
+    except CalledProcessError:
         # We expect an error (otherwise we would have automerged!)
         pass
     sys.stdout.write('Original first commit:\n')
