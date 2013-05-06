@@ -1843,7 +1843,7 @@ class MergeState(Block):
             version='.'.join(map(str, STATE_VERSION)),
             goal=self.goal,
             )
-        state_string = json.dumps(state, sort_keys=True, indent=4)
+        state_string = json.dumps(state, sort_keys=True) + '\n'
 
         cmd = ['git', 'hash-object', '-t', 'blob', '-w', '--stdin']
         p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
