@@ -770,7 +770,10 @@ class MergeFrontier(object):
             return MergeFrontier(block, [])
 
         if not block.is_mergeable(1, 1):
-            # There are no mergeable blocks in block.
+            # There are no mergeable blocks in block; therefore,
+            # block[1,1] must itself be unmergeable.  Record that
+            # fact:
+            block[1,1].record_blocked(True)
             return MergeFrontier(block, [])
 
         blocks = []
@@ -1785,6 +1788,7 @@ class MergeState(Block):
         except BlockCompleteError:
             return
         except FrontierBlockedError, e:
+            self.save()
             if not progress_made:
                 # Adjust the error message:
                 raise FrontierBlockedError(
@@ -2410,6 +2414,7 @@ def main(args):
         merge_state = read_merge_state(options.name)
         try:
             unblocked_block = incorporate_user_merge(merge_state)
+            unblocked_block[1,1].record_blocked(False)
             sys.stderr.write(
                 'Merge has been recorded for merge %d-%d.\n'
                 % unblocked_block.get_original_indexes(1, 1)
@@ -2432,6 +2437,7 @@ def main(args):
         merge_state = read_merge_state(options.name)
         try:
             unblocked_block = incorporate_user_merge(merge_state)
+            unblocked_block[1,1].record_blocked(False)
             sys.stderr.write(
                 'Merge has been recorded for merge %d-%d.\n'
                 % unblocked_block.get_original_indexes(1, 1)
