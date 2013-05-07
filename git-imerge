@@ -483,6 +483,9 @@ class MergeRecord(object):
     # A manual merge (which may have been unsuccessful) has been done:
     NEW_MANUAL = 0x08
 
+    # A merge that is currently blocking the merge frontier:
+    BLOCKED = 0x10
+
     # Some useful bit combinations:
     SAVED = SAVED_AUTO | SAVED_MANUAL
     NEW = NEW_AUTO | NEW_MANUAL
@@ -542,8 +545,17 @@ class MergeRecord(object):
         else:
             raise ValueError('Undefined source: %s' % (source,))
 
+    def record_blocked(self, blocked):
+        if blocked:
+            self.flags |= self.BLOCKED
+        else:
+            self.flags &= ~self.BLOCKED
+
     def is_known(self):
         return self.sha1 is not None
+
+    def is_blocked(self):
+        return self.flags & self.BLOCKED != 0
 
     def save(self, name, i1, i2):
         """If this record has changed, save it."""
@@ -636,7 +648,11 @@ class MergeFrontier(object):
 
         The return value only includes the part that is fully outlined
         and whose outline consists of rectangles reaching back to
-        (0,0)."""
+        (0,0).
+
+        A blocked commit is *not* considered to be within the
+        frontier, even if a merge is registered for it.  Such merges
+        must be explicitly unblocked."""
 
         # FIXME: This algorithm can take combinatorial time, for
         # example if there is a big block of merges that is a dead
@@ -684,7 +700,7 @@ class MergeFrontier(object):
                 if i2 == block.len2 - 1:
                     # Hit edge of block; can't move down:
                     down = False
-                elif (i1, i2 + 1) in block:
+                elif (i1, i2 + 1) in block and not block.is_blocked(i1, i2 + 1):
                     # Can move down
                     path.append((i1, i2, True))
                     i2 += 1
@@ -696,7 +712,7 @@ class MergeFrontier(object):
                     # Success!
                     path.append((i1, i2, False))
                     return create_frontier(path)
-                elif (i1 - 1, i2) in block:
+                elif (i1 - 1, i2) in block and not block.is_blocked(i1 - 1, i2):
                     # Can move left
                     path.append((i1, i2, False))
                     down = True
@@ -750,8 +766,14 @@ class MergeFrontier(object):
         # determine the frontier block by block, starting in the lower
         # left.
 
-        if block.len1 <= 1 or block.len2 <= 1 or not block.is_mergeable(1, 1):
-            # There are no mergeable blocks in block.
+        if block.len1 <= 1 or block.len2 <= 1 or block.is_blocked(1, 1):
+            return MergeFrontier(block, [])
+
+        if not block.is_mergeable(1, 1):
+            # There are no mergeable blocks in block; therefore,
+            # block[1,1] must itself be unmergeable.  Record that
+            # fact:
+            block[1,1].record_blocked(True)
             return MergeFrontier(block, [])
 
         blocks = []
@@ -1169,6 +1191,12 @@ class Block(object):
     def __contains__(self, index):
         return self[index].is_known()
 
+    def is_blocked(self, i1, i2):
+        """Return True iff the specified commit is blocked."""
+
+        (i1, i2) = self._normalize_indexes((i1, i2))
+        return self[i1, i2].is_blocked()
+
     def is_mergeable(self, i1, i2):
         """Determine whether (i1,i2) can be merged automatically.
 
@@ -1261,7 +1289,10 @@ class Block(object):
                 f2.block.auto_outline_frontier(f2)
             return True
 
-    def fill_diagram(self, diagram=None, manual='*', auto='.', unknown='?'):
+    def fill_diagram(
+        self, diagram=None,
+        manual='*', auto='.', unknown='?', blocked='#', unblocked='@',
+        ):
         """Write this Block to diagram using the specified strings.
 
         diagram, if provided, must be readable/writeable using
@@ -1274,13 +1305,25 @@ class Block(object):
                 for i1 in range(self.len1)
                 ]
 
+        # A map {(is_known(), manual, is_blocked()) : char}
+        table = {
+            (False, False, False) : None,
+            (False, False, True) : blocked,
+            (True, False, True) : unblocked,
+            (True, True, True) : unblocked,
+            (True, False, False) : auto,
+            (True, True, False) : manual,
+            }
+
         for i2 in range(self.len2):
             for i1 in range(self.len1):
-                if (i1,i2) in self:
-                    if self.get_value(i1, i2).flags & MergeRecord.MANUAL:
-                        diagram[i1][i2] = manual
-                    else:
-                        diagram[i1][i2] = auto
+                record = self.get_value(i1, i2)
+                c = table[
+                    record.is_known(), bool(record.flags & MergeRecord.MANUAL),
+                    record.is_blocked(),
+                    ]
+                if c is not None:
+                    diagram[i1][i2] = c
 
         return diagram
 
@@ -1585,6 +1628,8 @@ class MergeState(Block):
         if goal not in ALLOWED_GOALS:
             raise Failure('Goal %r, read from state, is not recognized.' % (goal,))
 
+        blockers = state.get('blockers', [])
+
         if unexpected:
             raise Failure(
                 'Unexpected reference(s) found in "refs/imerge/%s" namespace:\n    %s\n'
@@ -1629,6 +1674,10 @@ class MergeState(Block):
                     % (i1, i2, state.len1, state.len2)
                     )
             state[i1, i2].record_merge(sha1, source)
+
+        # Record any blockers:
+        for (i1,i2) in blockers:
+            state[i1, i2].record_blocked(True)
 
         return state
 
@@ -1739,6 +1788,7 @@ class MergeState(Block):
         except BlockCompleteError:
             return
         except FrontierBlockedError, e:
+            self.save()
             if not progress_made:
                 # Adjust the error message:
                 raise FrontierBlockedError(
@@ -1931,14 +1981,19 @@ class MergeState(Block):
     def save(self):
         """Write the current MergeState to the repository."""
 
+        blockers = []
         for i2 in range(0, self.len2):
             for i1 in range(0, self.len1):
-                if (i1, i2) in self:
-                    self[i1,i2].save(self.name, i1, i2)
+                record = self[i1,i2]
+                if record.is_known():
+                    record.save(self.name, i1, i2)
+                if record.is_blocked():
+                    blockers.append((i1, i2))
 
         state = dict(
             version='.'.join(map(str, STATE_VERSION)),
             goal=self.goal,
+            blockers=blockers,
             )
         state_string = json.dumps(state, sort_keys=True) + '\n'
 
@@ -2359,6 +2414,7 @@ def main(args):
         merge_state = read_merge_state(options.name)
         try:
             unblocked_block = incorporate_user_merge(merge_state)
+            unblocked_block[1,1].record_blocked(False)
             sys.stderr.write(
                 'Merge has been recorded for merge %d-%d.\n'
                 % unblocked_block.get_original_indexes(1, 1)
@@ -2381,6 +2437,7 @@ def main(args):
         merge_state = read_merge_state(options.name)
         try:
             unblocked_block = incorporate_user_merge(merge_state)
+            unblocked_block[1,1].record_blocked(False)
             sys.stderr.write(
                 'Merge has been recorded for merge %d-%d.\n'
                 % unblocked_block.get_original_indexes(1, 1)
@@ -2452,6 +2509,8 @@ def main(args):
         sys.stdout.write(
             '  * = merge done manually\n'
             '  . = merge done automatically\n'
+            '  # = conflict that is currently blocking progress\n'
+            '  @ = merge was blocked but has been resolved\n'
             '  ? = no merge recorded\n'
             '\n'
             )
