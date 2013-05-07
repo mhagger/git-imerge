@@ -611,6 +611,10 @@ class FrontierBlockedError(Exception):
         self.i2 = i2
 
 
+class NotABlockingCommitError(Exception):
+    pass
+
+
 class MergeFrontier(object):
     """Represents the merge frontier within a Block.
 
@@ -949,26 +953,6 @@ class MergeFrontier(object):
         if shrunk_block:
             self.blocks = list(self._iter_non_redundant_blocks(self.blocks))
 
-    def add_success(self, i1, i2):
-        """Return True iff the specified merge affects this frontier.
-
-        This method does *not* update self; if it returns True you
-        should recompute the frontier from scratch."""
-
-        for block in self.iter_blocker_blocks():
-            try:
-                (block_i1, block_i2) = block.convert_original_indexes(i1, i2)
-            except IndexError:
-                pass
-            else:
-                if (block_i1, block_i2) == (1,1):
-                    # That's the one we need to improve this block:
-                    return True
-                else:
-                    return False
-        else:
-            return False
-
     def partition(self, block):
         """Return two MergeFrontier instances partitioned by block.
 
@@ -1019,6 +1003,33 @@ class MergeFrontier(object):
 
         for block1, block2 in iter_neighbors(itertools.chain(*blockruns)):
             yield self.block[block1.len1 - 1:block2.len1, block2.len2 - 1: block1.len2]
+
+    def get_affected_blocker_block(self, i1, i2):
+        """Return the blocker block that a successful merge (i1,i2) would unblock.
+
+        If there is no such block, raise NotABlockingCommitError."""
+
+        for block in self.iter_blocker_blocks():
+            try:
+                (block_i1, block_i2) = block.convert_original_indexes(i1, i2)
+            except IndexError:
+                pass
+            else:
+                if (block_i1, block_i2) == (1,1):
+                    # That's the one we need to improve this block:
+                    return block
+                else:
+                    # An index pair can only be in a single blocker
+                    # block, which we've already found:
+                    raise NotABlockingCommitError(
+                        'Commit %d-%d was not blocking the frontier.'
+                        % self.block.get_original_indexes(i1, i2)
+                        )
+        else:
+            raise NotABlockingCommitError(
+                'Commit %d-%d was not on the frontier.'
+                % self.block.get_original_indexes(i1, i2)
+                )
 
     def auto_expand(self):
         """Try pushing out one of the blocks on this frontier.
@@ -2022,9 +2033,11 @@ def incorporate_user_merge(merge_state):
             '-d', refname,
             ])
 
-    # Now expand the merge frontier based on the new information (if
-    # possible):
-    return merge_frontier.add_success(i1, i2)
+    try:
+        merge_frontier.get_affected_blocker_block(i1, i2)
+        return True
+    except NotABlockingCommitError, e:
+        return False
 
 
 def choose_merge_name(name, default_to_unique=True):
