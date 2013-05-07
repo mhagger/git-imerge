@@ -766,7 +766,10 @@ class MergeFrontier(object):
         # determine the frontier block by block, starting in the lower
         # left.
 
-        if block.len1 <= 1 or block.len2 <= 1 or not block.is_mergeable(1, 1):
+        if block.len1 <= 1 or block.len2 <= 1 or block.is_blocked(1, 1):
+            return MergeFrontier(block, [])
+
+        if not block.is_mergeable(1, 1):
             # There are no mergeable blocks in block.
             return MergeFrontier(block, [])
 
