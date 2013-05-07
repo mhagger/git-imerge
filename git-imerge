@@ -557,6 +557,9 @@ class MergeRecord(object):
     def is_blocked(self):
         return self.flags & self.BLOCKED != 0
 
+    def is_manual(self):
+        return self.flags & self.MANUAL != 0
+
     def save(self, name, i1, i2):
         """If this record has changed, save it."""
 
@@ -1318,10 +1321,7 @@ class Block(object):
         for i2 in range(self.len2):
             for i1 in range(self.len1):
                 record = self.get_value(i1, i2)
-                c = table[
-                    record.is_known(), bool(record.flags & MergeRecord.MANUAL),
-                    record.is_blocked(),
-                    ]
+                c = table[record.is_known(), record.is_manual(), record.is_blocked()]
                 if c is not None:
                     diagram[i1][i2] = c
 
