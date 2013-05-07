@@ -648,7 +648,11 @@ class MergeFrontier(object):
 
         The return value only includes the part that is fully outlined
         and whose outline consists of rectangles reaching back to
-        (0,0)."""
+        (0,0).
+
+        A blocked commit is *not* considered to be within the
+        frontier, even if a merge is registered for it.  Such merges
+        must be explicitly unblocked."""
 
         # FIXME: This algorithm can take combinatorial time, for
         # example if there is a big block of merges that is a dead
@@ -696,7 +700,7 @@ class MergeFrontier(object):
                 if i2 == block.len2 - 1:
                     # Hit edge of block; can't move down:
                     down = False
-                elif (i1, i2 + 1) in block:
+                elif (i1, i2 + 1) in block and not block.is_blocked(i1, i2 + 1):
                     # Can move down
                     path.append((i1, i2, True))
                     i2 += 1
@@ -708,7 +712,7 @@ class MergeFrontier(object):
                     # Success!
                     path.append((i1, i2, False))
                     return create_frontier(path)
-                elif (i1 - 1, i2) in block:
+                elif (i1 - 1, i2) in block and not block.is_blocked(i1 - 1, i2):
                     # Can move left
                     path.append((i1, i2, False))
                     down = True
