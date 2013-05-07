@@ -18,15 +18,15 @@ done
 git checkout c
 "$GIT_IMERGE" init --first-parent --name=c-d d
 "$GIT_IMERGE" list
-"$GIT_IMERGE" diagram
+"$GIT_IMERGE" diagram --commits --frontier
 "$GIT_IMERGE" autofill || true
-"$GIT_IMERGE" diagram
+"$GIT_IMERGE" diagram --commits --frontier
 "$GIT_IMERGE" continue
 echo 'cd version' >conflict.txt
 git add conflict.txt
 git commit -am 'Resolve conflict'
 "$GIT_IMERGE" continue
-"$GIT_IMERGE" diagram
+"$GIT_IMERGE" diagram --commits --frontier
 GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=c-d-merge
 "$GIT_IMERGE" simplify --goal=rebase --branch=c-d-rebase
 "$GIT_IMERGE" simplify --goal=rebase-with-history --branch=c-d-rebase-with-history

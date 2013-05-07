@@ -18,7 +18,7 @@ done
 git checkout a
 "$GIT_IMERGE" start --first-parent --name=a-b b
 "$GIT_IMERGE" list
-"$GIT_IMERGE" diagram
+"$GIT_IMERGE" diagram --commits --frontier
 GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=a-b-merge
 "$GIT_IMERGE" simplify --goal=rebase --branch=a-b-rebase
 "$GIT_IMERGE" remove
@@ -26,6 +26,6 @@ GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=a-b-merge
 git checkout a
 "$GIT_IMERGE" start --first-parent --name=a-b b
 "$GIT_IMERGE" list
-"$GIT_IMERGE" diagram
+"$GIT_IMERGE" diagram --commits --frontier
 "$GIT_IMERGE" finish --goal=rebase-with-history --branch=a-b-rebase-with-history
 
