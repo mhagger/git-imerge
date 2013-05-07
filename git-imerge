@@ -1059,6 +1059,10 @@ class MergeFrontier(object):
                 )
 
 
+class NoManualMergeError(Exception):
+    pass
+
+
 class ManualMergeUnusableError(Exception):
     def __init__(self, msg, commit):
         Exception.__init__(self, 'Commit %s is not usable; %s' % (commit, msg))
@@ -1996,16 +2000,17 @@ def incorporate_user_merge(merge_state):
     """If the user has done a merge for us, incorporate the results.
 
     If reference refs/heads/imerge/NAME exists, try to incorporate it
-    into merge_state, auto-fill if possible, and delete the reference.
-    If the reference exists but cannot be used, raise a
-    ManualMergeUnusableError.  This function must be called with a
-    clean work tree."""
+    into merge_state, delete the reference, and return (i1,i2)
+    corresponding to the merge.  If the reference cannot be used,
+    raise NoManualMergeError().  If the reference exists but cannot be
+    used, raise a ManualMergeUnusableError.  This function must be
+    called with a clean work tree."""
 
     refname = MergeState.get_scratch_refname(merge_state.name)
     try:
         commit = get_commit_sha1(refname)
     except ValueError:
-        return False
+        raise NoManualMergeError('There was no merge at %s!' % (refname,))
 
     merge_frontier = MergeFrontier.map_known_frontier(merge_state)
 
@@ -2033,11 +2038,8 @@ def incorporate_user_merge(merge_state):
             '-d', refname,
             ])
 
-    try:
-        merge_frontier.get_affected_blocker_block(i1, i2)
-        return True
-    except NotABlockingCommitError, e:
-        return False
+    # This might throw NotABlockingCommitError:
+    return merge_frontier.get_affected_blocker_block(i1, i2)
 
 
 def choose_merge_name(name, default_to_unique=True):
@@ -2356,9 +2358,18 @@ def main(args):
         require_clean_work_tree('proceed')
         merge_state = read_merge_state(options.name)
         try:
-            incorporate_user_merge(merge_state)
+            unblocked_block = incorporate_user_merge(merge_state)
+            sys.stderr.write(
+                'Merge has been recorded for merge %d-%d.\n'
+                % unblocked_block.get_original_indexes(1, 1)
+                )
+        except NoManualMergeError:
+            pass
+        except NotABlockingCommitError:
+            raise Failure(str(e))
         except ManualMergeUnusableError, e:
             raise Failure(str(e))
+
         try:
             merge_state.auto_complete_frontier()
         except FrontierBlockedError, e:
@@ -2369,15 +2380,18 @@ def main(args):
         require_clean_work_tree('proceed')
         merge_state = read_merge_state(options.name)
         try:
-            if incorporate_user_merge(merge_state):
-                sys.stderr.write('Merge has been recorded.\n')
-            else:
-                raise Failure(
-                    'There was no merge at %s!'
-                    % (MergeState.get_scratch_refname(merge_state.name),)
-                    )
+            unblocked_block = incorporate_user_merge(merge_state)
+            sys.stderr.write(
+                'Merge has been recorded for merge %d-%d.\n'
+                % unblocked_block.get_original_indexes(1, 1)
+                )
+        except NoManualMergeError, e:
+            raise Failure(str(e))
+        except NotABlockingCommitError:
+            raise Failure(str(e))
         except ManualMergeUnusableError, e:
             raise Failure(str(e))
+
         try:
             merge_state.auto_complete_frontier()
         except FrontierBlockedError, e:
