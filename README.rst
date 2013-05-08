@@ -2,22 +2,19 @@
 git-imerge -- incremental merge and rebase for git
 ==================================================
 
-git-imerge is an tool to help in various ways with difficult git
-merges.  See `my blog`_ for more information.
-
-.. _`my blog`: http://softwareswirl.blogspot.com/
-
-**This tool is experimental!  If it breaks, you get to keep the
-pieces.  For example, it is strongly recommended that you make a clone
-of your git repository and run the script on the clone rather than the
-original.  Feedback and bug reports are welcome!**
-
-git-imerge is under the GNU General Public License (GPL), version 2 or
-later.
-
 Perform the merge between two branches incrementally.  If conflicts
 are encountered, figure out exactly which pairs of commits conflict,
-and present the user with one pairwise conflict at a time.
+and present the user with one pairwise conflict at a time for
+resolution.
+
+``git-imerge`` has two primary design goals:
+
+* Reduce the pain of resolving merge conflicts to its unavoidable
+  minimum, by finding and presenting the smallest possible conflicts:
+  those between the changes introduced by one commit from each branch.
+
+* Allow a merge to be saved, tested, interrupted, published, and
+  collaborated on while it is in progress.
 
 The theory and benefits of incremental merging are described in minute
 detail in a series of blog posts [1]_, as are the benefits of
@@ -31,6 +28,11 @@ state of an incremental merge can (crudely) be visualized using the
 
 An incremental merge can be interrupted and resumed arbitrarily, or
 even pushed to a server to allow somebody else to work on it.
+
+**git-imerge is experimental!  If it breaks, you get to keep the
+pieces.  For example, it is strongly recommended that you make a clone
+of your git repository and run the script on the clone rather than the
+original.  Feedback and bug reports are welcome!**
 
 
 Using results
@@ -110,6 +112,14 @@ where
 
       This is like a rebase, except that it retains the history of
       individual merges.  See [2]_ for more information.
+
+
+License
+=======
+
+git-imerge is released as open-source software under the GNU General
+Public License (GPL), version 2 or later.
+
 
 .. [1]
    * http://softwareswirl.blogspot.com/2012/12/the-conflict-frontier-of-nightmare-merge.html
