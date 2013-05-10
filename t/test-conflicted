@@ -8,11 +8,11 @@ set -x
 GIT_IMERGE="../git/git-imerge"
 
 # Clean up detritus from possible previous runs:
-git co master
+git checkout master
 "$GIT_IMERGE" remove --name=c-d || true
 for b in c-d-merge c-d-rebase c-d-rebase-with-history
 do
-    git br -D $b || true
+    git branch -D $b || true
 done
 
 git checkout c
