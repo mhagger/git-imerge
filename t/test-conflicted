@@ -5,7 +5,7 @@
 set -e
 set -x
 
-GIT_IMERGE="../git/git-imerge"
+GIT_IMERGE="../git-imerge"
 
 # Clean up detritus from possible previous runs:
 git checkout master
