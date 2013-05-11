@@ -5,9 +5,13 @@
 set -e
 set -x
 
-GIT_IMERGE="../git/git-imerge"
+BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
+TMP="$BASE/t/tmp"
+GIT_IMERGE="$BASE/git-imerge"
 
-# Clean up detritus from possible previous runs:
+cd "$TMP"
+
+# Clean up detritus from possible previous runs of this test:
 git checkout master
 "$GIT_IMERGE" remove --name=c-d || true
 for b in c-d-merge c-d-rebase c-d-rebase-with-history
