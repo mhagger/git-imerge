@@ -419,7 +419,7 @@ function fontScale() {  // causes layout problems in FireFox that get fixed if b
 		var vSize = 700;  // assuming 1024x768, minus chrome and such
 		var hSize = 1024; // these do not account for kiosk mode or Opera Show
 	}
-	var newSize = Math.min(Math.round(vSize/vScale),Math.round(hSize/hScale));
+	var newSize = Math.round(Math.min(vSize/vScale,hSize/hScale)*0.8);
 	fontSize(newSize + 'px');
 	if (isGe) {  // hack to counter incremental reflow bugs
 		var obj = document.getElementsByTagName('body')[0];
