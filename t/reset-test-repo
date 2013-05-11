@@ -1,0 +1,22 @@
+#! /bin/sh
+
+BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
+TMP="$BASE/t/tmp"
+GIT_IMERGE="$BASE/git-imerge"
+
+cd "$TMP"
+
+echo "Resetting temporary directory $TMP"
+
+"$GIT_IMERGE" remove --name=a-b
+for b in a-b a-b-merge a-b-rebase a-b-rebase-with-history
+do
+    git update-ref -d refs/heads/$b
+done
+
+"$GIT_IMERGE" remove --name=c-d
+for b in c-d c-d-merge c-d-rebase c-d-rebase-with-history
+do
+    git update-ref -d refs/heads/$b
+done
+
