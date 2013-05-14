@@ -1281,7 +1281,6 @@ class Block(object):
         except UnexpectedMergeFailure, e:
             # One of the merges that we expected to succeed in
             # fact failed.
-            i1, i2 = e.i1, e.i1
             merge_frontier.remove_failure(e.i1, e.i2)
             return self.auto_outline_frontier(merge_frontier)
         else:
