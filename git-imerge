@@ -1247,7 +1247,7 @@ class Block(object):
                 merge = automerge(commit1, commit2)
                 sys.stderr.write('success.\n')
             except AutomaticMergeFailed, e:
-                sys.stderr.write('unexpected failure.\n')
+                sys.stderr.write('unexpected conflict.  Backtracking...\n')
                 raise UnexpectedMergeFailure(str(e), i1, i2)
             merges.append((i1, i2, merge))
             return merge
