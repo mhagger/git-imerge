@@ -326,6 +326,10 @@ def get_type(arg):
     return check_output(['git', 'cat-file', '-t', arg]).strip()
 
 
+def get_tree(arg):
+    return rev_parse('%s^{tree}' % (arg,))
+
+
 BRANCH_PREFIX = 'refs/heads/'
 
 def checkout(refname):
@@ -1915,7 +1919,7 @@ class MergeState(Block):
         commit = self[i1, 0].sha1
         for i2 in range(1, self.len2):
             orig = self[0, i2].sha1
-            tree = rev_parse('%s^{tree}' % (self[i1, i2].sha1,))
+            tree = get_tree(self[i1, i2].sha1)
 
             # Create a commit, copying the old log message:
             commit = check_output([
@@ -1938,7 +1942,7 @@ class MergeState(Block):
         commit = self[i1, 0].sha1
         for i2 in range(1, self.len2):
             orig = self[0, i2].sha1
-            tree = rev_parse('%s^{tree}' % (self[i1, i2].sha1,))
+            tree = get_tree(self[i1, i2].sha1)
 
             # Create a commit, copying the old log message:
             commit = check_output([
@@ -1955,7 +1959,7 @@ class MergeState(Block):
                 'Cannot simplify to merge because merge %d-%d is not yet done'
                 % (self.len1 - 1, self.len2 - 1)
                 )
-        tree = rev_parse('%s^{tree}' % (self[-1, -1].sha1,))
+        tree = get_tree(self[-1, -1].sha1)
         parents = [self[-1,0].sha1, self[0,-1].sha1]
 
         # Create a preliminary commit with a generic commit message:
