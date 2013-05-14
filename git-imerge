@@ -969,14 +969,21 @@ class MergeFrontier(object):
     def remove_failure(self, i1, i2):
         """Refine the merge frontier given that the specified merge fails."""
 
+        newblocks = []
         shrunk_block = False
-        for (i, block) in enumerate(self.blocks):
+
+        for block in self.blocks:
             if i1 < block.len1 and i2 < block.len2:
-                self.blocks[i] = block[:i1, :i2]
+                if i1 > 1:
+                    newblocks.append(block[:i1, :])
+                if i2 > 1:
+                    newblocks.append(block[:, :i2])
                 shrunk_block = True
+            else:
+                newblocks.append(block)
 
         if shrunk_block:
-            self.blocks = list(self._iter_non_redundant_blocks(self.blocks))
+            self.blocks = list(self._iter_non_redundant_blocks(newblocks))
 
     def partition(self, block):
         """Return two MergeFrontier instances partitioned by block.
