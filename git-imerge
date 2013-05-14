@@ -326,6 +326,10 @@ def get_type(arg):
     return check_output(['git', 'cat-file', '-t', arg]).strip()
 
 
+def get_tree(arg):
+    return rev_parse('%s^{tree}' % (arg,))
+
+
 BRANCH_PREFIX = 'refs/heads/'
 
 def checkout(refname):
@@ -1237,19 +1241,18 @@ class Block(object):
         # of them permanently.
         merges = []
 
-        def do_merge(i1, commit1, i2, commit2):
+        def do_merge(i1, commit1, i2, commit2, msg='Autofilling %d-%d...', record=True):
             if (i1, i2) in self:
                 return self[i1,i2].sha1
             try:
-                sys.stderr.write(
-                    'Autofilling %d-%d...' % self.get_original_indexes(i1, i2)
-                    )
+                sys.stderr.write(msg % self.get_original_indexes(i1, i2))
                 merge = automerge(commit1, commit2)
                 sys.stderr.write('success.\n')
             except AutomaticMergeFailed, e:
                 sys.stderr.write('unexpected conflict.  Backtracking...\n')
                 raise UnexpectedMergeFailure(str(e), i1, i2)
-            merges.append((i1, i2, merge))
+            if record:
+                merges.append((i1, i2, merge))
             return merge
 
         i2 = self.len2 - 1
@@ -1262,10 +1265,39 @@ class Block(object):
         for i2 in range(1, self.len2 - 1):
             above = do_merge(i1, above, i2, self[0,i2].sha1)
 
+        # We will compare two ways of doing the final "vertex" merge:
+        # as a continuation of the bottom edge, or as a continuation
+        # of the right edge.  We only accept it if both approaches
+        # succeed and give identical trees.
         i1, i2 = self.len1 - 1, self.len2 - 1
-        do_merge(i1, above, i2, left)
+        vertex_v1 = do_merge(
+            i1, self[i1,0].sha1, i2, left,
+            msg='Autofilling %d-%d (first way)...',
+            record=False,
+            )
+        vertex_v2 = do_merge(
+            i1, above, i2, self[0,i2].sha1,
+            msg='Autofilling %d-%d (second way)...',
+            record=False,
+            )
+        if get_tree(vertex_v1) == get_tree(vertex_v2):
+            sys.stderr.write(
+                'The two ways of autofilling %d-%d agree.\n'
+                % self.get_original_indexes(i1, i2)
+                )
+        else:
+            sys.stderr.write(
+                'The two ways of autofilling %d-%d do not agree.  Backtracking...\n'
+                % self.get_original_indexes(i1, i2)
+                )
+            raise UnexpectedMergeFailure('Inconsistent vertex merges', i1, i2)
 
-        # Success!  Now we can record the results:
+        # Everything is OK.  Now reparent the actual vertex merge to
+        # have above and left as its parents:
+        merges.append((i1, i2, reparent(vertex_v1, [above, left])))
+
+        # Done!  Now we can record the results:
+        sys.stderr.write('Recording autofilled block %s.\n' % (self,))
         for (i1, i2, merge) in merges:
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
 
@@ -1915,7 +1947,7 @@ class MergeState(Block):
         commit = self[i1, 0].sha1
         for i2 in range(1, self.len2):
             orig = self[0, i2].sha1
-            tree = rev_parse('%s^{tree}' % (self[i1, i2].sha1,))
+            tree = get_tree(self[i1, i2].sha1)
 
             # Create a commit, copying the old log message:
             commit = check_output([
@@ -1938,7 +1970,7 @@ class MergeState(Block):
         commit = self[i1, 0].sha1
         for i2 in range(1, self.len2):
             orig = self[0, i2].sha1
-            tree = rev_parse('%s^{tree}' % (self[i1, i2].sha1,))
+            tree = get_tree(self[i1, i2].sha1)
 
             # Create a commit, copying the old log message:
             commit = check_output([
@@ -1955,7 +1987,7 @@ class MergeState(Block):
                 'Cannot simplify to merge because merge %d-%d is not yet done'
                 % (self.len1 - 1, self.len2 - 1)
                 )
-        tree = rev_parse('%s^{tree}' % (self[-1, -1].sha1,))
+        tree = get_tree(self[-1, -1].sha1)
         parents = [self[-1,0].sha1, self[0,-1].sha1]
 
         # Create a preliminary commit with a generic commit message:
