@@ -5,7 +5,11 @@
 set -e
 set -x
 
-GIT_IMERGE="../git/git-imerge"
+BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
+TMP="$BASE/t/tmp"
+GIT_IMERGE="$BASE/git-imerge"
+
+cd "$TMP"
 
 # Clean up detritus from possible previous runs:
 git checkout master

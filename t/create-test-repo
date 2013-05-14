@@ -2,6 +2,8 @@
 
 set -e
 
+DESCRIPTION="git-imerge test repository"
+
 modify() {
     filename="$1"
     text="$2"
@@ -9,7 +11,26 @@ modify() {
     git add "$filename"
 }
 
+BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
+TMP="$BASE/t/tmp"
+
+if test -d "$TMP"
+then
+    # Be very careful before running "rm -rf":
+    if test "x$(cat "$TMP/.git/description")" = "x$DESCRIPTION"
+    then
+        echo "Removing directory $TMP" >&2
+        rm -rf "$TMP"
+    else
+        echo "Directory $TMP already exists!" >&2
+        exit 1
+    fi
+fi
+
+mkdir -p "$TMP"
+cd "$TMP"
 git init
+echo "$DESCRIPTION" >.git/description
 git config user.name 'Lou User'
 git config user.email 'luser@example.com'
 
