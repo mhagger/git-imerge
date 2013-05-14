@@ -210,6 +210,46 @@ class Failure(Exception):
     pass
 
 
+class AnsiColor:
+    BLACK = '\033[0;30m'
+    RED = '\033[0;31m'
+    GREEN = '\033[0;32m'
+    YELLOW = '\033[0;33m'
+    BLUE = '\033[0;34m'
+    MAGENTA = '\033[0;35m'
+    CYAN = '\033[0;36m'
+    B_GRAY = '\033[0;37m'
+    D_GRAY = '\033[1;30m'
+    B_RED = '\033[1;31m'
+    B_GREEN = '\033[1;32m'
+    B_YELLOW = '\033[1;33m'
+    B_BLUE = '\033[1;34m'
+    B_MAGENTA = '\033[1;35m'
+    B_CYAN = '\033[1;36m'
+    WHITE = '\033[1;37m'
+    END = '\033[0m'
+
+    @classmethod
+    def disable(cls):
+        cls.BLACK = ''
+        cls.RED = ''
+        cls.GREEN = ''
+        cls.YELLOW = ''
+        cls.BLUE = ''
+        cls.MAGENTA = ''
+        cls.CYAN = ''
+        cls.B_GRAY = ''
+        cls.D_GRAY = ''
+        cls.B_RED = ''
+        cls.B_GREEN = ''
+        cls.B_YELLOW = ''
+        cls.B_BLUE = ''
+        cls.B_MAGENTA = ''
+        cls.B_CYAN = ''
+        cls.WHITE = ''
+        cls.END = ''
+
+
 def iter_neighbors(iterable):
     """For an iterable (x0, x1, x2, ...) generate [(x0,x1), (x1,x2), ...]."""
 
@@ -935,10 +975,16 @@ class MergeFrontier(object):
         """Write this frontier to file-like object f."""
 
         diagram = self.fill_diagram()
+        f1 = self.block.len1
         for i2 in range(self.block.len2):
+            f.write(AnsiColor.B_GREEN)
             for i1 in range(self.block.len1):
+                if (diagram[i1][i2] == '#'):
+                    f1 = i1
+                if f1 == i1:
+                    f.write(AnsiColor.B_RED)
                 f.write(diagram[i1][i2])
-            f.write('\n')
+            f.write(AnsiColor.END + '\n')
 
     @staticmethod
     def _iter_non_empty_blocks(blocks):
@@ -1365,13 +1411,23 @@ class Block(object):
 
         return diagram
 
-    def _write(self, f, manual='*', auto='.', unknown='?', sep='', linesep='\n'):
-        diagram = self.fill_diagram(manual=manual, auto=auto, unknown=unknown)
+    def _write(self, f,
+        manual='*', auto='.', unknown='?', blocked='#', unblocked='@',
+        sep='', linesep='\n'
+        ):
+        diagram = self.fill_diagram(manual=manual, auto=auto, unknown=unknown,
+            blocked=blocked, unblocked=unblocked)
         for i2 in range(self.len2):
             f.write(sep.join(diagram[i1][i2] for i1 in range(self.len1)) + linesep)
 
     def write(self, f):
-        self._write(f)
+        self._write(f,
+            manual = AnsiColor.B_GREEN + '*' + AnsiColor.END,
+            auto = AnsiColor.B_GREEN + '.' + AnsiColor.END,
+            unknown = AnsiColor.D_GRAY + '?' + AnsiColor.END,
+            blocked = AnsiColor.B_RED + '#' + AnsiColor.END,
+            unblocked='@',
+            sep='', linesep='\n')
 
     def writeppm(self, f):
         f.write('P3\n')
@@ -2292,6 +2348,14 @@ def main(args):
         '--frontier', action='store_true', default=False,
         help='show the current merge frontier',
         )
+    parser_diagram.add_argument(
+        '--color', dest='color', action='store_true', default=None,
+        help='draw diagram with colors',
+        )
+    parser_diagram.add_argument(
+        '--no-color', dest='color', action='store_false',
+        help='draw diagram without colors',
+        )
 
     parser_list = subparsers.add_parser(
         'list',
@@ -2537,6 +2601,8 @@ def main(args):
     elif options.subcommand == 'diagram':
         if not (options.commits or options.frontier):
             options.frontier = True
+        if not (options.color or (options.color is None and sys.stdout.isatty())):
+            AnsiColor.disable()
 
         merge_state = read_merge_state(options.name)
         if options.commits:
