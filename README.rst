@@ -16,9 +16,11 @@ resolution.
 * Allow a merge to be saved, tested, interrupted, published, and
   collaborated on while it is in progress.
 
-The theory and benefits of incremental merging are described in minute
-detail in a series of blog posts [1]_, as are the benefits of
-retaining history when doing a rebase [2]_.
+The best thing to read to get started is `git-imerge: A Practical
+Introduction`_.  If you want more information, the theory and benefits
+of incremental merging are described in minute detail in a series of
+blog posts [1]_, as are the benefits of retaining history when doing a
+rebase [2]_.
 
 Multiple incremental merges can be in progress at the same time.  Each
 incremental merge has a name, and its progress is recorded in the Git
@@ -121,12 +123,17 @@ git-imerge is released as open-source software under the GNU General
 Public License (GPL), version 2 or later.
 
 
+.. _`git-imerge: A Practical Introduction`:
+   http://softwareswirl.blogspot.com/2013/05/git-imerge-practical-introduction.html
+
 .. [1]
    * http://softwareswirl.blogspot.com/2012/12/the-conflict-frontier-of-nightmare-merge.html
    * http://softwareswirl.blogspot.com/2012/12/mapping-merge-conflict-frontier.html
    * http://softwareswirl.blogspot.com/2012/12/real-world-conflict-diagrams.html
-   * http://softwareswirl.blogspot.com/
-   * http://softwareswirl.blogspot.com/
+   * http://softwareswirl.blogspot.com/2013/05/git-incremental-merge.html
+   * http://softwareswirl.blogspot.com/2013/05/one-merge-to-rule-them-all.html
+   * http://softwareswirl.blogspot.com/2013/05/incremental-merge-vs-direct-merge-vs.html
+
 .. [2]
    * http://softwareswirl.blogspot.com/2009/04/truce-in-merge-vs-rebase-war.html
    * http://softwareswirl.blogspot.com/2009/08/upstream-rebase-just-works-if-history.html
