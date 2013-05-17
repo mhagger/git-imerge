@@ -172,7 +172,10 @@ except ImportError:
             cmd = kwargs.get("args")
             if cmd is None:
                 cmd = popenargs[0]
-            raise CalledProcessError(retcode, cmd, output=output)
+            # We don't store output in the CalledProcessError because
+            # the "output" keyword parameter was not supported in
+            # Python 2.6:
+            raise CalledProcessError(retcode, cmd)
         return output
 
 
@@ -261,7 +264,7 @@ def call_silently(cmd):
     (out,err) = p.communicate()
     retcode = p.wait()
     if retcode:
-        raise CalledProcessError(retcode, cmd, err)
+        raise CalledProcessError(retcode, cmd)
 
 
 class UncleanWorkTreeError(Failure):
@@ -2044,7 +2047,7 @@ class MergeState(Block):
         (out, err) = p.communicate(state_string)
         retcode = p.poll()
         if retcode:
-            raise CalledProcessError(retcode, cmd, output=out)
+            raise CalledProcessError(retcode, cmd)
         sha1 = out.strip()
         check_call([
                 'git', 'update-ref',
