@@ -381,11 +381,21 @@ def commit_tree(tree, parents, msg):
 
     Return the SHA-1 of the new commit object."""
 
-    cmd = ['git', 'commit-tree', '-m', msg]
+    cmd = ['git', 'commit-tree']
     for parent in parents:
         cmd += ['-p', parent]
     cmd += [tree]
-    return check_output(cmd).strip()
+    process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    out, err = process.communicate(msg)
+    retcode = process.poll()
+
+    if retcode:
+        # We don't store the output in the CalledProcessError because
+        # the "output" keyword parameter was not supported in Python
+        # 2.6:
+        raise CalledProcessError(retcode, cmd)
+
+    return out.strip()
 
 
 class TemporaryHead(object):
