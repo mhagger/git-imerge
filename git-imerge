@@ -376,6 +376,28 @@ def get_log_message(commit):
     return ''.join(contents)
 
 
+def commit_tree(tree, parents, msg):
+    """Create a commit containing the specified tree.
+
+    Return the SHA-1 of the new commit object."""
+
+    cmd = ['git', 'commit-tree']
+    for parent in parents:
+        cmd += ['-p', parent]
+    cmd += [tree]
+    process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    out, err = process.communicate(msg)
+    retcode = process.poll()
+
+    if retcode:
+        # We don't store the output in the CalledProcessError because
+        # the "output" keyword parameter was not supported in Python
+        # 2.6:
+        raise CalledProcessError(retcode, cmd)
+
+    return out.strip()
+
+
 class TemporaryHead(object):
     """A context manager that records the current HEAD state then restores it.
 
@@ -1957,11 +1979,7 @@ class MergeState(Block):
             tree = get_tree(self[i1, i2].sha1)
 
             # Create a commit, copying the old log message:
-            commit = check_output([
-                    'git', 'commit-tree',
-                    '-m', get_log_message(orig),
-                    '-p', commit, '-p', orig, tree,
-                    ]).strip()
+            commit = commit_tree(tree, [commit, orig], msg=get_log_message(orig))
 
         self._set_refname(refname, commit, force=force)
 
@@ -1980,11 +1998,7 @@ class MergeState(Block):
             tree = get_tree(self[i1, i2].sha1)
 
             # Create a commit, copying the old log message:
-            commit = check_output([
-                    'git', 'commit-tree',
-                    '-m', get_log_message(orig),
-                    '-p', commit, tree,
-                    ]).strip()
+            commit = commit_tree(tree, [commit], msg=get_log_message(orig))
 
         self._set_refname(refname, commit, force=force)
 
@@ -1998,11 +2012,10 @@ class MergeState(Block):
         parents = [self[-1,0].sha1, self[0,-1].sha1]
 
         # Create a preliminary commit with a generic commit message:
-        sha1 = check_output([
-                'git', 'commit-tree',
-                '-m', 'Merge commit %s into commit %s' % (parents[1], parents[0]),
-                '-p', parents[0], '-p', parents[1], tree,
-                ]).strip()
+        sha1 = commit_tree(
+            tree, parents,
+            msg='Merge commit %s into commit %s' % (parents[1], parents[0]),
+            )
 
         self._set_refname(refname, sha1, force=force)
 
