@@ -1394,14 +1394,11 @@ class Block(object):
         where the string at diagram[i1][i2] represents the state of the commit
         at (i1, i2)."""
 
-        diagram = [
-            [unknown] * self.len2
-            for i1 in range(self.len1)
-            ]
+        diagram = [[None for i2 in range(self.len2)] for i1 in range(self.len1)]
 
         # A map {(is_known(), manual, is_blocked()) : char}
         table = {
-            (False, False, False) : None,
+            (False, False, False) : unknown,
             (False, False, True) : blocked,
             (True, False, True) : unblocked,
             (True, True, True) : unblocked,
@@ -1411,10 +1408,9 @@ class Block(object):
 
         for i2 in range(self.len2):
             for i1 in range(self.len1):
-                record = self.get_value(i1, i2)
-                c = table[record.is_known(), record.is_manual(), record.is_blocked()]
-                if c is not None:
-                    diagram[i1][i2] = c
+                rec = self.get_value(i1, i2)
+                c = table[rec.is_known(), rec.is_manual(), rec.is_blocked()]
+                diagram[i1][i2] = c
 
         return diagram
 
