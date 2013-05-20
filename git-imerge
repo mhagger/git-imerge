@@ -998,7 +998,7 @@ class MergeFrontier(object):
     FRONTIER_MASK = 0x70
 
     @classmethod
-    def default_formatter(cls, node, legend = None):
+    def default_formatter(cls, node, legend=None):
         def color(node, within):
             if within:
                 return AnsiColor.B_GREEN + node + AnsiColor.END
@@ -1044,7 +1044,7 @@ class MergeFrontier(object):
                     diagram[i1][i2] |= v
         return diagram
 
-    def format_diagram(self, formatter = None, diagram = None):
+    def format_diagram(self, formatter=None, diagram=None):
         if formatter is None:
             formatter = self.default_formatter
         if diagram is None:
