@@ -218,6 +218,46 @@ class Failure(Exception):
     pass
 
 
+class AnsiColor:
+    BLACK = '\033[0;30m'
+    RED = '\033[0;31m'
+    GREEN = '\033[0;32m'
+    YELLOW = '\033[0;33m'
+    BLUE = '\033[0;34m'
+    MAGENTA = '\033[0;35m'
+    CYAN = '\033[0;36m'
+    B_GRAY = '\033[0;37m'
+    D_GRAY = '\033[1;30m'
+    B_RED = '\033[1;31m'
+    B_GREEN = '\033[1;32m'
+    B_YELLOW = '\033[1;33m'
+    B_BLUE = '\033[1;34m'
+    B_MAGENTA = '\033[1;35m'
+    B_CYAN = '\033[1;36m'
+    WHITE = '\033[1;37m'
+    END = '\033[0m'
+
+    @classmethod
+    def disable(cls):
+        cls.BLACK = ''
+        cls.RED = ''
+        cls.GREEN = ''
+        cls.YELLOW = ''
+        cls.BLUE = ''
+        cls.MAGENTA = ''
+        cls.CYAN = ''
+        cls.B_GRAY = ''
+        cls.D_GRAY = ''
+        cls.B_RED = ''
+        cls.B_GREEN = ''
+        cls.B_YELLOW = ''
+        cls.B_BLUE = ''
+        cls.B_MAGENTA = ''
+        cls.B_CYAN = ''
+        cls.WHITE = ''
+        cls.END = ''
+
+
 def iter_neighbors(iterable):
     """For an iterable (x0, x1, x2, ...) generate [(x0,x1), (x1,x2), ...]."""
 
@@ -951,44 +991,71 @@ class MergeFrontier(object):
             and self.blocks[0].len2 == self.block.len2
             )
 
-    ADD_VERTICAL = {
-        '?' : '|',
-        '-' : '+',
-        '+' : '+',
-        '*' : '*',
-        '.' : '|',
-        }
+    # Additional codes used in the 2D array returned from create_diagram()
+    FRONTIER_WITHIN = 0x10
+    FRONTIER_RIGHT_EDGE = 0x20
+    FRONTIER_BOTTOM_EDGE = 0x40
+    FRONTIER_MASK = 0x70
 
-    ADD_HORIZONTAL = {
-        '?' : '-',
-        '|' : '+',
-        '+' : '+',
-        '*' : '*',
-        '.' : '-',
-        }
+    @classmethod
+    def default_formatter(cls, node, legend=None):
+        def color(node, within):
+            if within:
+                return AnsiColor.B_GREEN + node + AnsiColor.END
+            else:
+                return AnsiColor.B_RED + node + AnsiColor.END
 
-    def fill_diagram(self, diagram=None):
-        """Write this frontier to diagram.
+        if legend is None:
+            legend = ["?", "*", ".", "#", "@", "-", "|", "+"]
+        merge = node & ~cls.FRONTIER_MASK
+        within = merge == Block.MERGE_MANUAL or (node & cls.FRONTIER_WITHIN)
+        skip = [Block.MERGE_MANUAL, Block.MERGE_BLOCKED, Block.MERGE_UNBLOCKED]
+        if merge not in skip:
+            vertex = (cls.FRONTIER_BOTTOM_EDGE | cls.FRONTIER_RIGHT_EDGE)
+            edge_status = node & vertex
+            if edge_status == vertex:
+                return color(legend[-1], within)
+            elif edge_status == cls.FRONTIER_RIGHT_EDGE:
+                return color(legend[-2], within)
+            elif edge_status == cls.FRONTIER_BOTTOM_EDGE:
+                return color(legend[-3], within)
+        return color(legend[merge], within)
 
-        diagram is a 2-d array of strings; see Block.fill_diagram()
-        for more info."""
+    def create_diagram(self):
+        """Generate a diagram of this frontier.
 
-        diagram = self.block.fill_diagram(diagram=diagram)
+        The returned diagram is a nested list of integers forming a 2D array,
+        representing the merge frontier embedded in the diagram of commits
+        returned from Block.create_diagram().
+
+        At each node in the returned diagram is an integer whose value is a
+        bitwise-or of existing MERGE_* constant from Block.create_diagram()
+        and zero or more of the FRONTIER_* constants defined in this class."""
+
+        diagram = self.block.create_diagram()
         for block in self:
-            i2 = block.len2 - 1
-            for i1 in range(block.len1 - 1):
-                diagram[i1][i2] = self.ADD_HORIZONTAL[diagram[i1][i2]]
-            i1 = block.len1 - 1
-            for i2 in range(block.len2 - 1):
-                diagram[i1][i2] = self.ADD_VERTICAL[diagram[i1][i2]]
-            diagram[block.len1 - 1][block.len2 - 1] = '+'
-
+            for i1 in range(block.len1):
+                for i2 in range(block.len2):
+                    v = self.FRONTIER_WITHIN
+                    if i1 == block.len1 - 1:
+                        v |= self.FRONTIER_RIGHT_EDGE
+                    if i2 == block.len2 - 1:
+                        v |= self.FRONTIER_BOTTOM_EDGE
+                    diagram[i1][i2] |= v
         return diagram
+
+    def format_diagram(self, formatter=None, diagram=None):
+        if formatter is None:
+            formatter = self.default_formatter
+        if diagram is None:
+            diagram = self.create_diagram()
+        return [
+            [formatter(diagram[i1][i2]) for i2 in range(self.block.len2)]
+            for i1 in range(self.block.len1)]
 
     def write(self, f):
         """Write this frontier to file-like object f."""
-
-        diagram = self.fill_diagram()
+        diagram = self.format_diagram()
         for i2 in range(self.block.len2):
             for i1 in range(self.block.len1):
                 f.write(diagram[i1][i2])
@@ -1384,59 +1451,67 @@ class Block(object):
                 f2.block.auto_outline_frontier(f2)
             return True
 
-    def fill_diagram(
-        self, diagram=None,
-        manual='*', auto='.', unknown='?', blocked='#', unblocked='@',
-        ):
-        """Write this Block to diagram using the specified strings.
+    # The codes in the 2D array returned from create_diagram()
+    MERGE_UNKNOWN = 0
+    MERGE_MANUAL = 1
+    MERGE_AUTOMATIC = 2
+    MERGE_BLOCKED = 3
+    MERGE_UNBLOCKED = 4
 
-        diagram, if provided, must be readable/writeable using
-        notation diagram[i1][i2]; otherwise it is initialized to a
-        nested list of strings initialized to unknown."""
+    # A map {(is_known(), manual, is_blocked()) : integer constant}
+    MergeState = {
+        (False, False, False) : MERGE_UNKNOWN,
+        (False, False, True) : MERGE_BLOCKED,
+        (True, False, True) : MERGE_UNBLOCKED,
+        (True, True, True) : MERGE_UNBLOCKED,
+        (True, False, False) : MERGE_AUTOMATIC,
+        (True, True, False) : MERGE_MANUAL,
+        }
 
-        if diagram is None:
-            diagram = [
-                [unknown] * self.len2
-                for i1 in range(self.len1)
-                ]
+    def create_diagram(self):
+        """Generate a diagram of this Block.
 
-        # A map {(is_known(), manual, is_blocked()) : char}
-        table = {
-            (False, False, False) : None,
-            (False, False, True) : blocked,
-            (True, False, True) : unblocked,
-            (True, True, True) : unblocked,
-            (True, False, False) : auto,
-            (True, True, False) : manual,
-            }
+        The returned diagram, is a nested list of integers forming a 2D array,
+        where the integer at diagram[i1][i2] is one of MERGE_UNKNOWN,
+        MERGE_MANUAL, MERGE_AUTOMATIC, MERGE_BLOCKED, or MERGE_UNBLOCKED,
+        representing the state of the commit at (i1, i2)."""
+
+        diagram = [[None for i2 in range(self.len2)] for i1 in range(self.len1)]
 
         for i2 in range(self.len2):
             for i1 in range(self.len1):
-                record = self.get_value(i1, i2)
-                c = table[record.is_known(), record.is_manual(), record.is_blocked()]
-                if c is not None:
-                    diagram[i1][i2] = c
+                rec = self.get_value(i1, i2)
+                c = self.MergeState[
+                    rec.is_known(), rec.is_manual(), rec.is_blocked()]
+                diagram[i1][i2] = c
 
         return diagram
 
-    def _write(self, f, manual='*', auto='.', unknown='?', sep='', linesep='\n'):
-        diagram = self.fill_diagram(manual=manual, auto=auto, unknown=unknown)
+    def format_diagram(self, legend=None, diagram=None):
+        if legend is None:
+            legend = [
+                AnsiColor.D_GRAY + "?" + AnsiColor.END,
+                AnsiColor.B_GREEN + "*" + AnsiColor.END,
+                AnsiColor.B_GREEN + "." + AnsiColor.END,
+                AnsiColor.B_RED + "#" + AnsiColor.END,
+                AnsiColor.B_YELLOW + "@" + AnsiColor.END,
+                ]
+        if diagram is None:
+            diagram = self.create_diagram()
+        return [
+            [legend[diagram[i1][i2]] for i2 in range(self.len2)]
+            for i1 in range(self.len1)]
+
+    def write(self, f, legend=None, sep='', linesep='\n'):
+        diagram = self.format_diagram(legend)
         for i2 in range(self.len2):
             f.write(sep.join(diagram[i1][i2] for i1 in range(self.len1)) + linesep)
-
-    def write(self, f):
-        self._write(f)
 
     def writeppm(self, f):
         f.write('P3\n')
         f.write('%d %d 255\n' % (self.n1, self.n2,))
-        self._write(
-            f,
-            manual='0 255 0',
-            auto='0 127 0',
-            unknown='127 127 0',
-            sep='  ',
-            )
+        legend = ['127 127 0', '0 255 0', '0 127 0', '255 0 0', '127 0 0']
+        self.write(f, legend, sep='  ')
 
 
 class SubBlock(Block):
@@ -2340,6 +2415,14 @@ def main(args):
         '--frontier', action='store_true', default=False,
         help='show the current merge frontier',
         )
+    parser_diagram.add_argument(
+        '--color', dest='color', action='store_true', default=None,
+        help='draw diagram with colors',
+        )
+    parser_diagram.add_argument(
+        '--no-color', dest='color', action='store_false',
+        help='draw diagram without colors',
+        )
 
     parser_list = subparsers.add_parser(
         'list',
@@ -2585,6 +2668,8 @@ def main(args):
     elif options.subcommand == 'diagram':
         if not (options.commits or options.frontier):
             options.frontier = True
+        if not (options.color or (options.color is None and sys.stdout.isatty())):
+            AnsiColor.disable()
 
         merge_state = read_merge_state(options.name)
         if options.commits:
