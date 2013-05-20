@@ -1466,7 +1466,7 @@ class Block(object):
         MERGE_MANUAL, MERGE_AUTOMATIC, or MERGE_BLOCKED, representing the state
         of the commit at (i1, i2)."""
 
-        diagram = [[None for x in range(self.len2)] for y in range(self.len1)]
+        diagram = [[None for i2 in range(self.len2)] for i1 in range(self.len1)]
 
         # A map {(is_known(), manual, is_blocked()) : char}
         table = {
