@@ -1458,35 +1458,36 @@ class Block(object):
     MERGE_BLOCKED = 3
     MERGE_UNBLOCKED = 4
 
+    # A map {(is_known(), manual, is_blocked()) : integer constant}
+    MergeState = {
+        (False, False, False) : MERGE_UNKNOWN,
+        (False, False, True) : MERGE_BLOCKED,
+        (True, False, True) : MERGE_UNBLOCKED,
+        (True, True, True) : MERGE_UNBLOCKED,
+        (True, False, False) : MERGE_AUTOMATIC,
+        (True, True, False) : MERGE_MANUAL,
+        }
+
     def create_diagram(self):
         """Generate a diagram of this Block.
 
         The returned diagram, is a nested list of integers forming a 2D array,
         where the integer at diagram[i1][i2] is one of MERGE_UNKNOWN,
-        MERGE_MANUAL, MERGE_AUTOMATIC, or MERGE_BLOCKED, representing the state
-        of the commit at (i1, i2)."""
+        MERGE_MANUAL, MERGE_AUTOMATIC, MERGE_BLOCKED, or MERGE_UNBLOCKED,
+        representing the state of the commit at (i1, i2)."""
 
         diagram = [[None for i2 in range(self.len2)] for i1 in range(self.len1)]
-
-        # A map {(is_known(), manual, is_blocked()) : char}
-        table = {
-            (False, False, False) : self.MERGE_UNKNOWN,
-            (False, False, True) : self.MERGE_BLOCKED,
-            (True, False, True) : self.MERGE_UNBLOCKED,
-            (True, True, True) : self.MERGE_UNBLOCKED,
-            (True, False, False) : self.MERGE_AUTOMATIC,
-            (True, True, False) : self.MERGE_MANUAL,
-            }
 
         for i2 in range(self.len2):
             for i1 in range(self.len1):
                 rec = self.get_value(i1, i2)
-                c = table[rec.is_known(), rec.is_manual(), rec.is_blocked()]
+                c = self.MergeState[
+                    rec.is_known(), rec.is_manual(), rec.is_blocked()]
                 diagram[i1][i2] = c
 
         return diagram
 
-    def format_diagram(self, legend = None, diagram = None):
+    def format_diagram(self, legend=None, diagram=None):
         if legend is None:
             legend = [
                 AnsiColor.D_GRAY + "?" + AnsiColor.END,
@@ -1501,7 +1502,7 @@ class Block(object):
             [legend[diagram[i1][i2]] for i2 in range(self.len2)]
             for i1 in range(self.len1)]
 
-    def write(self, f, legend = None, sep='', linesep='\n'):
+    def write(self, f, legend=None, sep='', linesep='\n'):
         diagram = self.format_diagram(legend)
         for i2 in range(self.len2):
             f.write(sep.join(diagram[i1][i2] for i1 in range(self.len1)) + linesep)
