@@ -951,45 +951,64 @@ class MergeFrontier(object):
             and self.blocks[0].len2 == self.block.len2
             )
 
-    ADD_VERTICAL = {
-        '?' : '|',
-        '-' : '+',
-        '+' : '+',
-        '*' : '*',
-        '.' : '|',
-        }
+    # Additional codes used in the 2D array returned from create_diagram()
+    FRONTIER_WITHIN = 0x10
+    FRONTIER_RIGHT_EDGE = 0x20
+    FRONTIER_BOTTOM_EDGE = 0x40
+    FRONTIER_MASK = 0x70
 
-    ADD_HORIZONTAL = {
-        '?' : '-',
-        '|' : '+',
-        '+' : '+',
-        '*' : '*',
-        '.' : '-',
-        }
+    @classmethod
+    def default_formatter(cls, node, legend=None):
+        if legend is None:
+            legend = ["?", "*", ".", "#", "@", "-", "|", "+"]
+        merge = node & ~cls.FRONTIER_MASK
+        skip = [Block.MERGE_MANUAL, Block.MERGE_BLOCKED, Block.MERGE_UNBLOCKED]
+        if merge not in skip:
+            vertex = (cls.FRONTIER_BOTTOM_EDGE | cls.FRONTIER_RIGHT_EDGE)
+            edge_status = node & vertex
+            if edge_status == vertex:
+                return legend[-1]
+            elif edge_status == cls.FRONTIER_RIGHT_EDGE:
+                return legend[-2]
+            elif edge_status == cls.FRONTIER_BOTTOM_EDGE:
+                return legend[-3]
+        return legend[merge]
 
     def create_diagram(self):
         """Generate a diagram of this frontier.
 
-        The returned diagram is a nested list of strings forming a 2D array,
+        The returned diagram is a nested list of integers forming a 2D array,
         representing the merge frontier embedded in the diagram of commits
-        returned from Block.create_diagram()."""
+        returned from Block.create_diagram().
 
-        diagram = self.block.format_diagram()
+        At each node in the returned diagram is an integer whose value is a
+        bitwise-or of existing MERGE_* constant from Block.create_diagram()
+        and zero or more of the FRONTIER_* constants defined in this class."""
+
+        diagram = self.block.create_diagram()
         for block in self:
-            i2 = block.len2 - 1
-            for i1 in range(block.len1 - 1):
-                diagram[i1][i2] = self.ADD_HORIZONTAL[diagram[i1][i2]]
-            i1 = block.len1 - 1
-            for i2 in range(block.len2 - 1):
-                diagram[i1][i2] = self.ADD_VERTICAL[diagram[i1][i2]]
-            diagram[block.len1 - 1][block.len2 - 1] = '+'
-
+            for i1 in range(block.len1):
+                for i2 in range(block.len2):
+                    v = self.FRONTIER_WITHIN
+                    if i1 == block.len1 - 1:
+                        v |= self.FRONTIER_RIGHT_EDGE
+                    if i2 == block.len2 - 1:
+                        v |= self.FRONTIER_BOTTOM_EDGE
+                    diagram[i1][i2] |= v
         return diagram
+
+    def format_diagram(self, formatter=None, diagram=None):
+        if formatter is None:
+            formatter = self.default_formatter
+        if diagram is None:
+            diagram = self.create_diagram()
+        return [
+            [formatter(diagram[i1][i2]) for i2 in range(self.block.len2)]
+            for i1 in range(self.block.len1)]
 
     def write(self, f):
         """Write this frontier to file-like object f."""
-
-        diagram = self.create_diagram()
+        diagram = self.format_diagram()
         for i2 in range(self.block.len2):
             for i1 in range(self.block.len1):
                 f.write(diagram[i1][i2])
