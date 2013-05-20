@@ -974,7 +974,7 @@ class MergeFrontier(object):
         representing the merge frontier embedded in the diagram of commits
         returned from Block.create_diagram()."""
 
-        diagram = self.block.create_diagram()
+        diagram = self.block.format_diagram()
         for block in self:
             i2 = block.len2 - 1
             for i1 in range(block.len1 - 1):
@@ -1385,25 +1385,31 @@ class Block(object):
                 f2.block.auto_outline_frontier(f2)
             return True
 
-    def create_diagram(
-        self, manual='*', auto='.', unknown='?', blocked='#', unblocked='@',
-        ):
-        """Generate a diagram of this Block using the specified strings.
+    # The codes in the 2D array returned from create_diagram()
+    MERGE_UNKNOWN = 0
+    MERGE_MANUAL = 1
+    MERGE_AUTOMATIC = 2
+    MERGE_BLOCKED = 3
+    MERGE_UNBLOCKED = 4
 
-        The returned diagram, is a nested list of strings forming a 2D array,
-        where the string at diagram[i1][i2] represents the state of the commit
-        at (i1, i2)."""
+    def create_diagram(self):
+        """Generate a diagram of this Block.
+
+        The returned diagram, is a nested list of integers forming a 2D array,
+        where the integer at diagram[i1][i2] is one of MERGE_UNKNOWN,
+        MERGE_MANUAL, MERGE_AUTOMATIC, or MERGE_BLOCKED, representing the state
+        of the commit at (i1, i2)."""
 
         diagram = [[None for x in range(self.len2)] for y in range(self.len1)]
 
         # A map {(is_known(), manual, is_blocked()) : char}
         table = {
-            (False, False, False) : unknown,
-            (False, False, True) : blocked,
-            (True, False, True) : unblocked,
-            (True, True, True) : unblocked,
-            (True, False, False) : auto,
-            (True, True, False) : manual,
+            (False, False, False) : self.MERGE_UNKNOWN,
+            (False, False, True) : self.MERGE_BLOCKED,
+            (True, False, True) : self.MERGE_UNBLOCKED,
+            (True, True, True) : self.MERGE_UNBLOCKED,
+            (True, False, False) : self.MERGE_AUTOMATIC,
+            (True, True, False) : self.MERGE_MANUAL,
             }
 
         for i2 in range(self.len2):
@@ -1414,24 +1420,25 @@ class Block(object):
 
         return diagram
 
-    def _write(self, f, manual='*', auto='.', unknown='?', sep='', linesep='\n'):
-        diagram = self.create_diagram(manual=manual, auto=auto, unknown=unknown)
+    def format_diagram(self, legend = None, diagram = None):
+        if legend is None:
+            legend = ["?", "*", ".", "#", "@"]
+        if diagram is None:
+            diagram = self.create_diagram()
+        return [
+            [legend[diagram[i1][i2]] for i2 in range(self.len2)]
+            for i1 in range(self.len1)]
+
+    def write(self, f, legend = None, sep='', linesep='\n'):
+        diagram = self.format_diagram(legend)
         for i2 in range(self.len2):
             f.write(sep.join(diagram[i1][i2] for i1 in range(self.len1)) + linesep)
-
-    def write(self, f):
-        self._write(f)
 
     def writeppm(self, f):
         f.write('P3\n')
         f.write('%d %d 255\n' % (self.n1, self.n2,))
-        self._write(
-            f,
-            manual='0 255 0',
-            auto='0 127 0',
-            unknown='127 127 0',
-            sep='  ',
-            )
+        legend = ['127 127 0', '0 255 0', '0 127 0', '255 0 0', '127 0 0']
+        self.write(f, legend, sep='  ')
 
 
 class SubBlock(Block):
