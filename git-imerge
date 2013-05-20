@@ -1509,7 +1509,7 @@ class Block(object):
 
     def writeppm(self, f):
         f.write('P3\n')
-        f.write('%d %d 255\n' % (self.n1, self.n2,))
+        f.write('%d %d 255\n' % (self.len1, self.len2,))
         legend = ['127 127 0', '0 255 0', '0 127 0', '255 0 0', '127 0 0']
         self.write(f, legend, sep='  ')
 
