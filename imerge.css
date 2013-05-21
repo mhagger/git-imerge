@@ -28,14 +28,20 @@ table#imerge td.merge_manual {
     font-weight: bold;
 }
 
+table#imerge td.merge_unknown:before {
+    content: "?"
+}
+
 table#imerge td.merge_unknown {
     color: #555;
-    content: "?"
+}
+
+table#imerge td.merge_blocked:before {
+    content: "BLOCKER"
 }
 
 table#imerge td.merge_blocked {
     background: #c00;
     border: 1px solid #400;
     font-weight: bold;
-    content: "BLOCKER"
 }

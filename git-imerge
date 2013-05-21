@@ -2738,7 +2738,7 @@ def main(args):
         if options.html:
             merge_frontier = MergeFrontier.map_known_frontier(merge_state)
             html = open(options.html, "w")
-            merge_frontier.write_html(html, options.name)
+            merge_frontier.write_html(html, merge_state.name)
             html.close()
         sys.stdout.write(
             'Key:\n'
