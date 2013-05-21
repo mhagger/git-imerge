@@ -1021,7 +1021,7 @@ class MergeFrontier(object):
                 return color(legend[-3], within)
         return color(legend[merge], within)
 
-    def create_diagram(self, include_records=False):
+    def create_diagram(self):
         """Generate a diagram of this frontier.
 
         The returned diagram is a nested list of integers forming a 2D array,
@@ -1032,7 +1032,7 @@ class MergeFrontier(object):
         bitwise-or of existing MERGE_* constant from Block.create_diagram()
         and zero or more of the FRONTIER_* constants defined in this class."""
 
-        diagram = self.block.create_diagram(include_records)
+        diagram = self.block.create_diagram()
         for block in self:
             for i1 in range(block.len1):
                 for i2 in range(block.len2):
@@ -1041,11 +1041,7 @@ class MergeFrontier(object):
                         v |= self.FRONTIER_RIGHT_EDGE
                     if i2 == block.len2 - 1:
                         v |= self.FRONTIER_BOTTOM_EDGE
-                    if include_records:
-                        i, rec = diagram[i1][i2]
-                        diagram[i1][i2] = (i | v, rec)
-                    else:
-                        diagram[i1][i2] |= v
+                    diagram[i1][i2] |= v
         return diagram
 
     def format_diagram(self, formatter=None, diagram=None):
@@ -1096,16 +1092,16 @@ class MergeFrontier(object):
 <table id="imerge">
 """ % (name, cssfile))
 
-        diagram = self.create_diagram(include_records=True)
+        diagram = self.create_diagram()
         for i2 in range(self.block.len2):
             f.write("  <tr>\n")
             for i1 in range(self.block.len1):
-                i, rec = diagram[i1][i2]
-                classes = map_to_classes(i)
-                sha1 = rec.sha1 or ""
-                td_id = rec.sha1 and 'id="%s"' % (rec.sha1) or ''
-                td_class = classes and 'class="' + " ".join(classes) + '"' or ''
-                f.write("    <td %s %s>%.*s</td>\n" % (
+                classes = map_to_classes(diagram[i1][i2])
+                record = self.block.get_value(i1, i2)
+                sha1 = record.sha1 or ""
+                td_id = record.sha1 and ' id="%s"' % (record.sha1) or ''
+                td_class = classes and ' class="' + " ".join(classes) + '"' or ''
+                f.write("    <td%s%s>%.*s</td>\n" % (
                         td_id, td_class, abbrev_sha1, sha1))
             f.write("  </tr>\n")
         f.write("</table>\n</body>\n</html>\n")
@@ -1517,7 +1513,7 @@ class Block(object):
         (True, True, False) : MERGE_MANUAL,
         }
 
-    def create_diagram(self, include_records=False):
+    def create_diagram(self):
         """Generate a diagram of this Block.
 
         The returned diagram, is a nested list of integers forming a 2D array,
@@ -1532,10 +1528,7 @@ class Block(object):
                 rec = self.get_value(i1, i2)
                 c = self.MergeState[
                     rec.is_known(), rec.is_manual(), rec.is_blocked()]
-                if include_records:
-                    diagram[i1][i2] = (c, rec)
-                else:
-                    diagram[i1][i2] = c
+                diagram[i1][i2] = c
 
         return diagram
 
