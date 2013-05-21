@@ -1,0 +1,41 @@
+table#imerge {
+    border-collapse: collapse;
+    font-family: monospace;
+    border: 1px solid black;
+}
+
+table#imerge td {
+    padding: 15px 5px;
+    background: #f44;
+    border: 1px dashed #444;
+    text-align: center;
+}
+
+table#imerge td.frontier_within {
+    background: #4f4;
+}
+
+table#imerge td.frontier_right_edge {
+    border-right: 5px solid black;
+}
+
+table#imerge td.frontier_bottom_edge {
+    border-bottom: 5px solid black;
+}
+
+table#imerge td.merge_manual {
+    background: #4f4;
+    font-weight: bold;
+}
+
+table#imerge td.merge_unknown {
+    color: #555;
+    content: "?"
+}
+
+table#imerge td.merge_blocked {
+    background: #c00;
+    border: 1px solid #400;
+    font-weight: bold;
+    content: "BLOCKER"
+}
