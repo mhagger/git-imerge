@@ -1061,6 +1061,51 @@ class MergeFrontier(object):
                 f.write(diagram[i1][i2])
             f.write('\n')
 
+    def write_html(self, f, name, cssfile="imerge.css", abbrev_sha1=7):
+        class_map = {
+            Block.MERGE_UNKNOWN: "merge_unknown",
+            Block.MERGE_MANUAL: "merge_manual",
+            Block.MERGE_AUTOMATIC: "merge_automatic",
+            Block.MERGE_BLOCKED: "merge_blocked",
+            Block.MERGE_UNBLOCKED: "merge_unblocked",
+            self.FRONTIER_WITHIN: "frontier_within",
+            self.FRONTIER_RIGHT_EDGE: "frontier_right_edge",
+            self.FRONTIER_BOTTOM_EDGE: "frontier_bottom_edge",
+            }
+
+        def map_to_classes(node):
+            merge = node & ~self.FRONTIER_MASK
+            ret = [class_map[merge]]
+            for bit in [self.FRONTIER_WITHIN, self.FRONTIER_RIGHT_EDGE,
+                        self.FRONTIER_BOTTOM_EDGE]:
+                if node & bit:
+                    ret.append(class_map[bit])
+            return ret
+
+        f.write("""\
+<html>
+<head>
+<title>git-imerge: %s</title>
+<link rel="stylesheet" href="%s" type="text/css" />
+</head>
+<body>
+<table id="imerge">
+""" % (name, cssfile))
+
+        diagram = self.create_diagram()
+        for i2 in range(self.block.len2):
+            f.write("  <tr>\n")
+            for i1 in range(self.block.len1):
+                classes = map_to_classes(diagram[i1][i2])
+                record = self.block.get_value(i1, i2)
+                sha1 = record.sha1 or ""
+                td_id = record.sha1 and ' id="%s"' % (record.sha1) or ''
+                td_class = classes and ' class="' + " ".join(classes) + '"' or ''
+                f.write("    <td%s%s>%.*s</td>\n" % (
+                        td_id, td_class, abbrev_sha1, sha1))
+            f.write("  </tr>\n")
+        f.write("</table>\n</body>\n</html>\n")
+
     @staticmethod
     def _iter_non_empty_blocks(blocks):
         for block in blocks:
@@ -2416,6 +2461,10 @@ def main(args):
         help='show the current merge frontier',
         )
     parser_diagram.add_argument(
+        '--html', action='store', default=None,
+        help='generate HTML diagram showing the current merge frontier',
+        )
+    parser_diagram.add_argument(
         '--color', dest='color', action='store_true', default=None,
         help='draw diagram with colors',
         )
@@ -2679,6 +2728,11 @@ def main(args):
             merge_frontier = MergeFrontier.map_known_frontier(merge_state)
             merge_frontier.write(sys.stdout)
             sys.stdout.write('\n')
+        if options.html:
+            merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+            html = open(options.html, "w")
+            merge_frontier.write_html(html, merge_state.name)
+            html.close()
         sys.stdout.write(
             'Key:\n'
             )
