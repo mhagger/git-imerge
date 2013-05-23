@@ -1753,7 +1753,13 @@ class MergeState(Block):
         if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
             raise Failure('Name %r is already in use!' % (name,))
 
-        merge_base = check_output(['git', 'merge-base', tip1, tip2]).strip()
+        merge_base = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
+        if not merge_base:
+            raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
+        if len(merge_base) > 1:
+            raise Failure('%r and %r do not have a unique merge base' % (tip1, tip2))
+
+        [merge_base] = merge_base
 
         commits1 = rev_list('--first-parent', '%s..%s' % (tip2, tip1))
         commits1.reverse()
