@@ -1761,13 +1761,24 @@ class MergeState(Block):
 
         [merge_base] = merge_base
 
-        commits1 = rev_list('--first-parent', '%s..%s' % (tip2, tip1))
+        ancestry_path1 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip1)))
+        commits1 = [
+            sha1
+            for sha1 in rev_list('--first-parent', '%s..%s' % (merge_base, tip1))
+            if sha1 in ancestry_path1
+            ]
         commits1.reverse()
         if not commits1:
             raise Failure(
                 'There are no commits on %r that are not already in %r' % (tip1, tip2)
                 )
-        commits2 = rev_list('--first-parent', '%s..%s' % (tip1, tip2))
+
+        ancestry_path2 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip2)))
+        commits2 = [
+            sha1
+            for sha1 in rev_list('--first-parent', '%s..%s' % (merge_base, tip2))
+            if sha1 in ancestry_path2
+            ]
         commits2.reverse()
         if not commits2:
             raise Failure(
