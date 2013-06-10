@@ -22,7 +22,17 @@ r"""Git incremental merge
 
 Perform the merge between two branches incrementally.  If conflicts
 are encountered, figure out exactly which pairs of commits conflict,
-and present the user with one pairwise conflict at a time.
+and present the user with one pairwise conflict at a time for
+resolution.
+
+git-imerge has two primary design goals:
+
+* Reduce the pain of resolving merge conflicts to its unavoidable
+  minimum, by finding and presenting the smallest possible conflicts:
+  those between the changes introduced by one commit from each branch.
+
+* Allow a merge to be saved, tested, interrupted, published, and
+  collaborated on while it is in progress.
 
 The best thing to read to get started is "git-imerge: A Practical
 Introduction" [1].  The theory and benefits of incremental merging are
