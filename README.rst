@@ -16,17 +16,35 @@ resolution.
 * Allow a merge to be saved, tested, interrupted, published, and
   collaborated on while it is in progress.
 
-The best thing to read to get started is `git-imerge: A Practical
-Introduction`_.  If you want more information, the theory and benefits
-of incremental merging are described in minute detail in a series of
-blog posts [1]_, as are the benefits of retaining history when doing a
-rebase [2]_.
+I think that it is easiest to understand the concept of incremental
+merging visually, and therefore I recommend the video of my
+`git-imerge presentation from the GitMerge 2013 conference`_ (20 min)
+as a good place to start.  The full slides for that talk are available
+in this repository under ``doc/presentations/GitMerge-2013``.  At the
+same conference, I was interviewed about ``git-imerge`` by Thomas
+Ferris Nicolaisen for his `GitMinutes Podcast #12`_.
+
+.. _`git-imerge presentation from the GitMerge 2013 conference`:
+   http://www.youtube.com/watch?v=FMZ2_-Ny_zc
+
+.. _`GitMinutes Podcast #12`:
+   http://episodes.gitminutes.com/2013/06/gitminutes-12-git-merge-2013-part-4.html
+
+To learn how to use the ``git-imerge`` tool itself, I suggest the blog
+article `git-imerge: A Practical Introduction`_ and also typing
+``git-imerge --help`` and ``git-imerge SUBCOMMAND --help``.  If you
+want more information, the theory and benefits of incremental merging
+are described in minute detail in a series of blog articles [1]_, as
+are the benefits of retaining history when doing a rebase [2]_.
+
+.. _`git-imerge: A Practical Introduction`:
+   http://softwareswirl.blogspot.com/2013/05/git-imerge-practical-introduction.html
 
 Multiple incremental merges can be in progress at the same time.  Each
 incremental merge has a name, and its progress is recorded in the Git
 repository as references under ``refs/imerge/NAME``.  The current
-state of an incremental merge can (crudely) be visualized using the
-``diagram`` command.
+state of an incremental merge can be visualized using the ``diagram``
+command.
 
 An incremental merge can be interrupted and resumed arbitrarily, or
 even pushed to a server to allow somebody else to work on it.
@@ -119,12 +137,12 @@ where
 License
 =======
 
-git-imerge is released as open-source software under the GNU General
-Public License (GPL), version 2 or later.
+``git-imerge`` is released as open-source software under the GNU
+General Public License (GPL), version 2 or later.
 
 
-.. _`git-imerge: A Practical Introduction`:
-   http://softwareswirl.blogspot.com/2013/05/git-imerge-practical-introduction.html
+References
+==========
 
 .. [1]
    * http://softwareswirl.blogspot.com/2012/12/the-conflict-frontier-of-nightmare-merge.html
@@ -133,6 +151,7 @@ Public License (GPL), version 2 or later.
    * http://softwareswirl.blogspot.com/2013/05/git-incremental-merge.html
    * http://softwareswirl.blogspot.com/2013/05/one-merge-to-rule-them-all.html
    * http://softwareswirl.blogspot.com/2013/05/incremental-merge-vs-direct-merge-vs.html
+   * http://softwareswirl.blogspot.com/2013/05/git-imerge-practical-introduction.html
 
 .. [2]
    * http://softwareswirl.blogspot.com/2009/04/truce-in-merge-vs-rebase-war.html
