@@ -570,7 +570,7 @@ def automerge(commit1, commit2):
     try:
         call_silently(['git', '-c', 'rerere.enabled=false', 'merge', commit2])
     except CalledProcessError:
-        call_silently(['git', 'merge', '--abort'])
+        call_silently(['git', 'reset', '--merge'])
         raise AutomaticMergeFailed(commit1, commit2)
     else:
         return get_commit_sha1('HEAD')
@@ -1931,7 +1931,7 @@ class MergeState(Block):
             head_refname = None
         if head_refname == scratch_refname:
             try:
-                check_call(['git', 'merge', '--abort'])
+                check_call(['git', 'reset', '--merge'])
             except CalledProcessError:
                 pass
             # Detach head so that we can delete scratch_refname:
