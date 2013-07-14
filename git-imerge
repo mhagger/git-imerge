@@ -2278,17 +2278,17 @@ def request_user_merge(merge_state, i1, i2):
     except CalledProcessError:
         # We expect an error (otherwise we would have automerged!)
         pass
-    sys.stdout.write(
+    sys.stderr.write(
         '\n'
         'Original first commit:\n'
         )
     check_call(['git', 'log', '--no-walk', merge_state[i1,0].sha1])
-    sys.stdout.write(
+    sys.stderr.write(
         '\n'
         'Original second commit:\n'
         )
     check_call(['git', 'log', '--no-walk', merge_state[0,i2].sha1])
-    sys.stdout.write(
+    sys.stderr.write(
         '\n'
         'There was a conflict merging commit %d-%d, shown above.\n'
         'Please resolve the conflict, commit the result, then type\n'
