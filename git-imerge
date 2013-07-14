@@ -2318,8 +2318,6 @@ def incorporate_user_merge(merge_state):
     # This might throw ManualMergeUnusableError:
     (i1, i2) = merge_state.incorporate_manual_merge(commit)
 
-    merge_state.save()
-
     try:
         headref = check_output(['git', 'symbolic-ref', '-q', 'HEAD']).strip()
     except CalledProcessError:
@@ -2339,8 +2337,18 @@ def incorporate_user_merge(merge_state):
             '-d', refname,
             ])
 
-    # This might throw NotABlockingCommitError:
-    return merge_frontier.get_affected_blocker_block(i1, i2)
+    try:
+        # This might throw NotABlockingCommitError:
+        unblocked_block = merge_frontier.get_affected_blocker_block(i1, i2)
+        unblocked_block[1,1].record_blocked(False)
+        sys.stderr.write(
+            'Merge has been recorded for merge %d-%d.\n'
+            % unblocked_block.get_original_indexes(1, 1)
+            )
+    except NotABlockingCommitError:
+        raise
+    finally:
+        merge_state.save()
 
 
 def choose_merge_name(name, default_to_unique=True):
@@ -2671,12 +2679,7 @@ def main(args):
         require_clean_work_tree('proceed')
         merge_state = read_merge_state(options.name)
         try:
-            unblocked_block = incorporate_user_merge(merge_state)
-            unblocked_block[1,1].record_blocked(False)
-            sys.stderr.write(
-                'Merge has been recorded for merge %d-%d.\n'
-                % unblocked_block.get_original_indexes(1, 1)
-                )
+            incorporate_user_merge(merge_state)
         except NoManualMergeError:
             pass
         except NotABlockingCommitError:
@@ -2694,12 +2697,7 @@ def main(args):
         require_clean_work_tree('proceed')
         merge_state = read_merge_state(options.name)
         try:
-            unblocked_block = incorporate_user_merge(merge_state)
-            unblocked_block[1,1].record_blocked(False)
-            sys.stderr.write(
-                'Merge has been recorded for merge %d-%d.\n'
-                % unblocked_block.get_original_indexes(1, 1)
-                )
+            incorporate_user_merge(merge_state)
         except NoManualMergeError, e:
             raise Failure(str(e))
         except NotABlockingCommitError:
