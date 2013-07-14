@@ -2318,8 +2318,6 @@ def incorporate_user_merge(merge_state):
     # This might throw ManualMergeUnusableError:
     (i1, i2) = merge_state.incorporate_manual_merge(commit)
 
-    merge_state.save()
-
     try:
         headref = check_output(['git', 'symbolic-ref', '-q', 'HEAD']).strip()
     except CalledProcessError:
@@ -2349,6 +2347,8 @@ def incorporate_user_merge(merge_state):
             )
     except NotABlockingCommitError:
         raise
+    finally:
+        merge_state.save()
 
 
 def choose_merge_name(name, default_to_unique=True):
