@@ -413,7 +413,7 @@ def get_commit_parents(commit):
     """Return a list containing the parents of commit."""
 
     return check_output(
-        ['git', 'log', '--no-walk', '--pretty=format:%P', commit]
+        ['git', '--no-pager', 'log', '--no-walk', '--pretty=format:%P', commit]
         ).strip().split()
 
 
@@ -429,7 +429,7 @@ def get_log_message(commit):
 
 def get_author_info(commit):
     a = check_output([
-        'git', 'log', '-n1',
+        'git', '--no-pager', 'log', '-n1',
         '--format=%an%x00%ae%x00%ad', commit
         ]).strip().split('\x00')
 
@@ -2282,12 +2282,12 @@ def request_user_merge(merge_state, i1, i2):
         '\n'
         'Original first commit:\n'
         )
-    check_call(['git', 'log', '--no-walk', merge_state[i1,0].sha1])
+    check_call(['git', '--no-pager', 'log', '--no-walk', merge_state[i1,0].sha1])
     sys.stderr.write(
         '\n'
         'Original second commit:\n'
         )
-    check_call(['git', 'log', '--no-walk', merge_state[0,i2].sha1])
+    check_call(['git', '--no-pager', 'log', '--no-walk', merge_state[0,i2].sha1])
     sys.stderr.write(
         '\n'
         'There was a conflict merging commit %d-%d, shown above.\n'
