@@ -2680,7 +2680,7 @@ def main(args):
             incorporate_user_merge(merge_state)
         except NoManualMergeError:
             pass
-        except NotABlockingCommitError:
+        except NotABlockingCommitError, e:
             raise Failure(str(e))
         except ManualMergeUnusableError, e:
             raise Failure(str(e))
