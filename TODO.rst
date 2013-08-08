@@ -155,6 +155,10 @@ Tools
 * ``git imerge list -v`` -- add more information to the display; for
   example, the goals, status, etc. of each imerge.
 
+* ``git imerge status`` -- show the current imerge status (issue #22).
+  If the user has been asked to do a merge, show the log messages for
+  the two original commits again.
+
 
 Miscellaneous
 =============
@@ -174,6 +178,13 @@ Miscellaneous
 * Maybe fix PPM output.
 
 * Maybe keep a record of all merge attempts, successful and failed.
+
+* When running subprocesses, set a more specific value to environment
+  variable GIT_IMERGE reflecting exactly what git-imerge is doing at
+  the time (e.g., 'autofill', 'automerge', etc.).  See issue #17.
+
+* Add better tools and hints for getting out of a screwed-up merge
+  attempt (see, e.g., issue #29).
 
 
 Testing
