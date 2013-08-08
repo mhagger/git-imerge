@@ -1763,7 +1763,10 @@ class MergeState(Block):
         if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
             raise Failure('Name %r is already in use!' % (name,))
 
-        merge_base = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
+        try:
+            merge_base = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
+        except CalledProcessError, e:
+            raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
         if not merge_base:
             raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
         if len(merge_base) > 1:
