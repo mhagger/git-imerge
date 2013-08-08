@@ -309,9 +309,7 @@ def call_silently(cmd):
     except (IOError, AttributeError):
         NULL = subprocess.PIPE
 
-    p = subprocess.Popen(
-        cmd, stdout=NULL, stderr=subprocess.PIPE,
-        )
+    p = subprocess.Popen(cmd, stdout=NULL, stderr=NULL)
     (out,err) = p.communicate()
     retcode = p.wait()
     if retcode:
