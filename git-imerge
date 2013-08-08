@@ -305,8 +305,8 @@ def find_first_false(f, lo, hi):
 
 def call_silently(cmd):
     try:
-        NULL = open('/dev/null', 'w')
-    except IOError:
+        NULL = open(os.devnull, 'w')
+    except (IOError, AttributeError):
         NULL = subprocess.PIPE
 
     p = subprocess.Popen(
