@@ -2628,6 +2628,13 @@ def main(args):
 
     options = parser.parse_args(args)
 
+    # Set an environment variable GIT_IMERGE=1 while we are running.
+    # This makes it possible for hook scripts etc. to know that they
+    # are being run within git-imerge, and should perhaps behave
+    # differently.  In the future we might make the value more
+    # informative, like GIT_IMERGE=[automerge|autofill|...].
+    os.environ['GIT_IMERGE'] = '1'
+
     if options.subcommand == 'list':
         default_merge = MergeState.get_default_name()
         for name in MergeState.iter_existing_names():
