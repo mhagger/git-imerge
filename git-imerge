@@ -509,19 +509,22 @@ class TemporaryHead(object):
         return False
 
 
-def reparent(commit, parent_sha1s):
+def reparent(commit, parent_sha1s, msg=None):
     """Create a new commit object like commit, but with the specified parents.
 
     commit is the SHA1 of an existing commit and parent_sha1s is a
     list of SHA1s.  Create a new commit exactly like that one, except
     that it has the specified parent commits.  Return the SHA1 of the
     resulting commit object, which is already stored in the object
-    database but is not yet referenced by anything."""
+    database but is not yet referenced by anything.
+
+    If msg is set, then use it as the commit message for the new
+    commit."""
 
     old_commit = check_output(['git', 'cat-file', 'commit', commit])
     separator = old_commit.index('\n\n')
     headers = old_commit[:separator + 1].splitlines(True)
-    rest = old_commit[separator + 1:]
+    rest = old_commit[separator + 2:]
 
     new_commit = StringIO()
     for i in range(len(headers)):
@@ -536,7 +539,13 @@ def reparent(commit, parent_sha1s):
         else:
             new_commit.write(line)
 
-    new_commit.write(rest)
+    new_commit.write('\n')
+    if msg is None:
+        new_commit.write(rest)
+    else:
+        new_commit.write(msg)
+        if not msg.endswith('\n'):
+            new_commit.write('\n')
 
     process = subprocess.Popen(
         ['git', 'hash-object', '-t', 'commit', '-w', '--stdin'],
