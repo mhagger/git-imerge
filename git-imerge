@@ -566,7 +566,7 @@ class AutomaticMergeFailed(Exception):
         self.commit1, self.commit2 = commit1, commit2
 
 
-def automerge(commit1, commit2):
+def automerge(commit1, commit2, msg=None):
     """Attempt an automatic merge of commit1 and commit2.
 
     Return the SHA1 of the resulting commit, or raise
@@ -574,8 +574,12 @@ def automerge(commit1, commit2):
     worktree."""
 
     call_silently(['git', 'checkout', '-f', commit1])
+    cmd = ['git', '-c', 'rerere.enabled=false', 'merge']
+    if msg is not None:
+        cmd += ['-m', msg]
+    cmd += [commit2]
     try:
-        call_silently(['git', '-c', 'rerere.enabled=false', 'merge', commit2])
+        call_silently(cmd)
     except CalledProcessError:
         # We don't use "git merge --abort" here because it was only
         # added in git version 1.7.4.
