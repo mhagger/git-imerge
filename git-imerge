@@ -190,7 +190,7 @@ except ImportError:
         return output
 
 
-STATE_VERSION = (1, 0, 0)
+STATE_VERSION = (1, 0, 1)
 
 ZEROS = '0' * 40
 
@@ -1801,7 +1801,12 @@ class MergeState(Block):
         if goal == 'rebase':
             MergeState._check_no_merges(commits2)
 
-        return MergeState(name, goal, merge_base, commits1, commits2, MergeRecord.NEW_MANUAL)
+        return MergeState(
+            name, goal, merge_base,
+            tip1, commits1,
+            tip2, commits2,
+            MergeRecord.NEW_MANUAL,
+            )
 
     @staticmethod
     def read(name):
@@ -1902,7 +1907,14 @@ class MergeState(Block):
             except KeyError:
                 break
 
-        state = MergeState(name, goal, merge_base, commits1, commits2, MergeRecord.SAVED_MANUAL)
+        tip1 = state.get('tip1', commits1[-1])
+        tip2 = state.get('tip2', commits2[-1])
+        state = MergeState(
+            name, goal, merge_base,
+            tip1, commits1,
+            tip2, commits2,
+            MergeRecord.SAVED_MANUAL,
+            )
 
         # Now write the rest of the merges to state:
         for ((i1, i2), (sha1, source)) in merges.iteritems():
@@ -1973,10 +1985,17 @@ class MergeState(Block):
         if MergeState.get_default_name() == name:
             MergeState.set_default_name(None)
 
-    def __init__(self, name, goal, merge_base, commits1, commits2, source):
+    def __init__(
+        self, name, goal, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        source,
+        ):
         Block.__init__(self, len(commits1) + 1, len(commits2) + 1)
         self.name = name
         self.goal = goal
+        self.tip1 = tip1
+        self.tip2 = tip2
 
         # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
@@ -2232,6 +2251,7 @@ class MergeState(Block):
             version='.'.join(map(str, STATE_VERSION)),
             goal=self.goal,
             blockers=blockers,
+            tip1=self.tip1, tip2=self.tip2,
             )
         state_string = json.dumps(state, sort_keys=True) + '\n'
 
@@ -2250,7 +2270,9 @@ class MergeState(Block):
                 ])
 
     def __str__(self):
-        return 'MergeState(%r, goal=%r)' % (self.name, self.goal,)
+        return 'MergeState(\'%s\', tip1=\'%s\', tip2=\'%s\', goal=\'%s\')' % (
+            self.name, self.tip1, self.tip2, self.goal,
+            )
 
 
 def request_user_merge(merge_state, i1, i2):
@@ -2653,9 +2675,14 @@ def main(args):
             parser.error(
                 'Please specify the --name to be used for this incremental merge'
                 )
-        merge_state = MergeState.initialize(
-            options.name, options.goal, 'HEAD', options.branch,
-            )
+        try:
+            tip1 = check_output(
+                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+                ).strip()
+        except CalledProcessError:
+            tip1 = 'HEAD'
+        tip2 = options.branch
+        merge_state = MergeState.initialize(options.name, options.goal, tip1, tip2)
         merge_state.save()
         MergeState.set_default_name(options.name)
     elif options.subcommand == 'start':
@@ -2669,9 +2696,14 @@ def main(args):
             parser.error(
                 'Please specify the --name to be used for this incremental merge'
                 )
-        merge_state = MergeState.initialize(
-            options.name, options.goal, 'HEAD', options.branch,
-            )
+        try:
+            tip1 = check_output(
+                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+                ).strip()
+        except CalledProcessError:
+            tip1 = 'HEAD'
+        tip2 = options.branch
+        merge_state = MergeState.initialize(options.name, options.goal, tip1, tip2)
         merge_state.save()
         MergeState.set_default_name(options.name)
 
