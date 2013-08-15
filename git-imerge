@@ -2309,10 +2309,11 @@ def request_user_merge(merge_state, i1, i2):
             refname, above.sha1,
             ])
     checkout(refname)
+    logmsg = 'imerge \'%s\': manual merge %d-%d' % (merge_state.name, i1, i2)
     try:
         check_call([
                 'git', 'merge', '--no-commit',
-                '-m', 'Merge %d-%d of incremental merge \'%s\'' % (i1, i2, merge_state.name,),
+                '-m', logmsg,
                 left.sha1,
                 ])
     except CalledProcessError:
