@@ -2256,8 +2256,8 @@ class MergeState(Block):
 def request_user_merge(merge_state, i1, i2):
     """Prepare the working tree for the user to do a manual merge.
 
-    It is assumed that the merge above and to the left of (i1, i2) are
-    already done."""
+    It is assumed that the merges above and to the left of (i1, i2)
+    are already done."""
 
     above = merge_state[i1, i2 - 1]
     left = merge_state[i1 - 1, i2]
