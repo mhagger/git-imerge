@@ -1670,7 +1670,7 @@ class MergeState(Block):
         state = json.loads(state_string)
 
         version = tuple(map(int, state['version'].split('.')))
-        if version[0] != STATE_VERSION[0] or version > STATE_VERSION:
+        if version[0] != STATE_VERSION[0] or version[1] > STATE_VERSION[1]:
             raise Failure(
                 'The format of imerge %s (%s) is not compatible with this script version.'
                 % (name, state['version'],)
