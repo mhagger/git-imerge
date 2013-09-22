@@ -2079,7 +2079,7 @@ class MergeState(Block):
         swapped = False
         if i1first < i1second:
             # Swap parents to make the parent from above the first parent:
-            (i1first, i2first, i1second, i2second) = (i1second, i2second, i2first, i1first)
+            (i1first, i2first, i1second, i2second) = (i1second, i2second, i1first, i2first)
             swapped = True
         if i1first != i1second + 1 or i2first != i2second - 1:
             raise ManualMergeUnusableError(
