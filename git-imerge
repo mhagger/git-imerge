@@ -2140,6 +2140,30 @@ class MergeState(Block):
                         ])
                 checkout(refname)
 
+    def get_refname(self, sha1):
+        merge_ref_re = re.compile(
+            r"""
+            ^
+            imerge\/
+            """ + re.escape(self.name) + r"""
+            \/(?P<source>auto|manual)\/
+            (?P<i1>0|[1-9][0-9]*)
+            \-
+            (?P<i2>0|[1-9][0-9]*)
+            $
+            """,
+            re.VERBOSE,
+            )
+
+        try:
+            ref = check_output(['git', 'name-rev', '--name-only', sha1]).strip()
+        except CalledProcessError:
+            ref = sha1
+        else:
+            if merge_ref_re.match(ref):
+                ref = sha1
+        return ref
+
     def simplify_to_rebase_with_history(self, refname, force=False):
         i1 = self.len1 - 1
         for i2 in range(1, self.len2):
@@ -2626,6 +2650,16 @@ def main(args):
         'parents', nargs='*', help='[PARENT...]',
         )
 
+    parser_status = subparsers.add_parser(
+        'status',
+        help='show information about merge in progress',
+        )
+
+    parser_status.add_argument(
+        '--name', action='store', default=None,
+        help='name of merge to show',
+        )
+
     options = parser.parse_args(args)
 
     # Set an environment variable GIT_IMERGE=1 while we are running.
@@ -2797,6 +2831,47 @@ def main(args):
             sys.exit(e.message)
 
         sys.stdout.write('%s\n' % (reparent(commit_sha1, parent_sha1s),))
+    elif options.subcommand == 'status':
+        merge_state = read_merge_state(options.name)
+        # Show global information
+        tip1 = merge_state[-1,0].sha1
+        tip2 = merge_state[0,-1].sha1
+        ref1 = merge_state.get_refname(tip1)
+        ref2 = merge_state.get_refname(tip2)
+
+        # Show micromerge information
+        try:
+            first_parent = get_commit_sha1("HEAD")
+        except ValueError:
+            sys.exit('HEAD is not a valid commit')
+
+        try:
+            second_parent = get_commit_sha1("MERGE_HEAD")
+        except ValueError:
+            sys.exit('MERGE_HEAD is not a valid commit')
+
+        try:
+            i1, ignore = merge_state.find_index(first_parent)
+            ignore, i2 = merge_state.find_index(second_parent)
+        except CommitNotFoundError:
+            sys.exit('Parents are not known merge commits')
+
+        len1 = merge_state.len1 - 1
+        len2 = merge_state.len2 - 1
+
+        sys.stdout.write("Merge '%s' of '%s' in '%s' in progress.\n" % (merge_state.name, ref2, ref1))
+        sys.stdout.write("\n")
+        sys.stdout.write("Currently resolving conflict in merge %s-%s of %s-%s:\n" % (i1, i2, len1, len2))
+        sys.stderr.write(
+                '\n'
+                'Original first commit:\n'
+                )
+        check_call(['git', '--no-pager', 'log', '--no-walk', merge_state[i1,0].sha1])
+        sys.stderr.write(
+                '\n'
+                'Original second commit:\n'
+                )
+        check_call(['git', '--no-pager', 'log', '--no-walk', merge_state[0,i2].sha1])
     else:
         parser.error('Unrecognized subcommand')
 
