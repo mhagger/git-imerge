@@ -28,7 +28,7 @@ git checkout c
 "$GIT_IMERGE" continue
 echo 'cd version' >conflict.txt
 git add conflict.txt
-git commit -am 'Resolve conflict'
+GIT_EDITOR=cat git commit -a
 "$GIT_IMERGE" continue
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge2.html
 GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=c-d-merge
