@@ -428,7 +428,7 @@ def get_log_message(commit):
 def get_author_info(commit):
     a = check_output([
         'git', '--no-pager', 'log', '-n1',
-        '--format=%an%x00%ae%x00%ad', commit
+        '--format=%an%x00%ae%x00%ai', commit
         ]).strip().split('\x00')
 
     return {
