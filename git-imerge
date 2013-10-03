@@ -2192,7 +2192,11 @@ class MergeState(Block):
             tree = get_tree(self[i1, i2].sha1)
 
             # Create a commit, copying the old log message:
-            commit = commit_tree(tree, [commit, orig], msg=get_log_message(orig))
+            msg = (
+                get_log_message(orig).rstrip('\n')
+                + '\n\n(rebased-with-history from commit %s)\n' % orig
+                )
+            commit = commit_tree(tree, [commit, orig], msg=msg)
 
         self._set_refname(refname, commit, force=force)
 
