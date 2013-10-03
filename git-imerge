@@ -2230,7 +2230,7 @@ class MergeState(Block):
         # Create a preliminary commit with a generic commit message:
         sha1 = commit_tree(
             tree, parents,
-            msg='Merge commit %s into commit %s' % (parents[1], parents[0]),
+            msg='Merge %s into %s (using imerge)' % (self.tip2, self.tip1),
             )
 
         self._set_refname(refname, sha1, force=force)
