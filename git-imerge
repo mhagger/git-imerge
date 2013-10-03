@@ -190,7 +190,7 @@ except ImportError:
         return output
 
 
-STATE_VERSION = (1, 0, 0)
+STATE_VERSION = (1, 0, 1)
 
 ZEROS = '0' * 40
 
@@ -509,19 +509,22 @@ class TemporaryHead(object):
         return False
 
 
-def reparent(commit, parent_sha1s):
+def reparent(commit, parent_sha1s, msg=None):
     """Create a new commit object like commit, but with the specified parents.
 
     commit is the SHA1 of an existing commit and parent_sha1s is a
     list of SHA1s.  Create a new commit exactly like that one, except
     that it has the specified parent commits.  Return the SHA1 of the
     resulting commit object, which is already stored in the object
-    database but is not yet referenced by anything."""
+    database but is not yet referenced by anything.
+
+    If msg is set, then use it as the commit message for the new
+    commit."""
 
     old_commit = check_output(['git', 'cat-file', 'commit', commit])
     separator = old_commit.index('\n\n')
     headers = old_commit[:separator + 1].splitlines(True)
-    rest = old_commit[separator + 1:]
+    rest = old_commit[separator + 2:]
 
     new_commit = StringIO()
     for i in range(len(headers)):
@@ -536,7 +539,13 @@ def reparent(commit, parent_sha1s):
         else:
             new_commit.write(line)
 
-    new_commit.write(rest)
+    new_commit.write('\n')
+    if msg is None:
+        new_commit.write(rest)
+    else:
+        new_commit.write(msg)
+        if not msg.endswith('\n'):
+            new_commit.write('\n')
 
     process = subprocess.Popen(
         ['git', 'hash-object', '-t', 'commit', '-w', '--stdin'],
@@ -557,7 +566,7 @@ class AutomaticMergeFailed(Exception):
         self.commit1, self.commit2 = commit1, commit2
 
 
-def automerge(commit1, commit2):
+def automerge(commit1, commit2, msg=None):
     """Attempt an automatic merge of commit1 and commit2.
 
     Return the SHA1 of the resulting commit, or raise
@@ -565,8 +574,12 @@ def automerge(commit1, commit2):
     worktree."""
 
     call_silently(['git', 'checkout', '-f', commit1])
+    cmd = ['git', '-c', 'rerere.enabled=false', 'merge']
+    if msg is not None:
+        cmd += ['-m', msg]
+    cmd += [commit2]
     try:
-        call_silently(['git', '-c', 'rerere.enabled=false', 'merge', commit2])
+        call_silently(cmd)
     except CalledProcessError:
         # We don't use "git merge --abort" here because it was only
         # added in git version 1.7.4.
@@ -1299,11 +1312,14 @@ class Block(object):
 
     Members:
 
+        name -- the name of the imerge of which this block is part.
+
         len1, len2 -- the dimensions of the block.
 
     """
 
-    def __init__(self, len1, len2):
+    def __init__(self, name, len1, len2):
+        self.name = name
         self.len1 = len1
         self.len2 = len2
 
@@ -1420,9 +1436,11 @@ class Block(object):
         def do_merge(i1, commit1, i2, commit2, msg='Autofilling %d-%d...', record=True):
             if (i1, i2) in self:
                 return self[i1,i2].sha1
+            (i1orig, i2orig) = self.get_original_indexes(i1, i2)
+            sys.stderr.write(msg % (i1orig, i2orig))
+            logmsg = 'imerge \'%s\': automatic merge %d-%d' % (self.name, i1orig, i2orig)
             try:
-                sys.stderr.write(msg % self.get_original_indexes(i1, i2))
-                merge = automerge(commit1, commit2)
+                merge = automerge(commit1, commit2, msg=logmsg)
                 sys.stderr.write('success.\n')
             except AutomaticMergeFailed, e:
                 sys.stderr.write('unexpected conflict.  Backtracking...\n')
@@ -1592,7 +1610,7 @@ class SubBlock(Block):
     def __init__(self, block, slice1, slice2):
         (start1, len1) = self._convert_to_slice(slice1, block.len1)
         (start2, len2) = self._convert_to_slice(slice2, block.len2)
-        Block.__init__(self, len1, len2)
+        Block.__init__(self, block.name, len1, len2)
         if isinstance(block, SubBlock):
             # Peel away one level of indirection:
             self._block = block._block
@@ -1670,7 +1688,7 @@ class MergeState(Block):
         state = json.loads(state_string)
 
         version = tuple(map(int, state['version'].split('.')))
-        if version[0] != STATE_VERSION[0] or version > STATE_VERSION:
+        if version[0] != STATE_VERSION[0] or version[1] > STATE_VERSION[1]:
             raise Failure(
                 'The format of imerge %s (%s) is not compatible with this script version.'
                 % (name, state['version'],)
@@ -1801,7 +1819,12 @@ class MergeState(Block):
         if goal == 'rebase':
             MergeState._check_no_merges(commits2)
 
-        return MergeState(name, goal, merge_base, commits1, commits2, MergeRecord.NEW_MANUAL)
+        return MergeState(
+            name, goal, merge_base,
+            tip1, commits1,
+            tip2, commits2,
+            MergeRecord.NEW_MANUAL,
+            )
 
     @staticmethod
     def read(name):
@@ -1902,7 +1925,14 @@ class MergeState(Block):
             except KeyError:
                 break
 
-        state = MergeState(name, goal, merge_base, commits1, commits2, MergeRecord.SAVED_MANUAL)
+        tip1 = state.get('tip1', commits1[-1])
+        tip2 = state.get('tip2', commits2[-1])
+        state = MergeState(
+            name, goal, merge_base,
+            tip1, commits1,
+            tip2, commits2,
+            MergeRecord.SAVED_MANUAL,
+            )
 
         # Now write the rest of the merges to state:
         for ((i1, i2), (sha1, source)) in merges.iteritems():
@@ -1973,10 +2003,16 @@ class MergeState(Block):
         if MergeState.get_default_name() == name:
             MergeState.set_default_name(None)
 
-    def __init__(self, name, goal, merge_base, commits1, commits2, source):
-        Block.__init__(self, len(commits1) + 1, len(commits2) + 1)
-        self.name = name
+    def __init__(
+        self, name, goal, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        source,
+        ):
+        Block.__init__(self, name, len(commits1) + 1, len(commits2) + 1)
         self.goal = goal
+        self.tip1 = tip1
+        self.tip2 = tip2
 
         # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
@@ -2156,7 +2192,11 @@ class MergeState(Block):
             tree = get_tree(self[i1, i2].sha1)
 
             # Create a commit, copying the old log message:
-            commit = commit_tree(tree, [commit, orig], msg=get_log_message(orig))
+            msg = (
+                get_log_message(orig).rstrip('\n')
+                + '\n\n(rebased-with-history from commit %s)\n' % orig
+                )
+            commit = commit_tree(tree, [commit, orig], msg=msg)
 
         self._set_refname(refname, commit, force=force)
 
@@ -2194,7 +2234,7 @@ class MergeState(Block):
         # Create a preliminary commit with a generic commit message:
         sha1 = commit_tree(
             tree, parents,
-            msg='Merge commit %s into commit %s' % (parents[1], parents[0]),
+            msg='Merge %s into %s (using imerge)' % (self.tip2, self.tip1),
             )
 
         self._set_refname(refname, sha1, force=force)
@@ -2232,6 +2272,7 @@ class MergeState(Block):
             version='.'.join(map(str, STATE_VERSION)),
             goal=self.goal,
             blockers=blockers,
+            tip1=self.tip1, tip2=self.tip2,
             )
         state_string = json.dumps(state, sort_keys=True) + '\n'
 
@@ -2250,7 +2291,9 @@ class MergeState(Block):
                 ])
 
     def __str__(self):
-        return 'MergeState(%r, goal=%r)' % (self.name, self.goal,)
+        return 'MergeState(\'%s\', tip1=\'%s\', tip2=\'%s\', goal=\'%s\')' % (
+            self.name, self.tip1, self.tip2, self.goal,
+            )
 
 
 def request_user_merge(merge_state, i1, i2):
@@ -2270,10 +2313,11 @@ def request_user_merge(merge_state, i1, i2):
             refname, above.sha1,
             ])
     checkout(refname)
+    logmsg = 'imerge \'%s\': manual merge %d-%d' % (merge_state.name, i1, i2)
     try:
         check_call([
                 'git', 'merge', '--no-commit',
-                '-m', 'Merge %d-%d of incremental merge \'%s\'' % (i1, i2, merge_state.name,),
+                '-m', logmsg,
                 left.sha1,
                 ])
     except CalledProcessError:
@@ -2653,9 +2697,14 @@ def main(args):
             parser.error(
                 'Please specify the --name to be used for this incremental merge'
                 )
-        merge_state = MergeState.initialize(
-            options.name, options.goal, 'HEAD', options.branch,
-            )
+        try:
+            tip1 = check_output(
+                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+                ).strip()
+        except CalledProcessError:
+            tip1 = 'HEAD'
+        tip2 = options.branch
+        merge_state = MergeState.initialize(options.name, options.goal, tip1, tip2)
         merge_state.save()
         MergeState.set_default_name(options.name)
     elif options.subcommand == 'start':
@@ -2669,9 +2718,14 @@ def main(args):
             parser.error(
                 'Please specify the --name to be used for this incremental merge'
                 )
-        merge_state = MergeState.initialize(
-            options.name, options.goal, 'HEAD', options.branch,
-            )
+        try:
+            tip1 = check_output(
+                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+                ).strip()
+        except CalledProcessError:
+            tip1 = 'HEAD'
+        tip2 = options.branch
+        merge_state = MergeState.initialize(options.name, options.goal, tip1, tip2)
         merge_state.save()
         MergeState.set_default_name(options.name)
 
