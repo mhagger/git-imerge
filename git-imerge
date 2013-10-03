@@ -2429,8 +2429,8 @@ def choose_merge_name(name, default_to_unique=True):
     raise Failure('Please select an incremental merge using --name')
 
 
-def read_merge_state(name=None):
-    return MergeState.read(choose_merge_name(name))
+def read_merge_state(name=None, default_to_unique=True):
+    return MergeState.read(choose_merge_name(name, default_to_unique=default_to_unique))
 
 
 @Failure.wrap
@@ -2794,8 +2794,7 @@ def main(args):
         merge_state.simplify(refname, force=options.force)
     elif options.subcommand == 'finish':
         require_clean_work_tree('proceed')
-        options.name = choose_merge_name(options.name, default_to_unique=False)
-        merge_state = read_merge_state(options.name)
+        merge_state = read_merge_state(options.name, default_to_unique=False)
         merge_frontier = MergeFrontier.map_known_frontier(merge_state)
         if not merge_frontier.is_complete():
             raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
