@@ -1314,6 +1314,11 @@ class Block(object):
         self.len1 = len1
         self.len2 = len2
 
+    def get_merge_state(self):
+        """Return the MergeState instance containing this Block."""
+
+        raise NotImplementedError()
+
     def get_area(self):
         """Return the area of this block, ignoring the known edges."""
 
@@ -1609,20 +1614,27 @@ class SubBlock(Block):
         Block.__init__(self, block.name, len1, len2)
         if isinstance(block, SubBlock):
             # Peel away one level of indirection:
-            self._block = block._block
+            self._merge_state = block._merge_state
             self._start1 = start1 + block._start1
             self._start2 = start2 + block._start2
         else:
-            self._block = block
+            assert(isinstance(block, MergeState))
+            self._merge_state = block
             self._start1 = start1
             self._start2 = start2
 
+    def get_merge_state(self):
+        return self._merge_state
+
     def get_original_indexes(self, i1, i2):
         i1, i2 = self._normalize_indexes((i1, i2))
-        return self._block.get_original_indexes(i1 + self._start1, i2 + self._start2)
+        return self._merge_state.get_original_indexes(
+            i1 + self._start1,
+            i2 + self._start2,
+            )
 
     def convert_original_indexes(self, i1, i2):
-        (i1, i2) = self._block.convert_original_indexes(i1, i2)
+        (i1, i2) = self._merge_state.convert_original_indexes(i1, i2)
         if not (
             self._start1 <= i1 < self._start1 + self.len1
             and self._start2 <= i2 < self._start2 + self.len2
@@ -1632,15 +1644,19 @@ class SubBlock(Block):
 
     def _set_value(self, i1, i2, sha1, flags):
         self._check_indexes(i1, i2)
-        self._block._set_value(i1 + self._start1, i2 + self._start2, sha1, flags)
+        self._merge_state._set_value(
+            i1 + self._start1,
+            i2 + self._start2,
+            sha1, flags,
+            )
 
     def get_value(self, i1, i2):
         self._check_indexes(i1, i2)
-        return self._block.get_value(i1 + self._start1, i2 + self._start2)
+        return self._merge_state.get_value(i1 + self._start1, i2 + self._start2)
 
     def __str__(self):
         return '%s[%d:%d,%d:%d]' % (
-            self._block,
+            self._merge_state,
             self._start1, self._start1 + self.len1,
             self._start2, self._start2 + self.len2,
             )
@@ -2018,6 +2034,9 @@ class MergeState(Block):
             self.get_value(i1, 0).record_merge(commit, source)
         for (i2, commit) in enumerate(commits2, 1):
             self.get_value(0, i2).record_merge(commit, source)
+
+    def get_merge_state(self):
+        return self
 
     def set_goal(self, goal):
         if goal not in ALLOWED_GOALS:
