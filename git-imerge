@@ -2803,7 +2803,7 @@ def main(args):
             merge_state.set_goal(options.goal)
             merge_state.save()
         merge_state.simplify(refname, force=options.force)
-        MergeState.remove(options.name)
+        MergeState.remove(merge_state.name)
     elif options.subcommand == 'diagram':
         if not (options.commits or options.frontier):
             options.frontier = True
