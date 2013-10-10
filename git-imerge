@@ -1268,16 +1268,16 @@ class MergeFrontier(object):
         blocks = list(self.iter_blocker_blocks())
         if not blocks:
             raise BlockCompleteError('The block is already complete')
-        # Try blocks from biggest to smallest:
-        blocks.sort(key=lambda block: block.get_area(), reverse=True)
+        # Try blocks from left to right:
+        blocks.sort(key=lambda block: block.get_original_indexes(0, 0))
         for block in blocks:
             if block.auto_outline_frontier():
                 return
         else:
             # None of the blocks could be expanded.  Suggest that the
             # caller do a manual merge of the commit that is blocking
-            # the *smallest* blocker block.
-            i1, i2 = blocks[-1].get_original_indexes(1, 1)
+            # the leftmost blocker block.
+            i1, i2 = blocks[0].get_original_indexes(1, 1)
             raise FrontierBlockedError(
                 'Frontier blocked; suggest manual merge of %d-%d' % (i1, i2),
                 i1, i2
@@ -1512,7 +1512,7 @@ class Block(object):
             # Nothing to do.
             return False
 
-        best_block = max(merge_frontier, key=lambda block: block.get_area())
+        best_block = max(merge_frontier, key=lambda block: block.get_original_indexes(0, 0))
 
         try:
             best_block.auto_outline()
