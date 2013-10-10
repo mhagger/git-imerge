@@ -695,8 +695,8 @@ class MergeRecord(object):
         def clear_ref(source):
             check_call([
                     'git', 'update-ref',
-                    '-d', 'imerge %r: Remove obsolete %s merge' % (name, source,),
-                    'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
+                    '-m', 'imerge %r: Remove obsolete %s merge' % (name, source,),
+                    '-d', 'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
                     ])
 
         if self.flags & self.MANUAL:
