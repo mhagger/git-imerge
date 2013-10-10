@@ -1459,36 +1459,41 @@ class Block(object):
         for i2 in range(1, self.len2 - 1):
             above = do_merge(i1, above, i2, self[0,i2].sha1)
 
-        # We will compare two ways of doing the final "vertex" merge:
-        # as a continuation of the bottom edge, or as a continuation
-        # of the right edge.  We only accept it if both approaches
-        # succeed and give identical trees.
         i1, i2 = self.len1 - 1, self.len2 - 1
-        vertex_v1 = do_merge(
-            i1, self[i1,0].sha1, i2, left,
-            msg='Autofilling %d-%d (first way)...',
-            record=False,
-            )
-        vertex_v2 = do_merge(
-            i1, above, i2, self[0,i2].sha1,
-            msg='Autofilling %d-%d (second way)...',
-            record=False,
-            )
-        if get_tree(vertex_v1) == get_tree(vertex_v2):
-            sys.stderr.write(
-                'The two ways of autofilling %d-%d agree.\n'
-                % self.get_original_indexes(i1, i2)
+        if i1 > 1 and i2 > 1:
+            # We will compare two ways of doing the final "vertex" merge:
+            # as a continuation of the bottom edge, or as a continuation
+            # of the right edge.  We only accept it if both approaches
+            # succeed and give identical trees.
+            vertex_v1 = do_merge(
+                i1, self[i1,0].sha1, i2, left,
+                msg='Autofilling %d-%d (first way)...',
+                record=False,
                 )
+            vertex_v2 = do_merge(
+                i1, above, i2, self[0,i2].sha1,
+                msg='Autofilling %d-%d (second way)...',
+                record=False,
+                )
+            if get_tree(vertex_v1) == get_tree(vertex_v2):
+                sys.stderr.write(
+                    'The two ways of autofilling %d-%d agree.\n'
+                    % self.get_original_indexes(i1, i2)
+                    )
+                # Everything is OK.  Now reparent the actual vertex merge to
+                # have above and left as its parents:
+                merges.append((i1, i2, reparent(vertex_v1, [above, left])))
+            else:
+                sys.stderr.write(
+                    'The two ways of autofilling %d-%d do not agree.  Backtracking...\n'
+                    % self.get_original_indexes(i1, i2)
+                    )
+                raise UnexpectedMergeFailure('Inconsistent vertex merges', i1, i2)
         else:
-            sys.stderr.write(
-                'The two ways of autofilling %d-%d do not agree.  Backtracking...\n'
-                % self.get_original_indexes(i1, i2)
+            do_merge(
+                i1, above, i2, left,
+                msg='Autofilling %d-%d...',
                 )
-            raise UnexpectedMergeFailure('Inconsistent vertex merges', i1, i2)
-
-        # Everything is OK.  Now reparent the actual vertex merge to
-        # have above and left as its parents:
-        merges.append((i1, i2, reparent(vertex_v1, [above, left])))
 
         # Done!  Now we can record the results:
         sys.stderr.write('Recording autofilled block %s.\n' % (self,))
