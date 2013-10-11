@@ -1026,7 +1026,7 @@ class MergeFrontier(object):
                 return AnsiColor.B_RED + node + AnsiColor.END
 
         if legend is None:
-            legend = ["?", "*", ".", "#", "@", "-", "|", "+"]
+            legend = ['?', '*', '.', '#', '@', '-', '|', '+']
         merge = node & ~cls.FRONTIER_MASK
         within = merge == Block.MERGE_MANUAL or (node & cls.FRONTIER_WITHIN)
         skip = [Block.MERGE_MANUAL, Block.MERGE_BLOCKED, Block.MERGE_UNBLOCKED]
@@ -1081,16 +1081,16 @@ class MergeFrontier(object):
                 f.write(diagram[i1][i2])
             f.write('\n')
 
-    def write_html(self, f, name, cssfile="imerge.css", abbrev_sha1=7):
+    def write_html(self, f, name, cssfile='imerge.css', abbrev_sha1=7):
         class_map = {
-            Block.MERGE_UNKNOWN: "merge_unknown",
-            Block.MERGE_MANUAL: "merge_manual",
-            Block.MERGE_AUTOMATIC: "merge_automatic",
-            Block.MERGE_BLOCKED: "merge_blocked",
-            Block.MERGE_UNBLOCKED: "merge_unblocked",
-            self.FRONTIER_WITHIN: "frontier_within",
-            self.FRONTIER_RIGHT_EDGE: "frontier_right_edge",
-            self.FRONTIER_BOTTOM_EDGE: "frontier_bottom_edge",
+            Block.MERGE_UNKNOWN: 'merge_unknown',
+            Block.MERGE_MANUAL: 'merge_manual',
+            Block.MERGE_AUTOMATIC: 'merge_automatic',
+            Block.MERGE_BLOCKED: 'merge_blocked',
+            Block.MERGE_UNBLOCKED: 'merge_unblocked',
+            self.FRONTIER_WITHIN: 'frontier_within',
+            self.FRONTIER_RIGHT_EDGE: 'frontier_right_edge',
+            self.FRONTIER_BOTTOM_EDGE: 'frontier_bottom_edge',
             }
 
         def map_to_classes(node):
@@ -1114,17 +1114,17 @@ class MergeFrontier(object):
 
         diagram = self.create_diagram()
         for i2 in range(self.block.len2):
-            f.write("  <tr>\n")
+            f.write('  <tr>\n')
             for i1 in range(self.block.len1):
                 classes = map_to_classes(diagram[i1][i2])
                 record = self.block.get_value(i1, i2)
-                sha1 = record.sha1 or ""
+                sha1 = record.sha1 or ''
                 td_id = record.sha1 and ' id="%s"' % (record.sha1) or ''
-                td_class = classes and ' class="' + " ".join(classes) + '"' or ''
-                f.write("    <td%s%s>%.*s</td>\n" % (
+                td_class = classes and ' class="' + ' '.join(classes) + '"' or ''
+                f.write('    <td%s%s>%.*s</td>\n' % (
                         td_id, td_class, abbrev_sha1, sha1))
-            f.write("  </tr>\n")
-        f.write("</table>\n</body>\n</html>\n")
+            f.write('  </tr>\n')
+        f.write('</table>\n</body>\n</html>\n')
 
     @staticmethod
     def _iter_non_empty_blocks(blocks):
@@ -1607,11 +1607,11 @@ class Block(object):
     def format_diagram(self, legend=None, diagram=None):
         if legend is None:
             legend = [
-                AnsiColor.D_GRAY + "?" + AnsiColor.END,
-                AnsiColor.B_GREEN + "*" + AnsiColor.END,
-                AnsiColor.B_GREEN + "." + AnsiColor.END,
-                AnsiColor.B_RED + "#" + AnsiColor.END,
-                AnsiColor.B_YELLOW + "@" + AnsiColor.END,
+                AnsiColor.D_GRAY + '?' + AnsiColor.END,
+                AnsiColor.B_GREEN + '*' + AnsiColor.END,
+                AnsiColor.B_GREEN + '.' + AnsiColor.END,
+                AnsiColor.B_RED + '#' + AnsiColor.END,
+                AnsiColor.B_YELLOW + '@' + AnsiColor.END,
                 ]
         if diagram is None:
             diagram = self.create_diagram()
@@ -1756,7 +1756,7 @@ class MergeState(Block):
         """Verify that a MergeState with the given name exists.
 
         Just check for the existence, readability, and compatible
-        version of the "state" reference.  If the reference doesn't
+        version of the 'state' reference.  If the reference doesn't
         exist, just return False.  If it exists but is unusable for
         some other reason, raise an exception."""
 
@@ -1941,7 +1941,7 @@ class MergeState(Block):
         if state is None:
             raise Failure(
                 'No state found; it should have been a blob reference at '
-                '"refs/imerge/%s/state' % (name,)
+                '"refs/imerge/%s/state"' % (name,)
                 )
 
         goal = state['goal']
@@ -2972,7 +2972,7 @@ def main(args):
             sys.stdout.write('\n')
         if options.html:
             merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-            html = open(options.html, "w")
+            html = open(options.html, 'w')
             merge_frontier.write_html(html, merge_state.name)
             html.close()
         sys.stdout.write(
