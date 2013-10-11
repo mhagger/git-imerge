@@ -60,10 +60,6 @@ Convenience features
 New merge goals and styles
 ==========================
 
-* Add a ``--goal=full`` option that causes the full merge diagram to
-  be constructed (i.e., without skipping commits within a
-  non-conflicting block).
-
 * Add a ``--goal=sparse`` option that retains all of the conflicted
   merges and enough intermediate history to connect them.
 

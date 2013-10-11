@@ -89,6 +89,12 @@ the following:
       It is safe to rebase an already-published branch using this
       approach.  See [3] for more information.
 
+  * full
+      don't simplify the incremental merge at all: do all of the
+      intermediate merges and retain them all in the permanent
+      history.
+
+
 Simple operation:
 
 For basic operation, you only need to know three git-imerge commands.
@@ -181,12 +187,12 @@ except ImportError:
         return output
 
 
-STATE_VERSION = (1, 0, 1)
+STATE_VERSION = (1, 1, 0)
 
 ZEROS = '0' * 40
 
 ALLOWED_GOALS = [
-    #'full',
+    'full',
     'rebase-with-history',
     'rebase',
     'merge',
@@ -1259,10 +1265,12 @@ class MergeFrontier(object):
         blocks = list(self.iter_blocker_blocks())
         if not blocks:
             raise BlockCompleteError('The block is already complete')
+
         # Try blocks from left to right:
         blocks.sort(key=lambda block: block.get_original_indexes(0, 0))
+
         for block in blocks:
-            if block.auto_outline_frontier():
+            if block.auto_expand_frontier():
                 return
         else:
             # None of the blocks could be expanded.  Suggest that the
@@ -1270,7 +1278,7 @@ class MergeFrontier(object):
             # the leftmost blocker block.
             i1, i2 = blocks[0].get_original_indexes(1, 1)
             raise FrontierBlockedError(
-                'Frontier blocked; suggest manual merge of %d-%d' % (i1, i2),
+                'Conflict; suggest manual merge of %d-%d' % (i1, i2),
                 i1, i2
                 )
 
@@ -1313,6 +1321,11 @@ class Block(object):
         self.name = name
         self.len1 = len1
         self.len2 = len2
+
+    def get_merge_state(self):
+        """Return the MergeState instance containing this Block."""
+
+        raise NotImplementedError()
 
     def get_area(self):
         """Return the area of this block, ignoring the known edges."""
@@ -1491,6 +1504,34 @@ class Block(object):
         for (i1, i2, merge) in merges:
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
 
+    def auto_fill_micromerge(self):
+        """Try to fill the very first micromerge in this block.
+
+        Return True iff the attempt was successful."""
+
+        assert (1, 1) not in self
+        if self.len1 <= 1 or self.len2 <= 1 or self.is_blocked(1, 1):
+            return False
+
+        i1, i2 = 1, 1
+        (i1orig, i2orig) = self.get_original_indexes(i1, i2)
+        sys.stderr.write('Attempting to merge %d-%d...' % (i1orig, i2orig))
+        logmsg = 'imerge \'%s\': automatic merge %d-%d' % (self.name, i1orig, i2orig)
+        try:
+            merge = automerge(
+                self[i1, i2 - 1].sha1,
+                self[i1 - 1, i2].sha1,
+                msg=logmsg,
+                )
+            sys.stderr.write('success.\n')
+        except AutomaticMergeFailed, e:
+            sys.stderr.write('conflict.\n')
+            self[i1,i2].record_blocked(True)
+            return False
+        else:
+            self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
+            return True
+
     def auto_outline_frontier(self, merge_frontier=None):
         """Try to outline the merge frontier of this block.
 
@@ -1519,6 +1560,13 @@ class Block(object):
             if f2:
                 f2.block.auto_outline_frontier(f2)
             return True
+
+    def auto_expand_frontier(self):
+        goal = self.get_merge_state().goal
+        if goal == 'full':
+            return self.auto_fill_micromerge()
+        else:
+            return self.auto_outline_frontier()
 
     # The codes in the 2D array returned from create_diagram()
     MERGE_UNKNOWN = 0
@@ -1609,20 +1657,27 @@ class SubBlock(Block):
         Block.__init__(self, block.name, len1, len2)
         if isinstance(block, SubBlock):
             # Peel away one level of indirection:
-            self._block = block._block
+            self._merge_state = block._merge_state
             self._start1 = start1 + block._start1
             self._start2 = start2 + block._start2
         else:
-            self._block = block
+            assert(isinstance(block, MergeState))
+            self._merge_state = block
             self._start1 = start1
             self._start2 = start2
 
+    def get_merge_state(self):
+        return self._merge_state
+
     def get_original_indexes(self, i1, i2):
         i1, i2 = self._normalize_indexes((i1, i2))
-        return self._block.get_original_indexes(i1 + self._start1, i2 + self._start2)
+        return self._merge_state.get_original_indexes(
+            i1 + self._start1,
+            i2 + self._start2,
+            )
 
     def convert_original_indexes(self, i1, i2):
-        (i1, i2) = self._block.convert_original_indexes(i1, i2)
+        (i1, i2) = self._merge_state.convert_original_indexes(i1, i2)
         if not (
             self._start1 <= i1 < self._start1 + self.len1
             and self._start2 <= i2 < self._start2 + self.len2
@@ -1632,15 +1687,19 @@ class SubBlock(Block):
 
     def _set_value(self, i1, i2, sha1, flags):
         self._check_indexes(i1, i2)
-        self._block._set_value(i1 + self._start1, i2 + self._start2, sha1, flags)
+        self._merge_state._set_value(
+            i1 + self._start1,
+            i2 + self._start2,
+            sha1, flags,
+            )
 
     def get_value(self, i1, i2):
         self._check_indexes(i1, i2)
-        return self._block.get_value(i1 + self._start1, i2 + self._start2)
+        return self._merge_state.get_value(i1 + self._start1, i2 + self._start2)
 
     def __str__(self):
         return '%s[%d:%d,%d:%d]' % (
-            self._block,
+            self._merge_state,
             self._start1, self._start1 + self.len1,
             self._start2, self._start2 + self.len2,
             )
@@ -2019,6 +2078,9 @@ class MergeState(Block):
         for (i2, commit) in enumerate(commits2, 1):
             self.get_value(0, i2).record_merge(commit, source)
 
+    def get_merge_state(self):
+        return self
+
     def set_goal(self, goal):
         if goal not in ALLOWED_GOALS:
             raise ValueError('%r is not an allowed goal' % (goal,))
@@ -2172,6 +2234,18 @@ class MergeState(Block):
                         ])
                 checkout(refname)
 
+    def simplify_to_full(self, refname, force=False):
+        for i1 in range(1, self.len1):
+            for i2 in range(1, self.len2):
+                if not (i1, i2) in self:
+                    raise Failure(
+                        'Cannot simplify to "full" because '
+                        'merge %d-%d is not yet done'
+                        % (i1, i2)
+                        )
+
+        self._set_refname(refname, self[-1, -1].sha1, force=force)
+
     def simplify_to_rebase_with_history(self, refname, force=False):
         i1 = self.len1 - 1
         for i2 in range(1, self.len2):
@@ -2243,7 +2317,9 @@ class MergeState(Block):
 
         The merge must be complete before calling this method."""
 
-        if self.goal == 'rebase-with-history':
+        if self.goal == 'full':
+            self.simplify_to_full(refname, force=force)
+        elif self.goal == 'rebase-with-history':
             self.simplify_to_rebase_with_history(refname, force=force)
         elif self.goal == 'rebase':
             self.simplify_to_rebase(refname, force=force)
