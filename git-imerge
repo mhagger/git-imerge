@@ -2279,6 +2279,23 @@ class MergeState(Block):
                     % (i1, i2)
                     )
 
+        if not force:
+            # A rebase simplification is allowed to discard history,
+            # as long as the *pre-simplification* apex commit is a
+            # descendant of the branch to be moved.
+            try:
+                ref_oldval = get_commit_sha1(refname)
+            except ValueError:
+                # refname doesn't already exist; no problem.
+                pass
+            else:
+                commit = self[-1, -1].sha1
+                if not MergeState._is_ancestor(ref_oldval, commit):
+                    raise Failure(
+                        '%s is not an ancestor of %s; use --force if you are sure'
+                        % (commit, refname,)
+                        )
+
         commit = self[i1, 0].sha1
         for i2 in range(1, self.len2):
             orig = self[0, i2].sha1
@@ -2290,7 +2307,9 @@ class MergeState(Block):
                 tree, [commit], msg=get_log_message(orig), metadata=authordata,
                 )
 
-        self._set_refname(refname, commit, force=force)
+        # We checked above that the update is OK, so here we can set
+        # force=True:
+        self._set_refname(refname, commit, force=True)
 
     def simplify_to_merge(self, refname, force=False):
         if not (-1, -1) in self:

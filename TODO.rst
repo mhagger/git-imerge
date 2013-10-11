@@ -30,11 +30,6 @@ Convenience features
   manual merge conflicts into suggested log messages for the
   simplified commits.
 
-* For "simplify --goal=rebase", relax the requirement that the final
-  result be a fast-forward of its original value.  Instead, require
-  only that *the final incremental merge* commit (i.e., before
-  simplification) be a fast-forward of the original reference.
-
 * Maybe remember the names of the two original branches for use in log
   messages etc.  (Should they be stored locally in ``git config`` or
   shareably in the state blob?)
