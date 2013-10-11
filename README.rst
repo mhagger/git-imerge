@@ -99,6 +99,10 @@ of the following:
     It is safe to rebase an already-published branch using this
     approach.  See [2]_ for more information.
 
+``full``
+    don't simplify the incremental merge at all: do all of the
+    intermediate merges and retain them all in the permanent history.
+
 
 Simple operation
 ================
