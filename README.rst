@@ -61,8 +61,8 @@ Using results
 When an incremental merge is finished, you can discard the
 intermediate merge commits and create a simpler history to record
 permanently in your project repository using either the ``finish`` or
-``simplify`` command.  The incremental merge can be simplified in one
-of three ways:
+``simplify`` command.  The "goal" of the incremental merge can be one
+of the following:
 
 ``merge``
     keep only a simple merge of the second branch into the first
@@ -81,22 +81,34 @@ of three ways:
         git rebase BRANCH1
 
 ``rebase-with-history``
-    like rebase, except that each of the rebased commits is recorded
-    as a merge from its original version to its rebased predecessor.
-    This is a style of rebasing that does not discard the old version
-    of the branch, and allows an already-published branch to be
-    rebased.  See [2]_ for more information.
+    like ``rebase``, except that it retains the old versions of the
+    rebased commits in the history.  It is equivalent to merging the
+    commits from ``BRANCH2`` into ``BRANCH1``, one commit at a
+    time. In other words, it transforms this::
+
+        o---o---o---o          BRANCH1
+             \
+              A---B---C---D    BRANCH2
+
+    into this::
+
+        o---o---o---o---A'--B'--C'--D'   NEW_BRANCH
+             \         /   /   /   /
+              --------A---B---C---D
+
+    It is safe to rebase an already-published branch using this
+    approach.  See [2]_ for more information.
 
 
 Simple operation
 ================
 
 For basic operation, you only need to know three ``git-imerge``
-commands.  To merge ``BRANCH`` into ``MASTER`` or rebase ``BRANCH``
-onto ``MASTER``, ::
+commands.  To merge ``BRANCH2`` into ``BRANCH1`` or rebase ``BRANCH2``
+onto ``BRANCH1``, ::
 
-    git checkout MASTER
-    git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH
+    git checkout BRANCH1
+    git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH2
     while not done:
         <fix conflict presented to you>
         git commit
@@ -110,28 +122,7 @@ where
     branch to which the results will be saved)
 
 ``GOAL``
-    describes how you want to simplify the results:
-
-    * ``merge`` for a simple merge
-
-    * ``rebase`` for a simple rebase
-
-    * ``rebase-with-history`` for a rebase that retains history.  This
-      is equivalent to merging the commits from BRANCH into MASTER, one
-      commit at a time. In other words, it transforms this::
-
-          o---o---o---o          MASTER
-               \
-                A---B---C---D    BRANCH
-
-      into this::
-
-          o---o---o---o---A'--B'--C'--D'    MASTER
-               \         /   /   /   /
-                --------A---B---C---D       BRANCH
-
-      This is like a rebase, except that it retains the history of
-      individual merges.  See [2]_ for more information.
+    describes how you want to simplify the results (see above)
 
 
 License
