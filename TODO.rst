@@ -26,9 +26,6 @@ Convenience features
   the way open to supporting octipus merges!)  Maybe ``--onto=X`` like
   rebase?
 
-* Teach ``git imerge continue`` to automatically commit staged changes
-  (à la ``git rebase --continue``).
-
 * Improve the handling of log messages.  Incorporate log messages from
   manual merge conflicts into suggested log messages for the
   simplified commits.

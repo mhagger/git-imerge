@@ -114,8 +114,7 @@ onto ``BRANCH1``, ::
     git checkout BRANCH1
     git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH2
     while not done:
-        <fix conflict presented to you>
-        git commit
+        <fix conflict presented to you and "git add" the changes>
         git-imerge continue
     git-imerge finish
 

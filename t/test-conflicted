@@ -28,8 +28,7 @@ git checkout c
 "$GIT_IMERGE" continue
 echo 'cd version' >conflict.txt
 git add conflict.txt
-GIT_EDITOR=cat git commit -a
-"$GIT_IMERGE" continue
+GIT_EDITOR=cat "$GIT_IMERGE" continue
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge2.html
 GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=c-d-merge
 "$GIT_IMERGE" simplify --goal=rebase --branch=c-d-rebase
@@ -41,7 +40,7 @@ git checkout c
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge3.html
 echo 'cd version' >conflict.txt
 git add conflict.txt
-GIT_EDITOR=cat git commit -a
+GIT_EDITOR=cat git commit
 "$GIT_IMERGE" continue
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge4.html
 "$GIT_IMERGE" finish --branch=c-d-full

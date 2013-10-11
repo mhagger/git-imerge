@@ -2414,39 +2414,102 @@ def request_user_merge(merge_state, i1, i2):
         % (i1, i2)
         )
 
+
 def incorporate_user_merge(merge_state):
     """If the user has done a merge for us, incorporate the results.
 
-    If reference refs/heads/imerge/NAME exists, try to incorporate it
-    into merge_state, delete the reference, and return (i1,i2)
-    corresponding to the merge.  If the reference cannot be used,
-    raise NoManualMergeError().  If the reference exists but cannot be
-    used, raise a ManualMergeUnusableError.  This function must be
-    called with a clean work tree."""
+    If the scratch reference refs/heads/imerge/NAME exists and is
+    checked out, first check if there are staged changes that can be
+    committed.  Then try to incorporate the current commit into
+    merge_state, delete the reference, and return (i1,i2)
+    corresponding to the merge.  If the scratch reference does not
+    exist, raise NoManualMergeError().  If the scratch reference
+    exists but cannot be used, raise a ManualMergeUnusableError.  If
+    there are unstaged changes in the working tree, emit an error
+    message and raise UncleanWorkTreeError."""
 
     refname = MergeState.get_scratch_refname(merge_state.name)
+
     try:
         commit = get_commit_sha1(refname)
     except ValueError:
-        raise NoManualMergeError('There was no merge at %s!' % (refname,))
+        raise NoManualMergeError('Reference %s does not exist.' % (refname,))
+
+    try:
+        head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
+    except CalledProcessError:
+        raise NoManualMergeError('HEAD is currently detached.')
+
+    if head_name != refname:
+        # This should not usually happen.  The scratch reference
+        # exists, but it is not current.  Perhaps the user gave up on
+        # an attempted merge then switched to another branch.  We want
+        # to delete refname, but only if it doesn't contain any
+        # content that we don't already know.
+        try:
+            merge_state.find_index(commit)
+        except CommitNotFoundError:
+            # It points to a commit that we don't have in our records.
+            raise Failure(
+                'The scratch reference, %(refname)s, already exists but is not\n'
+                'checked out.  If it points to a merge commit that you would like\n'
+                'to use, please check it out using\n'
+                '\n'
+                '    git checkout %(refname)s\n'
+                '\n'
+                'and then try to continue again.  If it points to a commit that is\n'
+                'unneeded, then please delete the reference using\n'
+                '\n'
+                '    git update-ref -d %(refname)s\n'
+                '\n'
+                'and then continue.'
+                % dict(refname=refname)
+                )
+        else:
+            # It points to a commit that is already recorded.  We can
+            # delete it without losing any information.
+            check_call([
+                    'git', 'update-ref',
+                    '-m',
+                    'imerge %r: Remove obsolete scratch reference'
+                    % (merge_state.name,),
+                    '-d', refname,
+                    ])
+            sys.stderr.write(
+                '%s did not point to a new merge; it has been deleted.\n'
+                % (refname,)
+                )
+            raise NoManualMergeError(
+                'Reference %s was not checked out.' % (refname,)
+                )
+
+    # If we reach this point, then the scratch reference exists and is
+    # checked out.  Now check whether there is staged content that
+    # can be committed:
 
     merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+
+    try:
+        check_call(['git', 'diff-index', '--cached', '--quiet', 'HEAD', '--'])
+    except CalledProcessError:
+        # There are staged changes; commit them if possible.
+        try:
+            check_call(['git', 'commit', '--no-verify', '-e'])
+        except CalledProcessError:
+            raise Failure('Could not commit staged changes.')
+        commit = get_commit_sha1('HEAD')
+
+    require_clean_work_tree('proceed')
 
     # This might throw ManualMergeUnusableError:
     (i1, i2) = merge_state.incorporate_manual_merge(commit)
 
-    try:
-        headref = check_output(['git', 'symbolic-ref', '-q', 'HEAD']).strip()
-    except CalledProcessError:
-        pass
-    else:
-        if headref == refname:
-            # Detach head so that we can delete refname.
-            check_call([
-                    'git', 'update-ref', '--no-deref',
-                    '-m', 'Detach HEAD from %s' % (refname,),
-                    'HEAD', commit,
-                    ])
+    # Now detach head so that we can delete refname.
+    check_call([
+            'git', 'update-ref', '--no-deref',
+            '-m', 'Detach HEAD from %s' % (refname,),
+            'HEAD', commit,
+            ])
 
     check_call([
             'git', 'update-ref',
@@ -2810,7 +2873,6 @@ def main(args):
     elif options.subcommand == 'remove':
         MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
     elif options.subcommand == 'continue':
-        require_clean_work_tree('proceed')
         merge_state = read_merge_state(options.name)
         try:
             incorporate_user_merge(merge_state)
@@ -2828,7 +2890,6 @@ def main(args):
         else:
             sys.stderr.write('Merge is complete!\n')
     elif options.subcommand == 'record':
-        require_clean_work_tree('proceed')
         merge_state = read_merge_state(options.name)
         try:
             incorporate_user_merge(merge_state)
