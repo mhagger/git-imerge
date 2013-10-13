@@ -192,7 +192,7 @@ except ImportError:
         return output
 
 
-STATE_VERSION = (1, 2, 0)
+STATE_VERSION = (1, 3, 0)
 
 ZEROS = '0' * 40
 
@@ -365,6 +365,21 @@ def require_clean_work_tree(action):
 
     if error:
         raise UncleanWorkTreeError('\n'.join(error))
+
+
+class InvalidBranchNameError(Failure):
+    pass
+
+
+def check_branch_name_format(name):
+    """Check that name is a valid branch name."""
+
+    try:
+        call_silently(
+            ['git', 'check-ref-format', 'refs/heads/%s' % (name,)]
+            )
+    except CalledProcessError:
+        raise InvalidBranchNameError('Name %r is not a valid branch name!' % (name,))
 
 
 def rev_parse(arg):
@@ -1841,10 +1856,14 @@ class MergeState(Block):
             raise Failure('Name %r is not a valid refname component!' % (name,))
 
     @staticmethod
-    def initialize(name, tip1, tip2, goal=DEFAULT_GOAL, manual=False):
+    def initialize(name, tip1, tip2, goal=DEFAULT_GOAL, manual=False, branch=None):
         """Create and return a new MergeState object."""
 
         MergeState.check_name_format(name)
+        if branch:
+            check_branch_name_format(branch)
+        else:
+            branch = name
 
         if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
             raise Failure('Name %r is already in use!' % (name,))
@@ -1894,6 +1913,7 @@ class MergeState(Block):
             MergeRecord.NEW_MANUAL,
             goal=goal,
             manual=manual,
+            branch=branch,
             )
 
     @staticmethod
@@ -1999,6 +2019,7 @@ class MergeState(Block):
             raise Failure('Goal %r, read from state, is not recognized.' % (goal,))
 
         manual = state['manual']
+        branch = state.get('branch', name)
 
         state = MergeState(
             name, merge_base,
@@ -2007,6 +2028,7 @@ class MergeState(Block):
             MergeRecord.SAVED_MANUAL,
             goal=goal,
             manual=manual,
+            branch=branch,
             )
 
         # Now write the rest of the merges to state:
@@ -2085,12 +2107,14 @@ class MergeState(Block):
         source,
         goal=DEFAULT_GOAL,
         manual=False,
+        branch=None,
         ):
         Block.__init__(self, name, len(commits1) + 1, len(commits2) + 1)
         self.tip1 = tip1
         self.tip2 = tip2
         self.goal = goal
         self.manual = bool(manual)
+        self.branch = branch or name
 
         # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
@@ -2388,6 +2412,7 @@ class MergeState(Block):
             tip1=self.tip1, tip2=self.tip2,
             goal=self.goal,
             manual=self.manual,
+            branch=self.branch,
             )
         state_string = json.dumps(state, sort_keys=True) + '\n'
 
@@ -2645,6 +2670,11 @@ def main(args):
         help='the goal of the incremental merge',
         )
     subparser.add_argument(
+        '--branch',
+        action='store', default=None,
+        help='the name of the branch to which the result will be stored',
+        )
+    subparser.add_argument(
         '--manual',
         action='store_true', default=False,
         help=(
@@ -2662,7 +2692,7 @@ def main(args):
             ),
         )
     subparser.add_argument(
-        'branch', action='store',
+        'tip2', action='store', metavar='branch',
         help='the tip of the branch to be merged into HEAD',
         )
 
@@ -2715,8 +2745,9 @@ def main(args):
         action='store', default=None,
         help=(
             'the name of the branch to which to store the result '
-            '(default is the name of the merge).   If '
-            'BRANCH already exists then it must be able to be '
+            '(default is the value provided to "init" or "start" if any; '
+            'otherwise the name of the merge).   '
+            'If BRANCH already exists then it must be able to be '
             'fast-forwarded to the result unless the --force option is '
             'specified.'
             ),
@@ -2779,6 +2810,11 @@ def main(args):
         help='the goal of the incremental merge',
         )
     subparser.add_argument(
+        '--branch',
+        action='store', default=None,
+        help='the name of the branch to which the result will be stored',
+        )
+    subparser.add_argument(
         '--manual',
         action='store_true', default=False,
         help=(
@@ -2796,7 +2832,7 @@ def main(args):
             ),
         )
     subparser.add_argument(
-        'branch', action='store',
+        'tip2', action='store', metavar='branch',
         help='the tip of the branch to be merged into HEAD',
         )
 
@@ -2853,8 +2889,9 @@ def main(args):
         action='store', default=None,
         help=(
             'the name of the branch to which to store the result '
-            '(default is the name of the merge).   If '
-            'BRANCH already exists then it must be able to be '
+            '(default is the value provided to "init" or "start" if any; '
+            'otherwise the name of the merge).   '
+            'If BRANCH already exists then it must be able to be '
             'fast-forwarded to the result unless the --force option is '
             'specified.'
             ),
@@ -2915,10 +2952,11 @@ def main(args):
                 ).strip()
         except CalledProcessError:
             tip1 = 'HEAD'
-        tip2 = options.branch
+        tip2 = options.tip2
         merge_state = MergeState.initialize(
             options.name, tip1, tip2,
             goal=options.goal, manual=options.manual,
+            branch=(options.branch or options.name),
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
@@ -2939,10 +2977,11 @@ def main(args):
                 ).strip()
         except CalledProcessError:
             tip1 = 'HEAD'
-        tip2 = options.branch
+        tip2 = options.tip2
         merge_state = MergeState.initialize(
             options.name, tip1, tip2,
             goal=options.goal, manual=options.manual,
+            branch=(options.branch or options.name),
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
@@ -3003,7 +3042,7 @@ def main(args):
         merge_frontier = MergeFrontier.map_known_frontier(merge_state)
         if not merge_frontier.is_complete():
             raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
-        refname = 'refs/heads/%s' % ((options.branch or merge_state.name),)
+        refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
         if options.goal is not None:
             merge_state.set_goal(options.goal)
             merge_state.save()
@@ -3014,7 +3053,7 @@ def main(args):
         merge_frontier = MergeFrontier.map_known_frontier(merge_state)
         if not merge_frontier.is_complete():
             raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
-        refname = 'refs/heads/%s' % ((options.branch or merge_state.name),)
+        refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
         if options.goal is not None:
             merge_state.set_goal(options.goal)
             merge_state.save()
