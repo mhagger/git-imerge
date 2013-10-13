@@ -2654,12 +2654,6 @@ def main(args):
             'completed.'
             ),
         )
-    #subparser.add_argument(
-    #    '--conflicts', ...
-    #    action='store', default='pairwise',
-    #    choices=['pairwise', 'fewest'],
-    #    help='what sort of conflicts will be presented to the user',
-    #    )
     subparser.add_argument(
         '--first-parent', action='store_true', default=None,
         help=(
@@ -2794,12 +2788,6 @@ def main(args):
             'completed.'
             ),
         )
-    #subparser.add_argument(
-    #    '--conflicts', ...
-    #    action='store', default='pairwise',
-    #    choices=['pairwise', 'fewest'],
-    #    help='what sort of conflicts will be presented to the user',
-    #    )
     subparser.add_argument(
         '--first-parent', action='store_true', default=None,
         help=(
