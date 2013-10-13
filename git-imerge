@@ -192,7 +192,7 @@ except ImportError:
         return output
 
 
-STATE_VERSION = (1, 1, 0)
+STATE_VERSION = (1, 2, 0)
 
 ZEROS = '0' * 40
 
@@ -1567,8 +1567,10 @@ class Block(object):
             return True
 
     def auto_expand_frontier(self):
-        goal = self.get_merge_state().goal
-        if goal == 'full':
+        merge_state = self.get_merge_state()
+        if merge_state.manual:
+            return False
+        elif merge_state.goal == 'full':
             return self.auto_fill_micromerge()
         else:
             return self.auto_outline_frontier()
@@ -1839,7 +1841,7 @@ class MergeState(Block):
             raise Failure('Name %r is not a valid refname component!' % (name,))
 
     @staticmethod
-    def initialize(name, goal, tip1, tip2):
+    def initialize(name, tip1, tip2, goal=DEFAULT_GOAL, manual=False):
         """Create and return a new MergeState object."""
 
         MergeState.check_name_format(name)
@@ -1886,10 +1888,12 @@ class MergeState(Block):
             MergeState._check_no_merges(commits2)
 
         return MergeState(
-            name, goal, merge_base,
+            name, merge_base,
             tip1, commits1,
             tip2, commits2,
             MergeRecord.NEW_MANUAL,
+            goal=goal,
+            manual=manual,
             )
 
     @staticmethod
@@ -1955,10 +1959,6 @@ class MergeState(Block):
                 '"refs/imerge/%s/state"' % (name,)
                 )
 
-        goal = state['goal']
-        if goal not in ALLOWED_GOALS:
-            raise Failure('Goal %r, read from state, is not recognized.' % (goal,))
-
         blockers = state.get('blockers', [])
 
         if unexpected:
@@ -1993,11 +1993,20 @@ class MergeState(Block):
 
         tip1 = state.get('tip1', commits1[-1])
         tip2 = state.get('tip2', commits2[-1])
+
+        goal = state['goal']
+        if goal not in ALLOWED_GOALS:
+            raise Failure('Goal %r, read from state, is not recognized.' % (goal,))
+
+        manual = state['manual']
+
         state = MergeState(
-            name, goal, merge_base,
+            name, merge_base,
             tip1, commits1,
             tip2, commits2,
             MergeRecord.SAVED_MANUAL,
+            goal=goal,
+            manual=manual,
             )
 
         # Now write the rest of the merges to state:
@@ -2070,15 +2079,18 @@ class MergeState(Block):
             MergeState.set_default_name(None)
 
     def __init__(
-        self, name, goal, merge_base,
+        self, name, merge_base,
         tip1, commits1,
         tip2, commits2,
         source,
+        goal=DEFAULT_GOAL,
+        manual=False,
         ):
         Block.__init__(self, name, len(commits1) + 1, len(commits2) + 1)
-        self.goal = goal
         self.tip1 = tip1
         self.tip2 = tip2
+        self.goal = goal
+        self.manual = bool(manual)
 
         # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
@@ -2372,9 +2384,10 @@ class MergeState(Block):
 
         state = dict(
             version='.'.join(map(str, STATE_VERSION)),
-            goal=self.goal,
             blockers=blockers,
             tip1=self.tip1, tip2=self.tip2,
+            goal=self.goal,
+            manual=self.manual,
             )
         state_string = json.dumps(state, sort_keys=True) + '\n'
 
@@ -2631,6 +2644,16 @@ def main(args):
         choices=ALLOWED_GOALS,
         help='the goal of the incremental merge',
         )
+    subparser.add_argument(
+        '--manual',
+        action='store_true', default=False,
+        help=(
+            'ask the user to complete all merges manually, even when they '
+            'appear conflict-free.  This option disables the usual bisection '
+            'algorithm and causes the full incremental merge diagram to be '
+            'completed.'
+            ),
+        )
     #subparser.add_argument(
     #    '--conflicts', ...
     #    action='store', default='pairwise',
@@ -2760,6 +2783,16 @@ def main(args):
         action='store', default=DEFAULT_GOAL,
         choices=ALLOWED_GOALS,
         help='the goal of the incremental merge',
+        )
+    subparser.add_argument(
+        '--manual',
+        action='store_true', default=False,
+        help=(
+            'ask the user to complete all merges manually, even when they '
+            'appear conflict-free.  This option disables the usual bisection '
+            'algorithm and causes the full incremental merge diagram to be '
+            'completed.'
+            ),
         )
     #subparser.add_argument(
     #    '--conflicts', ...
@@ -2895,7 +2928,10 @@ def main(args):
         except CalledProcessError:
             tip1 = 'HEAD'
         tip2 = options.branch
-        merge_state = MergeState.initialize(options.name, options.goal, tip1, tip2)
+        merge_state = MergeState.initialize(
+            options.name, tip1, tip2,
+            goal=options.goal, manual=options.manual,
+            )
         merge_state.save()
         MergeState.set_default_name(options.name)
     elif options.subcommand == 'start':
@@ -2916,7 +2952,10 @@ def main(args):
         except CalledProcessError:
             tip1 = 'HEAD'
         tip2 = options.branch
-        merge_state = MergeState.initialize(options.name, options.goal, tip1, tip2)
+        merge_state = MergeState.initialize(
+            options.name, tip1, tip2,
+            goal=options.goal, manual=options.manual,
+            )
         merge_state.save()
         MergeState.set_default_name(options.name)
 
