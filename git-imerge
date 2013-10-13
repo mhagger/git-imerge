@@ -1839,7 +1839,7 @@ class MergeState(Block):
             raise Failure('Name %r is not a valid refname component!' % (name,))
 
     @staticmethod
-    def initialize(name, goal, tip1, tip2):
+    def initialize(name, tip1, tip2, goal=DEFAULT_GOAL):
         """Create and return a new MergeState object."""
 
         MergeState.check_name_format(name)
@@ -2895,7 +2895,7 @@ def main(args):
         except CalledProcessError:
             tip1 = 'HEAD'
         tip2 = options.branch
-        merge_state = MergeState.initialize(options.name, options.goal, tip1, tip2)
+        merge_state = MergeState.initialize(options.name, tip1, tip2, goal=options.goal)
         merge_state.save()
         MergeState.set_default_name(options.name)
     elif options.subcommand == 'start':
@@ -2916,7 +2916,7 @@ def main(args):
         except CalledProcessError:
             tip1 = 'HEAD'
         tip2 = options.branch
-        merge_state = MergeState.initialize(options.name, options.goal, tip1, tip2)
+        merge_state = MergeState.initialize(options.name, tip1, tip2, goal=options.goal)
         merge_state.save()
         MergeState.set_default_name(options.name)
 
