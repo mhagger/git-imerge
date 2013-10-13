@@ -50,15 +50,43 @@ An incremental merge can be interrupted and resumed arbitrarily, or
 even pushed to a server to allow somebody else to work on it.
 
 **git-imerge is experimental!  If it breaks, you get to keep the
-pieces.  For example, it is strongly recommended that you make a clone
-of your git repository and run the script on the clone rather than the
+pieces.  For example, it is recommended that you make a clone of your
+git repository and run the script on the clone rather than the
 original.  Feedback and bug reports are welcome!**
 
 
-Using results
-=============
+Instructions
+============
 
-When an incremental merge is finished, you can discard the
+For basic operation, you only need to know three ``git-imerge``
+commands.  To merge ``BRANCH2`` into ``BRANCH1`` or rebase ``BRANCH2``
+onto ``BRANCH1``, ::
+
+    git checkout BRANCH1
+    git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH2
+    while not done:
+        <fix conflict presented to you and "git add" the changes>
+        git-imerge continue
+    git-imerge finish
+
+where
+
+``NAME``
+    is the name for this merge (and also the default name of the
+    branch to which the results will be saved).
+
+``GOAL`` describes how you want to simplify the results (see next
+    section).
+
+
+Simplifying results
+-------------------
+
+When the incremental merge is finished, you can simplify its results
+in various ways before recording it in your project's permanent
+history.
+
+discard the
 intermediate merge commits and create a simpler history to record
 permanently in your project repository using either the ``finish`` or
 ``simplify`` command.  The "goal" of the incremental merge can be one
@@ -66,16 +94,16 @@ of the following:
 
 ``merge``
     keep only a simple merge of the second branch into the first
-    branch, discarding all intermediate merges.  The result is similar
-    to what you would get from ::
+    branch, discarding all intermediate merges.  The end result is
+    similar to what you would get from ::
 
         git checkout BRANCH1
         git merge BRANCH2
 
 ``rebase``
     keep the versions of the commits from the second branch rebased
-    onto the first branch.  The result is similar to what you would
-    get from ::
+    onto the first branch.  The end result is similar to what you
+    would get from ::
 
         git checkout BRANCH2
         git rebase BRANCH1
@@ -102,30 +130,6 @@ of the following:
 ``full``
     don't simplify the incremental merge at all: do all of the
     intermediate merges and retain them all in the permanent history.
-
-
-Simple operation
-================
-
-For basic operation, you only need to know three ``git-imerge``
-commands.  To merge ``BRANCH2`` into ``BRANCH1`` or rebase ``BRANCH2``
-onto ``BRANCH1``, ::
-
-    git checkout BRANCH1
-    git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH2
-    while not done:
-        <fix conflict presented to you and "git add" the changes>
-        git-imerge continue
-    git-imerge finish
-
-where
-
-``NAME``
-    is the name for this merge (and also the default name of the
-    branch to which the results will be saved)
-
-``GOAL``
-    describes how you want to simplify the results (see above)
 
 
 License

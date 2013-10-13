@@ -48,54 +48,8 @@ of an incremental merge can (crudely) be visualized using the
 An incremental merge can be interrupted and resumed arbitrarily, or
 even pushed to a server to allow somebody else to work on it.
 
-When an incremental merge is finished, you can discard the
-intermediate merge commits and create a simpler history to record
-permanently in your project repository using either the "finish" or
-"simplify" command.  The "goal" of the incremental merge can be one of
-the following:
 
-  * merge
-      keep only a simple merge of the second branch into the first
-      branch, discarding all intermediate merges.  The result is
-      similar to what you would get from
-
-          git checkout BRANCH1
-          git merge BRANCH2
-
-  * rebase
-      keep the versions of the commits from the second branch rebased
-      onto the first branch.  The result is similar to what you would
-      get from
-
-          git checkout BRANCH2
-          git rebase BRANCH1
-
-  * rebase-with-history
-      like rebase, except that it retains the old versions of the
-      rebased commits in the history.  It is equivalent to merging the
-      commits from BRANCH2 into BRANCH1, one commit at a time. In
-      other words, it transforms this:
-
-          o---o---o---o          BRANCH1
-               \
-                A---B---C---D    BRANCH2
-
-      into this:
-
-          o---o---o---o---A'--B'--C'--D'   NEW_BRANCH
-               \         /   /   /   /
-                --------A---B---C---D
-
-      It is safe to rebase an already-published branch using this
-      approach.  See [3] for more information.
-
-  * full
-      don't simplify the incremental merge at all: do all of the
-      intermediate merges and retain them all in the permanent
-      history.
-
-
-Simple operation:
+Instructions:
 
 For basic operation, you only need to know three git-imerge commands.
 To merge BRANCH2 into BRANCH1 or rebase BRANCH2 onto BRANCH1,
@@ -111,9 +65,60 @@ To merge BRANCH2 into BRANCH1 or rebase BRANCH2 onto BRANCH1,
 where
 
     NAME is the name for this merge (and also the default name of the
-        branch to which the results will be saved)
+        branch to which the results will be saved).
 
-    GOAL describes how you want to simplify the results (see above)
+    GOAL describes how you want the "finish" or "simplify" command to
+        record the results of the incremental merge in your project's
+        permanent history.  The "goal" of the incremental merge can be
+        one of the following:
+
+        * merge
+            keep only a simple merge of the second branch into the
+            first branch, discarding all intermediate merges.  The end
+            result is similar to what you would get from
+
+                git checkout BRANCH1
+                git merge BRANCH2
+
+        * rebase
+            keep the versions of the commits from the second branch
+            rebased onto the first branch.  The end result is similar
+            to what you would get from
+
+                git checkout BRANCH2
+                git rebase BRANCH1
+
+        * rebase-with-history
+            like rebase, except that it retains the old versions of
+            the rebased commits in the history.  It is equivalent to
+            merging the commits from BRANCH2 into BRANCH1, one commit
+            at a time.  In other words, it transforms this:
+
+                o---o---o---o          BRANCH1
+                     \
+                      A---B---C---D    BRANCH2
+
+            into this:
+
+                o---o---o---o---A'--B'--C'--D'   NEW_BRANCH
+                     \         /   /   /   /
+                      --------A---B---C---D
+
+            It is safe to rebase an already-published branch using this
+            approach.  See [3] for more information.
+
+        * full
+            don't simplify the incremental merge at all: do all of the
+            intermediate merges and retain them all in the permanent
+            history.
+
+For the full documentation, type
+
+    git-imerge --help
+
+and
+
+    git-imerge SUBCOMMAND --help
 
 
 [1] http://softwareswirl.blogspot.com/2013/05/git-imerge-practical-introduction.html
