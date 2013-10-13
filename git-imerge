@@ -1901,7 +1901,12 @@ class MergeState(Block):
             raise Failure('Name %r is not a valid refname component!' % (name,))
 
     @staticmethod
-    def initialize(name, tip1, tip2, goal=DEFAULT_GOAL, manual=False, branch=None):
+    def initialize(
+        name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal=DEFAULT_GOAL, manual=False, branch=None,
+        ):
         """Create and return a new MergeState object."""
 
         MergeState.check_name_format(name)
@@ -1912,8 +1917,6 @@ class MergeState(Block):
 
         if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
             raise Failure('Name %r is already in use!' % (name,))
-
-        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
 
         if goal == 'rebase':
             MergeState._check_no_merges(commits2)
@@ -2965,8 +2968,11 @@ def main(args):
         except CalledProcessError:
             tip1 = 'HEAD'
         tip2 = options.tip2
+        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
         merge_state = MergeState.initialize(
-            options.name, tip1, tip2,
+            options.name, merge_base,
+            tip1, commits1,
+            tip2, commits2,
             goal=options.goal, manual=options.manual,
             branch=(options.branch or options.name),
             )
@@ -2990,8 +2996,11 @@ def main(args):
         except CalledProcessError:
             tip1 = 'HEAD'
         tip2 = options.tip2
+        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
         merge_state = MergeState.initialize(
-            options.name, tip1, tip2,
+            options.name, merge_base,
+            tip1, commits1,
+            tip2, commits2,
             goal=options.goal, manual=options.manual,
             branch=(options.branch or options.name),
             )
