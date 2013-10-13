@@ -2439,7 +2439,7 @@ def request_user_merge(merge_state, i1, i2):
         )
 
 
-def incorporate_user_merge(merge_state):
+def incorporate_user_merge(merge_state, edit_log_msg=None):
     """If the user has done a merge for us, incorporate the results.
 
     If the scratch reference refs/heads/imerge/NAME exists and is
@@ -2517,8 +2517,16 @@ def incorporate_user_merge(merge_state):
         check_call(['git', 'diff-index', '--cached', '--quiet', 'HEAD', '--'])
     except CalledProcessError:
         # There are staged changes; commit them if possible.
+        cmd = ['git', 'commit', '--no-verify']
+
+        if edit_log_msg is not None:
+            if edit_log_msg:
+                cmd += ['--edit']
+            else:
+                cmd += ['--no-edit']
+
         try:
-            check_call(['git', 'commit', '--no-verify', '-e'])
+            check_call(cmd)
         except CalledProcessError:
             raise Failure('Could not commit staged changes.')
         commit = get_commit_sha1('HEAD')
@@ -2649,6 +2657,15 @@ def main(args):
         '--name', action='store', default=None,
         help='name of merge to continue',
         )
+    parser_continue.set_defaults(edit=None)
+    parser_continue.add_argument(
+        '--edit', '-e', dest='edit', action='store_true',
+        help='commit staged changes with the --edit option',
+        )
+    parser_continue.add_argument(
+        '--no-edit', dest='edit', action='store_false',
+        help='commit staged changes with the --no-edit option',
+        )
 
     parser_finish = subparsers.add_parser(
         'finish',
@@ -2763,6 +2780,15 @@ def main(args):
     parser_record.add_argument(
         '--name', action='store', default=None,
         help='name of merge to which the merge should be added',
+        )
+    parser_record.set_defaults(edit=None)
+    parser_record.add_argument(
+        '--edit', '-e', dest='edit', action='store_true',
+        help='commit staged changes with the --edit option',
+        )
+    parser_record.add_argument(
+        '--no-edit', dest='edit', action='store_false',
+        help='commit staged changes with the --no-edit option',
         )
 
     parser_autofill = subparsers.add_parser(
@@ -2899,7 +2925,7 @@ def main(args):
     elif options.subcommand == 'continue':
         merge_state = read_merge_state(options.name)
         try:
-            incorporate_user_merge(merge_state)
+            incorporate_user_merge(merge_state, edit_log_msg=options.edit)
         except NoManualMergeError:
             pass
         except NotABlockingCommitError, e:
@@ -2916,7 +2942,7 @@ def main(args):
     elif options.subcommand == 'record':
         merge_state = read_merge_state(options.name)
         try:
-            incorporate_user_merge(merge_state)
+            incorporate_user_merge(merge_state, edit_log_msg=options.edit)
         except NoManualMergeError, e:
             raise Failure(str(e))
         except NotABlockingCommitError:
