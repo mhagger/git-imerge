@@ -1886,10 +1886,11 @@ class MergeState(Block):
             MergeState._check_no_merges(commits2)
 
         return MergeState(
-            name, goal, merge_base,
+            name, merge_base,
             tip1, commits1,
             tip2, commits2,
             MergeRecord.NEW_MANUAL,
+            goal=goal,
             )
 
     @staticmethod
@@ -1955,10 +1956,6 @@ class MergeState(Block):
                 '"refs/imerge/%s/state"' % (name,)
                 )
 
-        goal = state['goal']
-        if goal not in ALLOWED_GOALS:
-            raise Failure('Goal %r, read from state, is not recognized.' % (goal,))
-
         blockers = state.get('blockers', [])
 
         if unexpected:
@@ -1993,11 +1990,17 @@ class MergeState(Block):
 
         tip1 = state.get('tip1', commits1[-1])
         tip2 = state.get('tip2', commits2[-1])
+
+        goal = state['goal']
+        if goal not in ALLOWED_GOALS:
+            raise Failure('Goal %r, read from state, is not recognized.' % (goal,))
+
         state = MergeState(
-            name, goal, merge_base,
+            name, merge_base,
             tip1, commits1,
             tip2, commits2,
             MergeRecord.SAVED_MANUAL,
+            goal=goal,
             )
 
         # Now write the rest of the merges to state:
@@ -2070,15 +2073,16 @@ class MergeState(Block):
             MergeState.set_default_name(None)
 
     def __init__(
-        self, name, goal, merge_base,
+        self, name, merge_base,
         tip1, commits1,
         tip2, commits2,
         source,
+        goal=DEFAULT_GOAL,
         ):
         Block.__init__(self, name, len(commits1) + 1, len(commits2) + 1)
-        self.goal = goal
         self.tip1 = tip1
         self.tip2 = tip2
+        self.goal = goal
 
         # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
@@ -2372,9 +2376,9 @@ class MergeState(Block):
 
         state = dict(
             version='.'.join(map(str, STATE_VERSION)),
-            goal=self.goal,
             blockers=blockers,
             tip1=self.tip1, tip2=self.tip2,
+            goal=self.goal,
             )
         state_string = json.dumps(state, sort_keys=True) + '\n'
 
