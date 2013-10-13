@@ -1825,8 +1825,8 @@ class MergeState(Block):
                 )
 
     @staticmethod
-    def initialize(name, goal, tip1, tip2):
-        """Create and return a new MergeState object."""
+    def check_name_format(name):
+        """Check that name is a valid imerge name."""
 
         if '/' in name:
             raise Failure('Name %r must not include a slash character!' % (name,))
@@ -1837,6 +1837,12 @@ class MergeState(Block):
                 )
         except CalledProcessError:
             raise Failure('Name %r is not a valid refname component!' % (name,))
+
+    @staticmethod
+    def initialize(name, goal, tip1, tip2):
+        """Create and return a new MergeState object."""
+
+        MergeState.check_name_format(name)
 
         if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
             raise Failure('Name %r is already in use!' % (name,))
