@@ -2750,6 +2750,47 @@ def main(args):
         )
 
     subparser = subparsers.add_parser(
+        'rebase',
+        help='start a simple rebase via incremental merge',
+        )
+    subparser.add_argument(
+        '--name', action='store', default=None,
+        help='name to use for this incremental merge',
+        )
+    subparser.add_argument(
+        '--goal',
+        action='store', default='rebase',
+        choices=ALLOWED_GOALS,
+        help='the goal of the incremental merge',
+        )
+    subparser.add_argument(
+        '--branch',
+        action='store', default=None,
+        help='the name of the branch to which the result will be stored',
+        )
+    subparser.add_argument(
+        '--manual',
+        action='store_true', default=False,
+        help=(
+            'ask the user to complete all merges manually, even when they '
+            'appear conflict-free.  This option disables the usual bisection '
+            'algorithm and causes the full incremental merge diagram to be '
+            'completed.'
+            ),
+        )
+    subparser.add_argument(
+        '--first-parent', action='store_true', default=True,
+        help=argparse.SUPPRESS,
+        )
+    subparser.add_argument(
+        'tip1', action='store', metavar='branch',
+        help=(
+            'the tip of the branch onto which the current branch should '
+            'be rebased'
+            ),
+        )
+
+    subparser = subparsers.add_parser(
         'continue',
         help=(
             'record the merge at branch imerge/NAME '
@@ -3102,6 +3143,68 @@ def main(args):
             )
         merge_state.save()
         MergeState.set_default_name(name)
+
+        try:
+            merge_state.auto_complete_frontier()
+        except FrontierBlockedError, e:
+            request_user_merge(merge_state, e.i1, e.i2)
+        else:
+            sys.stderr.write('Merge is complete!\n')
+    elif options.subcommand == 'rebase':
+        require_clean_work_tree('proceed')
+
+        if not options.first_parent:
+            parser.error(
+                'The --first-parent option is currently required for the "rebase" command'
+                )
+
+        tip1 = options.tip1
+
+        try:
+            tip2 = check_output(
+                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+                ).strip()
+            if not options.branch:
+                # See if we can store the result to the current branch:
+                try:
+                    check_branch_name_format(tip2)
+                except InvalidBranchNameError:
+                    pass
+                else:
+                    options.branch = tip2
+            if not options.name:
+                # By default, name the imerge after the branch being rebased:
+                options.name = tip2.replace('/', '_')
+
+        except CalledProcessError:
+            tip2 = rev_parse('HEAD')
+
+        if not options.name:
+            parser.error(
+                'The checked-out branch could not be used as the imerge name.\n'
+                'Please use the --name option.'
+                )
+
+        if not options.branch:
+            if options.name:
+                options.branch = options.name
+            else:
+                parser.error(
+                    'HEAD is not a simple branch.  '
+                    'Please specify --branch for storing results.'
+                    )
+
+        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+
+        merge_state = MergeState.initialize(
+            options.name, merge_base,
+            tip1, commits1,
+            tip2, commits2,
+            goal=options.goal, manual=options.manual,
+            branch=options.branch,
+            )
+        merge_state.save()
+        MergeState.set_default_name(options.name)
 
         try:
             merge_state.auto_complete_frontier()
