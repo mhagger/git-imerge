@@ -192,7 +192,7 @@ except ImportError:
         return output
 
 
-STATE_VERSION = (1, 2, 0)
+STATE_VERSION = (1, 3, 0)
 
 ZEROS = '0' * 40
 
@@ -367,6 +367,21 @@ def require_clean_work_tree(action):
         raise UncleanWorkTreeError('\n'.join(error))
 
 
+class InvalidBranchNameError(Failure):
+    pass
+
+
+def check_branch_name_format(name):
+    """Check that name is a valid branch name."""
+
+    try:
+        call_silently(
+            ['git', 'check-ref-format', 'refs/heads/%s' % (name,)]
+            )
+    except CalledProcessError:
+        raise InvalidBranchNameError('Name %r is not a valid branch name!' % (name,))
+
+
 def rev_parse(arg):
     return check_output(['git', 'rev-parse', '--verify', '--quiet', arg]).strip()
 
@@ -471,6 +486,51 @@ def commit_tree(tree, parents, msg, metadata=None):
         raise CalledProcessError(retcode, cmd)
 
     return out.strip()
+
+
+def get_boundaries(tip1, tip2):
+    """Get the boundaries of an incremental merge.
+
+    Given the tips of two branches that should be merged, return
+    (merge_base, commits1, commits2) describing the edges of the
+    imerge.  Raise Failure if there are any problems."""
+
+    try:
+        merge_base = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
+    except CalledProcessError, e:
+        raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
+    if not merge_base:
+        raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
+    if len(merge_base) > 1:
+        raise Failure('%r and %r do not have a unique merge base' % (tip1, tip2))
+
+    [merge_base] = merge_base
+
+    ancestry_path1 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip1)))
+    commits1 = [
+        sha1
+        for sha1 in rev_list('--first-parent', '%s..%s' % (merge_base, tip1))
+        if sha1 in ancestry_path1
+        ]
+    commits1.reverse()
+    if not commits1:
+        raise Failure(
+            'There are no commits on %r that are not already in %r' % (tip1, tip2)
+            )
+
+    ancestry_path2 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip2)))
+    commits2 = [
+        sha1
+        for sha1 in rev_list('--first-parent', '%s..%s' % (merge_base, tip2))
+        if sha1 in ancestry_path2
+        ]
+    commits2.reverse()
+    if not commits2:
+        raise Failure(
+            'There are no commits on %r that are not already in %r' % (tip2, tip1)
+            )
+
+    return (merge_base, commits1, commits2)
 
 
 class TemporaryHead(object):
@@ -1841,48 +1901,22 @@ class MergeState(Block):
             raise Failure('Name %r is not a valid refname component!' % (name,))
 
     @staticmethod
-    def initialize(name, tip1, tip2, goal=DEFAULT_GOAL, manual=False):
+    def initialize(
+        name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal=DEFAULT_GOAL, manual=False, branch=None,
+        ):
         """Create and return a new MergeState object."""
 
         MergeState.check_name_format(name)
+        if branch:
+            check_branch_name_format(branch)
+        else:
+            branch = name
 
         if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
             raise Failure('Name %r is already in use!' % (name,))
-
-        try:
-            merge_base = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
-        except CalledProcessError, e:
-            raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
-        if not merge_base:
-            raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
-        if len(merge_base) > 1:
-            raise Failure('%r and %r do not have a unique merge base' % (tip1, tip2))
-
-        [merge_base] = merge_base
-
-        ancestry_path1 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip1)))
-        commits1 = [
-            sha1
-            for sha1 in rev_list('--first-parent', '%s..%s' % (merge_base, tip1))
-            if sha1 in ancestry_path1
-            ]
-        commits1.reverse()
-        if not commits1:
-            raise Failure(
-                'There are no commits on %r that are not already in %r' % (tip1, tip2)
-                )
-
-        ancestry_path2 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip2)))
-        commits2 = [
-            sha1
-            for sha1 in rev_list('--first-parent', '%s..%s' % (merge_base, tip2))
-            if sha1 in ancestry_path2
-            ]
-        commits2.reverse()
-        if not commits2:
-            raise Failure(
-                'There are no commits on %r that are not already in %r' % (tip2, tip1)
-                )
 
         if goal == 'rebase':
             MergeState._check_no_merges(commits2)
@@ -1894,6 +1928,7 @@ class MergeState(Block):
             MergeRecord.NEW_MANUAL,
             goal=goal,
             manual=manual,
+            branch=branch,
             )
 
     @staticmethod
@@ -1999,6 +2034,7 @@ class MergeState(Block):
             raise Failure('Goal %r, read from state, is not recognized.' % (goal,))
 
         manual = state['manual']
+        branch = state.get('branch', name)
 
         state = MergeState(
             name, merge_base,
@@ -2007,6 +2043,7 @@ class MergeState(Block):
             MergeRecord.SAVED_MANUAL,
             goal=goal,
             manual=manual,
+            branch=branch,
             )
 
         # Now write the rest of the merges to state:
@@ -2085,12 +2122,14 @@ class MergeState(Block):
         source,
         goal=DEFAULT_GOAL,
         manual=False,
+        branch=None,
         ):
         Block.__init__(self, name, len(commits1) + 1, len(commits2) + 1)
         self.tip1 = tip1
         self.tip2 = tip2
         self.goal = goal
         self.manual = bool(manual)
+        self.branch = branch or name
 
         # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
@@ -2388,6 +2427,7 @@ class MergeState(Block):
             tip1=self.tip1, tip2=self.tip2,
             goal=self.goal,
             manual=self.manual,
+            branch=self.branch,
             )
         state_string = json.dumps(state, sort_keys=True) + '\n'
 
@@ -2645,6 +2685,11 @@ def main(args):
         help='the goal of the incremental merge',
         )
     subparser.add_argument(
+        '--branch',
+        action='store', default=None,
+        help='the name of the branch to which the result will be stored',
+        )
+    subparser.add_argument(
         '--manual',
         action='store_true', default=False,
         help=(
@@ -2662,8 +2707,87 @@ def main(args):
             ),
         )
     subparser.add_argument(
-        'branch', action='store',
+        'tip2', action='store', metavar='branch',
         help='the tip of the branch to be merged into HEAD',
+        )
+
+    subparser = subparsers.add_parser(
+        'merge',
+        help='start a simple merge via incremental merge',
+        )
+    subparser.add_argument(
+        '--name', action='store', default=None,
+        help='name to use for this incremental merge',
+        )
+    subparser.add_argument(
+        '--goal',
+        action='store', default='merge',
+        choices=ALLOWED_GOALS,
+        help='the goal of the incremental merge',
+        )
+    subparser.add_argument(
+        '--branch',
+        action='store', default=None,
+        help='the name of the branch to which the result will be stored',
+        )
+    subparser.add_argument(
+        '--manual',
+        action='store_true', default=False,
+        help=(
+            'ask the user to complete all merges manually, even when they '
+            'appear conflict-free.  This option disables the usual bisection '
+            'algorithm and causes the full incremental merge diagram to be '
+            'completed.'
+            ),
+        )
+    subparser.add_argument(
+        '--first-parent', action='store_true', default=True,
+        help=argparse.SUPPRESS,
+        )
+    subparser.add_argument(
+        'tip2', action='store', metavar='branch',
+        help='the tip of the branch to be merged into HEAD',
+        )
+
+    subparser = subparsers.add_parser(
+        'rebase',
+        help='start a simple rebase via incremental merge',
+        )
+    subparser.add_argument(
+        '--name', action='store', default=None,
+        help='name to use for this incremental merge',
+        )
+    subparser.add_argument(
+        '--goal',
+        action='store', default='rebase',
+        choices=ALLOWED_GOALS,
+        help='the goal of the incremental merge',
+        )
+    subparser.add_argument(
+        '--branch',
+        action='store', default=None,
+        help='the name of the branch to which the result will be stored',
+        )
+    subparser.add_argument(
+        '--manual',
+        action='store_true', default=False,
+        help=(
+            'ask the user to complete all merges manually, even when they '
+            'appear conflict-free.  This option disables the usual bisection '
+            'algorithm and causes the full incremental merge diagram to be '
+            'completed.'
+            ),
+        )
+    subparser.add_argument(
+        '--first-parent', action='store_true', default=True,
+        help=argparse.SUPPRESS,
+        )
+    subparser.add_argument(
+        'tip1', action='store', metavar='branch',
+        help=(
+            'the tip of the branch onto which the current branch should '
+            'be rebased'
+            ),
         )
 
     subparser = subparsers.add_parser(
@@ -2715,8 +2839,9 @@ def main(args):
         action='store', default=None,
         help=(
             'the name of the branch to which to store the result '
-            '(default is the name of the merge).   If '
-            'BRANCH already exists then it must be able to be '
+            '(default is the value provided to "init" or "start" if any; '
+            'otherwise the name of the merge).   '
+            'If BRANCH already exists then it must be able to be '
             'fast-forwarded to the result unless the --force option is '
             'specified.'
             ),
@@ -2779,6 +2904,11 @@ def main(args):
         help='the goal of the incremental merge',
         )
     subparser.add_argument(
+        '--branch',
+        action='store', default=None,
+        help='the name of the branch to which the result will be stored',
+        )
+    subparser.add_argument(
         '--manual',
         action='store_true', default=False,
         help=(
@@ -2796,7 +2926,7 @@ def main(args):
             ),
         )
     subparser.add_argument(
-        'branch', action='store',
+        'tip2', action='store', metavar='branch',
         help='the tip of the branch to be merged into HEAD',
         )
 
@@ -2853,8 +2983,9 @@ def main(args):
         action='store', default=None,
         help=(
             'the name of the branch to which to store the result '
-            '(default is the name of the merge).   If '
-            'BRANCH already exists then it must be able to be '
+            '(default is the value provided to "init" or "start" if any; '
+            'otherwise the name of the merge).   '
+            'If BRANCH already exists then it must be able to be '
             'fast-forwarded to the result unless the --force option is '
             'specified.'
             ),
@@ -2915,10 +3046,14 @@ def main(args):
                 ).strip()
         except CalledProcessError:
             tip1 = 'HEAD'
-        tip2 = options.branch
+        tip2 = options.tip2
+        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
         merge_state = MergeState.initialize(
-            options.name, tip1, tip2,
+            options.name, merge_base,
+            tip1, commits1,
+            tip2, commits2,
             goal=options.goal, manual=options.manual,
+            branch=(options.branch or options.name),
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
@@ -2939,10 +3074,134 @@ def main(args):
                 ).strip()
         except CalledProcessError:
             tip1 = 'HEAD'
-        tip2 = options.branch
+        tip2 = options.tip2
+        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
         merge_state = MergeState.initialize(
-            options.name, tip1, tip2,
+            options.name, merge_base,
+            tip1, commits1,
+            tip2, commits2,
             goal=options.goal, manual=options.manual,
+            branch=(options.branch or options.name),
+            )
+        merge_state.save()
+        MergeState.set_default_name(options.name)
+
+        try:
+            merge_state.auto_complete_frontier()
+        except FrontierBlockedError, e:
+            request_user_merge(merge_state, e.i1, e.i2)
+        else:
+            sys.stderr.write('Merge is complete!\n')
+    elif options.subcommand == 'merge':
+        require_clean_work_tree('proceed')
+
+        if not options.first_parent:
+            parser.error(
+                'The --first-parent option is currently required for the "merge" command'
+                )
+
+        tip2 = options.tip2
+
+        if options.name:
+            name = options.name
+        else:
+            # By default, name the imerge after the branch being merged:
+            name = tip2.replace('/', '_')
+            MergeState.check_name_format(name)
+
+        try:
+            tip1 = check_output(
+                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+                ).strip()
+            if not options.branch:
+                # See if we can store the result to the checked-out branch:
+                try:
+                    check_branch_name_format(tip1)
+                except InvalidBranchNameError:
+                    pass
+                else:
+                    options.branch = tip1
+        except CalledProcessError:
+            tip1 = 'HEAD'
+
+        if not options.branch:
+            if options.name:
+                options.branch = options.name
+            else:
+                parser.error(
+                    'HEAD is not a simple branch.  '
+                    'Please specify --branch for storing results.'
+                    )
+
+        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+        merge_state = MergeState.initialize(
+            name, merge_base,
+            tip1, commits1,
+            tip2, commits2,
+            goal=options.goal, manual=options.manual,
+            branch=options.branch,
+            )
+        merge_state.save()
+        MergeState.set_default_name(name)
+
+        try:
+            merge_state.auto_complete_frontier()
+        except FrontierBlockedError, e:
+            request_user_merge(merge_state, e.i1, e.i2)
+        else:
+            sys.stderr.write('Merge is complete!\n')
+    elif options.subcommand == 'rebase':
+        require_clean_work_tree('proceed')
+
+        if not options.first_parent:
+            parser.error(
+                'The --first-parent option is currently required for the "rebase" command'
+                )
+
+        tip1 = options.tip1
+
+        try:
+            tip2 = check_output(
+                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+                ).strip()
+            if not options.branch:
+                # See if we can store the result to the current branch:
+                try:
+                    check_branch_name_format(tip2)
+                except InvalidBranchNameError:
+                    pass
+                else:
+                    options.branch = tip2
+            if not options.name:
+                # By default, name the imerge after the branch being rebased:
+                options.name = tip2.replace('/', '_')
+
+        except CalledProcessError:
+            tip2 = rev_parse('HEAD')
+
+        if not options.name:
+            parser.error(
+                'The checked-out branch could not be used as the imerge name.\n'
+                'Please use the --name option.'
+                )
+
+        if not options.branch:
+            if options.name:
+                options.branch = options.name
+            else:
+                parser.error(
+                    'HEAD is not a simple branch.  '
+                    'Please specify --branch for storing results.'
+                    )
+
+        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+
+        merge_state = MergeState.initialize(
+            options.name, merge_base,
+            tip1, commits1,
+            tip2, commits2,
+            goal=options.goal, manual=options.manual,
+            branch=options.branch,
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
@@ -3003,7 +3262,7 @@ def main(args):
         merge_frontier = MergeFrontier.map_known_frontier(merge_state)
         if not merge_frontier.is_complete():
             raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
-        refname = 'refs/heads/%s' % ((options.branch or merge_state.name),)
+        refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
         if options.goal is not None:
             merge_state.set_goal(options.goal)
             merge_state.save()
@@ -3014,7 +3273,7 @@ def main(args):
         merge_frontier = MergeFrontier.map_known_frontier(merge_state)
         if not merge_frontier.is_complete():
             raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
-        refname = 'refs/heads/%s' % ((options.branch or merge_state.name),)
+        refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
         if options.goal is not None:
             merge_state.set_goal(options.goal)
             merge_state.save()

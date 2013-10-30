@@ -20,7 +20,7 @@ do
 done
 
 git checkout a
-"$GIT_IMERGE" start --first-parent --name=a-b b
+"$GIT_IMERGE" start --first-parent --name=a-b --branch=a-b-merge b
 "$GIT_IMERGE" list
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge3.html
 GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=a-b-merge
