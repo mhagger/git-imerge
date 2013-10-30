@@ -89,8 +89,8 @@ history.
 discard the
 intermediate merge commits and create a simpler history to record
 permanently in your project repository using either the ``finish`` or
-``simplify`` command.  The "goal" of the incremental merge can be one
-of the following:
+``simplify`` command.  The incremental merge can be simplified in one
+of four ways:
 
 ``merge``
     keep only a simple merge of the second branch into the first
@@ -99,6 +99,13 @@ of the following:
 
         git checkout BRANCH1
         git merge BRANCH2
+
+``manual``
+    like ``merge``, but also keep any merges that had to be done
+    manually plus enough automatic merges to connect the manual merges
+    together meaningfully.  If the result is later discovered to be
+    buggy, the additional information might be helpful in isolating
+    the problem.
 
 ``rebase``
     keep the versions of the commits from the second branch rebased
