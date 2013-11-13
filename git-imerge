@@ -80,6 +80,13 @@ where
                 git checkout BRANCH1
                 git merge BRANCH2
 
+        * manual
+            like merge, but also keep any merges that had to be done
+            manually plus enough automatic merges to connect the
+            manual merges together meaningfully.  If the merge is
+            later discovered to be buggy, the additional information
+            might be helpful in isolating the problem.
+
         * rebase
             keep the versions of the commits from the second branch
             rebased onto the first branch.  The end result is similar
@@ -198,6 +205,7 @@ ZEROS = '0' * 40
 
 ALLOWED_GOALS = [
     'full',
+    'manual',
     'rebase-with-history',
     'rebase',
     'merge',
@@ -2308,6 +2316,65 @@ class MergeState(Block):
 
         self._set_refname(refname, self[-1, -1].sha1, force=force)
 
+    def simplify_to_manual(self, refname, force=False):
+        i1s = set()
+        i2s = set()
+        for i2 in range(1, self.len2):
+            for i1 in range(1, self.len1):
+                record = self[i1,i2]
+                if record.is_known() and record.is_manual():
+                    i1s.add(i1)
+                    i2s.add(i2)
+        if not i1s:
+            # No manual merges were needed; simplify to merge instead.
+            self.simplify_to_merge(refname, force=force)
+            return
+
+        i1s = sorted(i1s.union([0, self.len1 - 1]))
+        i2s = sorted(i2s.union([0, self.len2 - 1]))
+
+        for i2 in i2s:
+            for i1 in i1s:
+                if not (i1, i2) in self:
+                    raise Failure(
+                        'Cannot simplify to "manual" because '
+                        'merge %d-%d is not yet done'
+                        % (i1, i2)
+                        )
+
+        # A map {(i1, i2) : sha1} for the grid commits that will be
+        # retained:
+        keepers = {}
+        keepers.update(((i1,0), self[i1,0].sha1) for i1 in i1s)
+        keepers.update(((0,i2), self[0,i2].sha1) for i2 in i2s)
+
+        for index1 in range(1, len(i1s)):
+            i1 = i1s[index1]
+            for index2 in range(1, len(i2s)):
+                i2 = i2s[index2]
+                tree = get_tree(self[i1, i2].sha1)
+                parents = [
+                    keepers[i1, i2s[index2 - 1]],
+                    keepers[i1s[index1 - 1], i2],
+                    ]
+
+                if index1 == len(i1s) - 1 and index2 == len(i2s) - 1:
+                    # Handle the last commit specially.  First create
+                    # a preliminary commit with a generic commit
+                    # message:
+                    sha1 = commit_tree(
+                        tree, parents,
+                        msg='Merge %s into %s (using imerge)' % (self.tip2, self.tip1),
+                        )
+
+                    self._set_refname(refname, sha1, force=force)
+
+                    # Now let the user edit the commit log message:
+                    check_call(['git', 'commit', '--amend'])
+                else:
+                    msg = get_log_message(self[i1, i2].sha1)
+                    keepers[i1, i2] = commit_tree(tree, parents, msg=msg)
+
     def simplify_to_rebase_with_history(self, refname, force=False):
         i1 = self.len1 - 1
         for i2 in range(1, self.len2):
@@ -2400,6 +2467,8 @@ class MergeState(Block):
 
         if self.goal == 'full':
             self.simplify_to_full(refname, force=force)
+        elif self.goal == 'manual':
+            self.simplify_to_manual(refname, force=force)
         elif self.goal == 'rebase-with-history':
             self.simplify_to_rebase_with_history(refname, force=force)
         elif self.goal == 'rebase':

@@ -14,7 +14,7 @@ cd "$TMP"
 # Clean up detritus from possible previous runs of this test:
 git checkout master
 "$GIT_IMERGE" remove --name=c-d || true
-for b in c-d-merge c-d-rebase c-d-rebase-with-history c-d-full
+for b in c-d-merge c-d-manual c-d-rebase c-d-rebase-with-history c-d-full
 do
     git branch -D $b || true
 done
@@ -33,6 +33,7 @@ git add conflict.txt
 GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=c-d-merge
 "$GIT_IMERGE" simplify --goal=rebase --branch=c-d-rebase
 "$GIT_IMERGE" simplify --goal=rebase-with-history --branch=c-d-rebase-with-history
+GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=manual --branch=c-d-manual
 "$GIT_IMERGE" remove
 
 git checkout c
