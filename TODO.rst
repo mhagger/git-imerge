@@ -52,9 +52,6 @@ Convenience features
 New merge goals and styles
 ==========================
 
-* Add a ``--goal=sparse`` option that retains all of the conflicted
-  merges and enough intermediate history to connect them.
-
 * Add an option that allows the user to resolve conflicts in larger
   chunks; for example, add a rebase-with-history-type merge where each
   branch commit is merged directly to its final location on the last

@@ -14,7 +14,7 @@ cd "$TMP"
 # Clean up detritus from possible previous runs:
 git checkout master
 "$GIT_IMERGE" remove --name=a-b || true
-for b in a-b-merge a-b-rebase a-b-rebase-with-history a-b-full
+for b in a-b-merge a-b-manual a-b-rebase a-b-rebase-with-history a-b-full
 do
     git branch -D $b || true
 done
@@ -32,5 +32,6 @@ git checkout a
 "$GIT_IMERGE" start --goal=full --first-parent --name=a-b b
 "$GIT_IMERGE" list
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge4.html
-"$GIT_IMERGE" finish --branch=a-b-full
+"$GIT_IMERGE" simplify --branch=a-b-full
+GIT_EDITOR=cat "$GIT_IMERGE" finish --goal=manual --branch=a-b-manual
 
