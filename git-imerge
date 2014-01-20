@@ -1201,6 +1201,8 @@ class MergeFrontier(object):
                     ret.append(class_map[bit])
             if not (node & self.FRONTIER_WITHIN):
                 ret.append('frontier_without')
+            elif (node & Block.MERGE_MASK) == Block.MERGE_UNKNOWN:
+                ret.append('merge_skipped')
             if i1 == 0 or i2 == 0:
                 ret.append('merge_initial')
             if i1 == 0:

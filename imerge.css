@@ -64,6 +64,14 @@ table#imerge td.merge_unknown {
     color: #555;
 }
 
+table#imerge td.merge_skipped:before {
+    content: "-";
+}
+
+table#imerge td.merge_skipped {
+    background: #cfc;
+}
+
 table#imerge td.merge_blocked:before {
     content: "BLOCKER";
 }
