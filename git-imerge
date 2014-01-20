@@ -1092,7 +1092,7 @@ class MergeFrontier(object):
 
         if legend is None:
             legend = ['?', '*', '.', '#', '@', '-', '|', '+']
-        merge = node & ~cls.FRONTIER_MASK
+        merge = node & Block.MERGE_MASK
         within = merge == Block.MERGE_MANUAL or (node & cls.FRONTIER_WITHIN)
         skip = [Block.MERGE_MANUAL, Block.MERGE_BLOCKED, Block.MERGE_UNBLOCKED]
         if merge not in skip:
@@ -1118,15 +1118,49 @@ class MergeFrontier(object):
         and zero or more of the FRONTIER_* constants defined in this class."""
 
         diagram = self.block.create_diagram()
-        for block in self:
+
+        try:
+            next_block = self.blocks[0]
+        except IndexError:
+            next_block = None
+
+        diagram[0][-1] |= self.FRONTIER_BOTTOM_EDGE
+        for i2 in range(1, self.block.len2):
+            if next_block is None or i2 >= next_block.len2:
+                diagram[0][i2] |= self.FRONTIER_RIGHT_EDGE
+
+        prev_block = None
+        for n in range(len(self.blocks)):
+            block = self.blocks[n]
+            try:
+                next_block = self.blocks[n + 1]
+            except IndexError:
+                next_block = None
+
             for i1 in range(block.len1):
                 for i2 in range(block.len2):
                     v = self.FRONTIER_WITHIN
-                    if i1 == block.len1 - 1:
+                    if i1 == block.len1 - 1 and (
+                        next_block is None or i2 >= next_block.len2
+                        ):
                         v |= self.FRONTIER_RIGHT_EDGE
-                    if i2 == block.len2 - 1:
+                    if i2 == block.len2 - 1 and (
+                        prev_block is None or i1 >= prev_block.len1
+                        ):
                         v |= self.FRONTIER_BOTTOM_EDGE
                     diagram[i1][i2] |= v
+            prev_block = block
+
+        try:
+            prev_block = self.blocks[-1]
+        except IndexError:
+            prev_block = None
+
+        for i1 in range(1, self.block.len1):
+            if prev_block is None or i1 >= prev_block.len1:
+                diagram[i1][0] |= self.FRONTIER_BOTTOM_EDGE
+        diagram[-1][0] |= self.FRONTIER_RIGHT_EDGE
+
         return diagram
 
     def format_diagram(self, formatter=None, diagram=None):
@@ -1158,13 +1192,27 @@ class MergeFrontier(object):
             self.FRONTIER_BOTTOM_EDGE: 'frontier_bottom_edge',
             }
 
-        def map_to_classes(node):
-            merge = node & ~self.FRONTIER_MASK
+        def map_to_classes(i1, i2, node):
+            merge = node & Block.MERGE_MASK
             ret = [class_map[merge]]
             for bit in [self.FRONTIER_WITHIN, self.FRONTIER_RIGHT_EDGE,
                         self.FRONTIER_BOTTOM_EDGE]:
                 if node & bit:
                     ret.append(class_map[bit])
+            if not (node & self.FRONTIER_WITHIN):
+                ret.append('frontier_without')
+            elif (node & Block.MERGE_MASK) == Block.MERGE_UNKNOWN:
+                ret.append('merge_skipped')
+            if i1 == 0 or i2 == 0:
+                ret.append('merge_initial')
+            if i1 == 0:
+                ret.append('col_left')
+            if i1 == self.block.len1 - 1:
+                ret.append('col_right')
+            if i2 == 0:
+                ret.append('row_top')
+            if i2 == self.block.len2 - 1:
+                ret.append('row_bottom')
             return ret
 
         f.write("""\
@@ -1178,10 +1226,18 @@ class MergeFrontier(object):
 """ % (name, cssfile))
 
         diagram = self.create_diagram()
+
+        f.write('  <tr>\n')
+        f.write('    <th class="indexes">&nbsp;</td>\n')
+        for i1 in range(self.block.len1):
+            f.write('    <th class="indexes">%d-*</td>\n' % (i1,))
+        f.write('  </tr>\n')
+
         for i2 in range(self.block.len2):
             f.write('  <tr>\n')
+            f.write('    <th class="indexes">*-%d</td>\n' % (i2,))
             for i1 in range(self.block.len1):
-                classes = map_to_classes(diagram[i1][i2])
+                classes = map_to_classes(i1, i2, diagram[i1][i2])
                 record = self.block.get_value(i1, i2)
                 sha1 = record.sha1 or ''
                 td_id = record.sha1 and ' id="%s"' % (record.sha1) or ''
@@ -1641,6 +1697,7 @@ class Block(object):
     MERGE_AUTOMATIC = 2
     MERGE_BLOCKED = 3
     MERGE_UNBLOCKED = 4
+    MERGE_MASK = 7
 
     # A map {(is_known(), manual, is_blocked()) : integer constant}
     MergeState = {

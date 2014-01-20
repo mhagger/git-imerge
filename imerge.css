@@ -1,18 +1,35 @@
 table#imerge {
     border-collapse: collapse;
     font-family: monospace;
-    border: 1px solid black;
 }
 
 table#imerge td {
     padding: 15px 5px;
-    background: #faa;
     border: 1px dashed #444;
     text-align: center;
 }
 
-table#imerge td.frontier_within {
-    background: #afa;
+table#imerge td.col_left {
+    border-left: 1px solid black;
+}
+
+table#imerge td.col_right {
+    border-right: 1px solid black;
+}
+
+table#imerge td.row_top {
+    border-top: 1px solid black;
+}
+
+table#imerge td.row_bottom {
+    border-bottom: 1px solid black;
+}
+
+table#imerge th {
+    padding: 5px 5px;
+    text-align: center;
+    background: #fff;
+    border: none;
 }
 
 table#imerge td.frontier_right_edge {
@@ -23,25 +40,44 @@ table#imerge td.frontier_bottom_edge {
     border-bottom: 5px solid black;
 }
 
-table#imerge td.merge_manual {
+table#imerge td.frontier_within {
     background: #afa;
+}
+
+table#imerge td.frontier_without {
+    background: #ffd;
+}
+
+table#imerge td.merge_initial {
+    background: #cdf;
+}
+
+table#imerge td.merge_manual {
     font-weight: bold;
 }
 
 table#imerge td.merge_unknown:before {
-    content: "?"
+    content: "?";
 }
 
 table#imerge td.merge_unknown {
     color: #555;
 }
 
+table#imerge td.merge_skipped:before {
+    content: "-";
+}
+
+table#imerge td.merge_skipped {
+    background: #cfc;
+}
+
 table#imerge td.merge_blocked:before {
-    content: "BLOCKER"
+    content: "BLOCKER";
 }
 
 table#imerge td.merge_blocked {
-    background: #c33;
+    background: #f88;
     border: 1px solid #400;
     font-weight: bold;
 }
