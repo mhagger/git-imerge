@@ -5,7 +5,6 @@ table#imerge {
 
 table#imerge td {
     padding: 15px 5px;
-    background: #faa;
     border: 1px dashed #444;
     text-align: center;
 }
@@ -26,10 +25,6 @@ table#imerge td.row_bottom {
     border-bottom: 1px solid black;
 }
 
-table#imerge td.frontier_within {
-    background: #afa;
-}
-
 table#imerge td.frontier_right_edge {
     border-right: 5px solid black;
 }
@@ -48,6 +43,14 @@ table#imerge td.merge_unknown:before {
 
 table#imerge td.merge_unknown {
     color: #555;
+}
+
+table#imerge td.frontier_within {
+    background: #afa;
+}
+
+table#imerge td.frontier_without {
+    background: #faa;
 }
 
 table#imerge td.merge_blocked:before {
