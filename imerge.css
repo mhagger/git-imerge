@@ -60,6 +60,10 @@ table#imerge td.frontier_without {
     background: #faa;
 }
 
+table#imerge td.merge_initial {
+    background: #cdf;
+}
+
 table#imerge td.merge_blocked:before {
     content: "BLOCKER";
 }
