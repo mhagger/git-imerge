@@ -45,7 +45,7 @@ table#imerge td.frontier_within {
 }
 
 table#imerge td.frontier_without {
-    background: #faa;
+    background: #ffd;
 }
 
 table#imerge td.merge_initial {
@@ -77,7 +77,7 @@ table#imerge td.merge_blocked:before {
 }
 
 table#imerge td.merge_blocked {
-    background: #c33;
+    background: #f88;
     border: 1px solid #400;
     font-weight: bold;
 }
