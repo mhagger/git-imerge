@@ -1,7 +1,6 @@
 table#imerge {
     border-collapse: collapse;
     font-family: monospace;
-    border: 1px solid black;
 }
 
 table#imerge td {
@@ -9,6 +8,22 @@ table#imerge td {
     background: #faa;
     border: 1px dashed #444;
     text-align: center;
+}
+
+table#imerge td.col_left {
+    border-left: 1px solid black;
+}
+
+table#imerge td.col_right {
+    border-right: 1px solid black;
+}
+
+table#imerge td.row_top {
+    border-top: 1px solid black;
+}
+
+table#imerge td.row_bottom {
+    border-bottom: 1px solid black;
 }
 
 table#imerge td.frontier_within {

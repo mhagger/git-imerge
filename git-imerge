@@ -1171,13 +1171,21 @@ class MergeFrontier(object):
             self.FRONTIER_BOTTOM_EDGE: 'frontier_bottom_edge',
             }
 
-        def map_to_classes(node):
+        def map_to_classes(i1, i2, node):
             merge = node & ~self.FRONTIER_MASK
             ret = [class_map[merge]]
             for bit in [self.FRONTIER_WITHIN, self.FRONTIER_RIGHT_EDGE,
                         self.FRONTIER_BOTTOM_EDGE]:
                 if node & bit:
                     ret.append(class_map[bit])
+            if i1 == 0:
+                ret.append('col_left')
+            if i1 == self.block.len1 - 1:
+                ret.append('col_right')
+            if i2 == 0:
+                ret.append('row_top')
+            if i2 == self.block.len2 - 1:
+                ret.append('row_bottom')
             return ret
 
         f.write("""\
@@ -1194,7 +1202,7 @@ class MergeFrontier(object):
         for i2 in range(self.block.len2):
             f.write('  <tr>\n')
             for i1 in range(self.block.len1):
-                classes = map_to_classes(diagram[i1][i2])
+                classes = map_to_classes(i1, i2, diagram[i1][i2])
                 record = self.block.get_value(i1, i2)
                 sha1 = record.sha1 or ''
                 td_id = record.sha1 and ' id="%s"' % (record.sha1) or ''
