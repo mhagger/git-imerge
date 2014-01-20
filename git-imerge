@@ -1199,7 +1199,7 @@ class MergeFrontier(object):
                         self.FRONTIER_BOTTOM_EDGE]:
                 if node & bit:
                     ret.append(class_map[bit])
-            if not (node & self.FRONTIER_MASK):
+            if not (node & self.FRONTIER_WITHIN):
                 ret.append('frontier_without')
             if i1 == 0 or i2 == 0:
                 ret.append('merge_initial')
