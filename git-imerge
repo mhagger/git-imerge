@@ -1201,8 +1201,16 @@ class MergeFrontier(object):
 """ % (name, cssfile))
 
         diagram = self.create_diagram()
+
+        f.write('  <tr>\n')
+        f.write('    <th class="indexes">&nbsp;</td>\n')
+        for i1 in range(self.block.len1):
+            f.write('    <th class="indexes">%d-*</td>\n' % (i1,))
+        f.write('  </tr>\n')
+
         for i2 in range(self.block.len2):
             f.write('  <tr>\n')
+            f.write('    <th class="indexes">*-%d</td>\n' % (i2,))
             for i1 in range(self.block.len1):
                 classes = map_to_classes(i1, i2, diagram[i1][i2])
                 record = self.block.get_value(i1, i2)

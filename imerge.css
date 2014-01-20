@@ -25,6 +25,13 @@ table#imerge td.row_bottom {
     border-bottom: 1px solid black;
 }
 
+table#imerge th {
+    padding: 5px 5px;
+    text-align: center;
+    background: #fff;
+    border: none;
+}
+
 table#imerge td.frontier_right_edge {
     border-right: 5px solid black;
 }
