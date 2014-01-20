@@ -1118,15 +1118,28 @@ class MergeFrontier(object):
         and zero or more of the FRONTIER_* constants defined in this class."""
 
         diagram = self.block.create_diagram()
-        for block in self:
+        prev_block = None
+        for n in range(len(self.blocks)):
+            block = self.blocks[n]
+            try:
+                next_block = self.blocks[n + 1]
+            except IndexError:
+                next_block = None
+
             for i1 in range(block.len1):
                 for i2 in range(block.len2):
                     v = self.FRONTIER_WITHIN
-                    if i1 == block.len1 - 1:
+                    if i1 == block.len1 - 1 and (
+                        next_block is None or i2 >= next_block.len2
+                        ):
                         v |= self.FRONTIER_RIGHT_EDGE
-                    if i2 == block.len2 - 1:
+                    if i2 == block.len2 - 1 and (
+                        prev_block is None or i1 >= prev_block.len1
+                        ):
                         v |= self.FRONTIER_BOTTOM_EDGE
                     diagram[i1][i2] |= v
+            prev_block = block
+
         return diagram
 
     def format_diagram(self, formatter=None, diagram=None):
