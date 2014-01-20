@@ -40,18 +40,6 @@ table#imerge td.frontier_bottom_edge {
     border-bottom: 5px solid black;
 }
 
-table#imerge td.merge_manual {
-    font-weight: bold;
-}
-
-table#imerge td.merge_unknown:before {
-    content: "?";
-}
-
-table#imerge td.merge_unknown {
-    color: #555;
-}
-
 table#imerge td.frontier_within {
     background: #afa;
 }
@@ -62,6 +50,18 @@ table#imerge td.frontier_without {
 
 table#imerge td.merge_initial {
     background: #cdf;
+}
+
+table#imerge td.merge_manual {
+    font-weight: bold;
+}
+
+table#imerge td.merge_unknown:before {
+    content: "?";
+}
+
+table#imerge td.merge_unknown {
+    color: #555;
 }
 
 table#imerge td.merge_blocked:before {
