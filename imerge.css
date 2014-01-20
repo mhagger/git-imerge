@@ -6,13 +6,13 @@ table#imerge {
 
 table#imerge td {
     padding: 15px 5px;
-    background: #f44;
+    background: #faa;
     border: 1px dashed #444;
     text-align: center;
 }
 
 table#imerge td.frontier_within {
-    background: #4f4;
+    background: #afa;
 }
 
 table#imerge td.frontier_right_edge {
@@ -24,7 +24,7 @@ table#imerge td.frontier_bottom_edge {
 }
 
 table#imerge td.merge_manual {
-    background: #4f4;
+    background: #afa;
     font-weight: bold;
 }
 
@@ -41,7 +41,7 @@ table#imerge td.merge_blocked:before {
 }
 
 table#imerge td.merge_blocked {
-    background: #c00;
+    background: #c33;
     border: 1px solid #400;
     font-weight: bold;
 }
