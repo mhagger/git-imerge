@@ -1092,7 +1092,7 @@ class MergeFrontier(object):
 
         if legend is None:
             legend = ['?', '*', '.', '#', '@', '-', '|', '+']
-        merge = node & ~cls.FRONTIER_MASK
+        merge = node & Block.MERGE_MASK
         within = merge == Block.MERGE_MANUAL or (node & cls.FRONTIER_WITHIN)
         skip = [Block.MERGE_MANUAL, Block.MERGE_BLOCKED, Block.MERGE_UNBLOCKED]
         if merge not in skip:
@@ -1193,7 +1193,7 @@ class MergeFrontier(object):
             }
 
         def map_to_classes(i1, i2, node):
-            merge = node & ~self.FRONTIER_MASK
+            merge = node & Block.MERGE_MASK
             ret = [class_map[merge]]
             for bit in [self.FRONTIER_WITHIN, self.FRONTIER_RIGHT_EDGE,
                         self.FRONTIER_BOTTOM_EDGE]:
@@ -1695,6 +1695,7 @@ class Block(object):
     MERGE_AUTOMATIC = 2
     MERGE_BLOCKED = 3
     MERGE_UNBLOCKED = 4
+    MERGE_MASK = 7
 
     # A map {(is_known(), manual, is_blocked()) : integer constant}
     MergeState = {
