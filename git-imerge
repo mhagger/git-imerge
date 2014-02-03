@@ -312,7 +312,7 @@ def call_silently(cmd):
         NULL = subprocess.PIPE
 
     p = subprocess.Popen(cmd, stdout=NULL, stderr=NULL)
-    (out,err) = p.communicate()
+    p.communicate()
     retcode = p.wait()
     if retcode:
         raise CalledProcessError(retcode, cmd)
@@ -497,7 +497,7 @@ def get_boundaries(tip1, tip2):
 
     try:
         merge_base = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
-    except CalledProcessError, e:
+    except CalledProcessError:
         raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
     if not merge_base:
         raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
@@ -1645,7 +1645,7 @@ class Block(object):
                 msg=logmsg,
                 )
             sys.stderr.write('success.\n')
-        except AutomaticMergeFailed, e:
+        except AutomaticMergeFailed:
             sys.stderr.write('conflict.\n')
             self[i1,i2].record_blocked(True)
             return False
