@@ -276,7 +276,7 @@ def iter_neighbors(iterable):
     i = iter(iterable)
 
     try:
-        last = i.next()
+        last = next(i)
     except StopIteration:
         return
 
@@ -1262,7 +1262,7 @@ class MergeFrontier(object):
 
         i = iter(blocks)
         try:
-            last = i.next()
+            last = next(i)
         except StopIteration:
             return
 
