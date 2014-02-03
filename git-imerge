@@ -276,7 +276,7 @@ def iter_neighbors(iterable):
     i = iter(iterable)
 
     try:
-        last = i.next()
+        last = next(i)
     except StopIteration:
         return
 
@@ -312,7 +312,7 @@ def call_silently(cmd):
         NULL = subprocess.PIPE
 
     p = subprocess.Popen(cmd, stdout=NULL, stderr=NULL)
-    (out,err) = p.communicate()
+    p.communicate()
     retcode = p.wait()
     if retcode:
         raise CalledProcessError(retcode, cmd)
@@ -497,7 +497,7 @@ def get_boundaries(tip1, tip2):
 
     try:
         merge_base = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
-    except CalledProcessError, e:
+    except CalledProcessError:
         raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
     if not merge_base:
         raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
@@ -1262,7 +1262,7 @@ class MergeFrontier(object):
 
         i = iter(blocks)
         try:
-            last = i.next()
+            last = next(i)
         except StopIteration:
             return
 
@@ -1645,7 +1645,7 @@ class Block(object):
                 msg=logmsg,
                 )
             sys.stderr.write('success.\n')
-        except AutomaticMergeFailed, e:
+        except AutomaticMergeFailed:
             sys.stderr.write('conflict.\n')
             self[i1,i2].record_blocked(True)
             return False
@@ -1866,7 +1866,7 @@ class MergeState(Block):
         state_string = check_output(['git', 'cat-file', 'blob', sha1])
         state = json.loads(state_string)
 
-        version = tuple(map(int, state['version'].split('.')))
+        version = tuple(int(i) for i in state['version'].split('.'))
         if version[0] != STATE_VERSION[0] or version[1] > STATE_VERSION[1]:
             raise Failure(
                 'The format of imerge %s (%s) is not compatible with this script version.'
@@ -2479,7 +2479,7 @@ class MergeState(Block):
                     blockers.append((i1, i2))
 
         state = dict(
-            version='.'.join(map(str, STATE_VERSION)),
+            version='.'.join(str(i) for i in STATE_VERSION),
             blockers=blockers,
             tip1=self.tip1, tip2=self.tip2,
             goal=self.goal,
@@ -3377,7 +3377,7 @@ def main(args):
             sys.exit('HEAD is not a valid commit')
 
         try:
-            parent_sha1s = map(get_commit_sha1, options.parents)
+            parent_sha1s = [get_commit_sha1(p) for p in options.parents]
         except ValueError, e:
             sys.exit(e.message)
 
