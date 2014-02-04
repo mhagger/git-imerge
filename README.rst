@@ -2,10 +2,9 @@
 git-imerge -- incremental merge and rebase for git
 ==================================================
 
-Perform the merge between two branches incrementally.  If conflicts
-are encountered, figure out exactly which pairs of commits conflict,
-and present the user with one pairwise conflict at a time for
-resolution.
+Perform a merge between two branches incrementally.  If conflicts are
+encountered, figure out exactly which pairs of commits conflict, and
+present the user with one pairwise conflict at a time for resolution.
 
 ``git-imerge`` has two primary design goals:
 
@@ -50,9 +49,7 @@ An incremental merge can be interrupted and resumed arbitrarily, or
 even pushed to a server to allow somebody else to work on it.
 
 **git-imerge is experimental!  If it breaks, you get to keep the
-pieces.  For example, it is recommended that you make a clone of your
-git repository and run the script on the clone rather than the
-original.  Feedback and bug reports are welcome!**
+pieces.  Feedback and bug reports are welcome!**
 
 
 Requirements
@@ -79,16 +76,24 @@ Requirements
 Instructions
 ============
 
-For basic operation, you only need to know three ``git-imerge``
-commands.  To merge ``BRANCH2`` into ``BRANCH1`` or rebase ``BRANCH2``
-onto ``BRANCH1``, ::
+To start a merge or rebase operation using ``git-imerge``, you use
+commands that are similar to the corresponding ``git`` commands:
 
-    git checkout BRANCH1
-    git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH2
-    while not done:
-        <fix conflict presented to you and "git add" the changes>
-        git-imerge continue
-    git-imerge finish
+.. list-table:: Starting an incremental merge or rebase
+   :widths: 50 50
+   :header-rows: 1
+
+   * - ``git`` command
+     - ``git-imerge`` equivalent
+   * - ``git merge BRANCH``
+     - ``git-imerge merge BRANCH``
+   * - ``git rebase BRANCH``
+     - ``git-imerge rebase BRANCH``
+
+For more flexibility, you can start an incremental merge using ``git
+imerge start``::
+
+    git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH
 
 where
 
@@ -99,19 +104,34 @@ where
 ``GOAL`` describes how you want to simplify the results (see next
     section).
 
+After the incremental merge is started, you will be presented with any
+conflicts that have to be resolved.  The basic procedure is similar
+to performing an incremental merge using ``git``::
+
+    while not done:
+        <fix the conflict that is presented to you>
+        <"git add" the files that you changed>
+        git-imerge continue
+
+When you have resolved all of the conflicts, you finish the
+incremental merge by typing::
+
+    git-imerge finish
+
+That should be enough to get you going.  All of these subcommands have
+additional options; to learn about them type::
+
+    git-imerge --help
+    git-imerge SUBCMD --help
+
 
 Simplifying results
 -------------------
 
 When the incremental merge is finished, you can simplify its results
 in various ways before recording it in your project's permanent
-history.
-
-discard the
-intermediate merge commits and create a simpler history to record
-permanently in your project repository using either the ``finish`` or
-``simplify`` command.  The "goal" of the incremental merge can be one
-of the following:
+history by using either the ``finish`` or ``simplify`` command.  The
+"goal" of the incremental merge can be one of the following:
 
 ``merge``
     keep only a simple merge of the second branch into the first
