@@ -55,6 +55,27 @@ git repository and run the script on the clone rather than the
 original.  Feedback and bug reports are welcome!**
 
 
+Requirements
+============
+
+``git-imerge`` requires:
+
+* A Python interpreter; either
+
+  * Python 2.x, version 2.6.1 or later.  If you are using Python
+    2.6.x, then you have to install the ``argparse`` module yourself,
+    as it was only added to the standard library in Python 2.7.
+
+  * Python 3.x, version 3.3 or later.
+
+  The script tries to use a Python interpreter called ``python`` in
+  your ``PATH``.  If your Python interpreter has a different name or
+  is not in your ``PATH``, please adjust the first line of the script
+  accordingly.
+
+* A recent version of Git.
+
+
 Instructions
 ============
 
