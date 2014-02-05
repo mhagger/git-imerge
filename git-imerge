@@ -1761,7 +1761,7 @@ class MergeState(Block):
         r"""
         ^
         refs\/imerge\/
-        (?P<name>[^\/]+)
+        (?P<name>.+)
         \/state
         $
         """,
@@ -1868,9 +1868,6 @@ class MergeState(Block):
     @staticmethod
     def check_name_format(name):
         """Check that name is a valid imerge name."""
-
-        if '/' in name:
-            raise Failure('Name %r must not include a slash character!' % (name,))
 
         try:
             call_silently(
@@ -3086,7 +3083,7 @@ def main(args):
             name = options.name
         else:
             # By default, name the imerge after the branch being merged:
-            name = tip2.replace('/', '_')
+            name = tip2
             MergeState.check_name_format(name)
 
         try:
@@ -3154,7 +3151,7 @@ def main(args):
                     options.branch = tip2
             if not options.name:
                 # By default, name the imerge after the branch being rebased:
-                options.name = tip2.replace('/', '_')
+                options.name = tip2
 
         except CalledProcessError:
             tip2 = rev_parse('HEAD')
