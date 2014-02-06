@@ -2997,7 +2997,7 @@ def main(args):
     # are being run within git-imerge, and should perhaps behave
     # differently.  In the future we might make the value more
     # informative, like GIT_IMERGE=[automerge|autofill|...].
-    os.environ['GIT_IMERGE'] = '1'
+    os.environ[str('GIT_IMERGE')] = str('1')
 
     if options.subcommand == 'list':
         default_merge = MergeState.get_default_name()
