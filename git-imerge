@@ -91,7 +91,7 @@ def check_output(*popenargs, **kwargs):
     if 'stdout' in kwargs:
         raise ValueError('stdout argument not allowed, it will be overridden.')
     process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
-    output, unused_err = process.communicate()
+    output = process.communicate()[0]
     retcode = process.poll()
     if retcode:
         cmd = kwargs.get("args")
@@ -230,6 +230,19 @@ def call_silently(cmd):
         raise CalledProcessError(retcode, cmd)
 
 
+def communicate(process, input=None):
+    """Return decoded output from process."""
+    if input is not None:
+        input = input.encode(PREFERRED_ENCODING)
+
+    output, error = process.communicate(input)
+
+    output = None if output is None else output.decode(PREFERRED_ENCODING)
+    error = None if error is None else error.decode(PREFERRED_ENCODING)
+
+    return (output, error)
+
+
 class UncleanWorkTreeError(Failure):
     pass
 
@@ -244,8 +257,7 @@ def require_clean_work_tree(action):
         ['git', 'rev-parse', '--verify', 'HEAD'],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
-    _unused, err = process.communicate()
-    err = err.decode(PREFERRED_ENCODING)
+    err = communicate(process)[1]
     retcode = process.poll()
     if retcode:
         raise UncleanWorkTreeError(err.rstrip())
@@ -254,8 +266,7 @@ def require_clean_work_tree(action):
         ['git', 'update-index', '-q', '--ignore-submodules', '--refresh'],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
-    out, err = process.communicate()
-    err = err.decode(PREFERRED_ENCODING)
+    out, err = communicate(process)
     retcode = process.poll()
     if retcode:
         raise UncleanWorkTreeError(err.rstrip() or out.rstrip())
@@ -390,8 +401,7 @@ def commit_tree(tree, parents, msg, metadata=None):
     process = subprocess.Popen(
         cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         )
-    out = process.communicate(msg.encode(PREFERRED_ENCODING))[0]
-    out = out.decode(PREFERRED_ENCODING)
+    out = communicate(process, input=msg)[0]
     retcode = process.poll()
 
     if retcode:
@@ -528,9 +538,7 @@ def reparent(commit, parent_sha1s, msg=None):
         ['git', 'hash-object', '-t', 'commit', '-w', '--stdin'],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         )
-    out, err = process.communicate(
-        new_commit.getvalue().encode(PREFERRED_ENCODING))
-    out = out.decode(PREFERRED_ENCODING)
+    out = communicate(process, input=new_commit.getvalue())[0]
     retcode = process.poll()
     if retcode:
         raise Failure('Could not reparent commit %s' % (commit,))
@@ -2409,8 +2417,7 @@ class MergeState(Block):
 
         cmd = ['git', 'hash-object', '-t', 'blob', '-w', '--stdin']
         p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        out = p.communicate(state_string.encode(PREFERRED_ENCODING))[0]
-        out = out.decode(PREFERRED_ENCODING)
+        out = communicate(p, input=state_string)[0]
         retcode = p.poll()
         if retcode:
             raise CalledProcessError(retcode, cmd)
