@@ -374,9 +374,9 @@ def get_author_info(commit):
         ]).strip().split('\x00')
 
     return {
-        'GIT_AUTHOR_NAME': a[0],
-        'GIT_AUTHOR_EMAIL': a[1],
-        'GIT_AUTHOR_DATE': a[2],
+        str('GIT_AUTHOR_NAME'): str(a[0]),
+        str('GIT_AUTHOR_EMAIL'): str(a[1]),
+        str('GIT_AUTHOR_DATE'): str(a[2]),
         }
 
 
