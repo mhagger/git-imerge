@@ -22,7 +22,7 @@ $(module)/talk.html: $(module)/talk.rst
 	rst2s5 --theme=small-white --current-slide $< $@
 
 install: $(BIN)
-        install $(BIN) $(PREFIX)/bin
+	install $(BIN) $(PREFIX)/bin
 
 uninstall:
-        rm $(PREFIX)/bin/$(BIN)
+	rm $(PREFIX)/bin/$(BIN)
