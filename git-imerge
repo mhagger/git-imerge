@@ -895,7 +895,7 @@ class MergeFrontier(object):
         i1 = 1
         i2 = find_first_false(
             lambda i: block.is_mergeable(i1, i),
-            1, block.len2,
+            2, block.len2,
             )
 
         # Now we know that (1,i2-1) is mergeable but (1,i2) is not;
@@ -939,9 +939,11 @@ class MergeFrontier(object):
             # recorded explicitly).  It also implies that a mergeable
             # block has its last mergeable commit somewhere in row
             # i2-1; find its width.
-            if block.is_mergeable(block.len1 - 1, i2 - 1):
-                i1 = block.len1
-                blocks.append(block[:i1,:i2])
+            if (
+                i1 == block.len1 - 1
+                or block.is_mergeable(block.len1 - 1, i2 - 1)
+                ):
+                blocks.append(block[:block.len1,:i2])
                 break
             else:
                 i1 = find_first_false(
@@ -966,13 +968,13 @@ class MergeFrontier(object):
             # The block ending at (i1-1,i2-1) has just been recorded.
             # Now find the height of the conflict rectangle at column
             # i1 and fill it in:
-            if block.is_mergeable(i1, 1):
+            if i2 - 1 == 1 or not block.is_mergeable(i1, 1):
+                break
+            else:
                 i2 = find_first_false(
                     lambda i: block.is_mergeable(i1, i),
                     2, i2 - 1,
                     )
-            else:
-                break
 
         return MergeFrontier(block, blocks)
 
