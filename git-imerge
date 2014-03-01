@@ -939,9 +939,11 @@ class MergeFrontier(object):
             # recorded explicitly).  It also implies that a mergeable
             # block has its last mergeable commit somewhere in row
             # i2-1; find its width.
-            if block.is_mergeable(block.len1 - 1, i2 - 1):
-                i1 = block.len1
-                blocks.append(block[:i1,:i2])
+            if (
+                i1 == block.len1 - 1
+                or block.is_mergeable(block.len1 - 1, i2 - 1)
+                ):
+                blocks.append(block[:block.len1,:i2])
                 break
             else:
                 i1 = find_first_false(
