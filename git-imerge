@@ -895,7 +895,7 @@ class MergeFrontier(object):
         i1 = 1
         i2 = find_first_false(
             lambda i: block.is_mergeable(i1, i),
-            1, block.len2,
+            2, block.len2,
             )
 
         # Now we know that (1,i2-1) is mergeable but (1,i2) is not;
