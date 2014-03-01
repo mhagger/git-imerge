@@ -968,13 +968,13 @@ class MergeFrontier(object):
             # The block ending at (i1-1,i2-1) has just been recorded.
             # Now find the height of the conflict rectangle at column
             # i1 and fill it in:
-            if block.is_mergeable(i1, 1):
+            if i2 - 1 == 1 or not block.is_mergeable(i1, 1):
+                break
+            else:
                 i2 = find_first_false(
                     lambda i: block.is_mergeable(i1, i),
                     2, i2 - 1,
                     )
-            else:
-                break
 
         return MergeFrontier(block, blocks)
 
