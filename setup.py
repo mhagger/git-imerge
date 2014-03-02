@@ -15,7 +15,3 @@ setup(
     scripts=['bin/git-imerge']
 )
 
-
-
-
-
