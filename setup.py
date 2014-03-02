@@ -8,6 +8,7 @@ setup(
     name = 'gitimerge',
     description = 'Incremental merge for git',
     author='Michael Haggerty',
+    version='0.7.0',
     author_email='mhagger@alum.mit.edu',
     url='https://github.com/mhagger/git-imerge',
     packages=['gitimerge'],
