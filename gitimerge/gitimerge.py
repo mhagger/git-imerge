@@ -3310,4 +3310,6 @@ def main(args):
     else:
         parser.error('Unrecognized subcommand')
 
+if __name__ == "__main__":
+    main(sys.argv[1:])
 # vim: set expandtab ft=python:

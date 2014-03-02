@@ -5,12 +5,12 @@
 from distutils.core import setup
 
 setup(
-    name = 'git-imerge',
+    name = 'gitimerge',
     description = 'Incremental merge for git',
     author='Michael Haggerty',
     author_email='mhagger@alum.mit.edu',
     url='https://github.com/mhagger/git-imerge',
-    packages=['git-imerge'],
+    packages=['gitimerge'],
     license='GPL',
     scripts=['bin/git-imerge']
 )
