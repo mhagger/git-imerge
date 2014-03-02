@@ -1,5 +1,3 @@
-#! /usr/bin/env python
-
 # Copyright 2012-2013 Michael Haggerty <mhagger@alum.mit.edu>
 #
 # This file is part of git-imerge.
@@ -3311,8 +3309,5 @@ def main(args):
         sys.stdout.write('%s\n' % (reparent(commit_sha1, parent_sha1s),))
     else:
         parser.error('Unrecognized subcommand')
-
-
-main(sys.argv[1:])
 
 # vim: set expandtab ft=python:
