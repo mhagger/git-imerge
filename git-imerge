@@ -427,7 +427,13 @@ def get_boundaries(tip1, tip2):
     if not merge_base:
         raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
     if len(merge_base) > 1:
-        raise Failure('%r and %r do not have a unique merge base' % (tip1, tip2))
+        print ("There are multiple merge bases:")
+        for i, b in enumerate(merge_base):
+            print (i, b)
+
+	merge_base = get_index_for_merge(merge_base)
+	print ("Selected merge base:")
+	print (merge_base)
 
     [merge_base] = merge_base
 
@@ -456,6 +462,25 @@ def get_boundaries(tip1, tip2):
             )
 
     return (merge_base, commits1, commits2)
+
+
+def get_index_for_merge(merge_base):
+    """Ask user to select one of the merge bases."""
+
+    finished = 0
+    while finished == 0:
+	merge_index = raw_input('Enter the merge base index to use: ')
+	if int(merge_index) > len(merge_base) - 1:
+            print ("Invalid merge index")
+        elif int(merge_index) < 0:
+            print ("Invalid merge index")
+        else:
+            selected_base = merge_base[int(merge_index)]
+            merge_base = []
+            merge_base.append(selected_base)
+            finished = 1
+
+    return merge_base
 
 
 class TemporaryHead(object):
