@@ -82,7 +82,7 @@ import json
 import os
 
 
-PREFERRED_ENCODING = locale.getpreferredencoding(False)
+PREFERRED_ENCODING = locale.getpreferredencoding()
 
 
 # Define check_output() for ourselves, including decoding of the
