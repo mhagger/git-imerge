@@ -439,9 +439,10 @@ def get_boundaries(tip1, tip2):
         ]
     commits1.reverse()
     if not commits1:
-        raise Failure(
-            'There are no commits on %r that are not already in %r' % (tip1, tip2)
+        sys.stdout.write(
+            'There are no commits on %r that are not already in %r\n' % (tip1, tip2)
             )
+        sys.exit(0)
 
     ancestry_path2 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip2)))
     commits2 = [
@@ -451,9 +452,10 @@ def get_boundaries(tip1, tip2):
         ]
     commits2.reverse()
     if not commits2:
-        raise Failure(
-            'There are no commits on %r that are not already in %r' % (tip2, tip1)
+        sys.stdout.write(
+            'There are no commits on %r that are not already in %r\n' % (tip2, tip1)
             )
+        sys.exit(0)
 
     return (merge_base, commits1, commits2)
 
