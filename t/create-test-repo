@@ -1,6 +1,7 @@
 #! /bin/sh
 
 set -e
+set -x
 
 DESCRIPTION="git-imerge test repository"
 
@@ -8,6 +9,20 @@ modify() {
     filename="$1"
     text="$2"
     echo "$text" >"$filename" &&
+    git add "$filename"
+}
+
+modify_buildable() {
+    filename="$1"
+    text="$2"
+    cat > $filename << EOF
+#include<stdio.h>
+
+int main()
+{
+    $text
+}
+EOF
     git add "$filename"
 }
 
@@ -77,6 +92,42 @@ for i in $(seq 3 5)
 do
     modify d.txt $i
     git commit -m "d$i"
+done
+
+###############
+# Build setup #
+###############
+git checkout -b build master --
+modify_buildable hello.c printf\(\"0\\n\"\)\;
+cat > make_script << EOF
+#/bin/bash -ex
+gcc -o hello hello.c
+EOF
+chmod +x make_script
+git add make_script
+git commit -m "Hello World"
+
+git checkout -b build-left build --
+for i in $(seq 10)
+do
+    modify_buildable hello.c 'printf("'$i' top\n");
+    printf("'$i' bot\n");'
+    git commit -m "build $i"
+done
+
+git checkout -b build-right build --
+modify_buildable hello.c printf\(\"2\\n\"\)\;
+git commit -m "Conflicts"
+modify_buildable hello.c printf\(\"2\\n\"\;
+git commit -m "Conflicts, breaks build"
+modify_buildable hello.c 'printf("'2' top\n");
+    printf("'2' bot\n");
+    typo'
+git commit -m "No conflict, breaks build"
+for i in $(seq 4 6)
+do
+    modify_buildable hello.c printf\(\"$i\\n\"\)\;
+    git commit -m "build $i"
 done
 
 git checkout master --
