@@ -31,52 +31,52 @@ mkdir -p "$TMP"
 cd "$TMP"
 git init
 echo "$DESCRIPTION" >.git/description
-git config user.name 'Lou User'
+git config user.name 'Loú User'
 git config user.email 'luser@example.com'
 
 modify a.txt 0
-git commit -m 'm0'
+git commit -m 'm⇒0'
 
 git checkout -b a --
 for i in $(seq 8)
 do
     modify a.txt $i
-    git commit -m "a$i"
+    git commit -m "a⇒$i"
 done
 
 git checkout -b b master --
 for i in $(seq 5)
 do
     modify b.txt $i
-    git commit -m "b$i"
+    git commit -m "b⇒$i"
 done
 
 git checkout -b c master --
 for i in $(seq 3)
 do
     modify c.txt $i
-    git commit -m "c$i"
+    git commit -m "c⇒$i"
 done
 modify conflict.txt "c version"
 git commit -m "c conflict"
 for i in $(seq 4 8)
 do
     modify c.txt $i
-    git commit -m "c$i"
+    git commit -m "c⇒$i"
 done
 
 git checkout -b d master --
 for i in $(seq 2)
 do
     modify d.txt $i
-    git commit -m "d$i"
+    git commit -m "d⇒$i"
 done
 modify conflict.txt "d version"
 git commit -m "d conflict"
 for i in $(seq 3 5)
 do
     modify d.txt $i
-    git commit -m "d$i"
+    git commit -m "d⇒$i"
 done
 
 git checkout master --
