@@ -1,0 +1,60 @@
+#! /bin/sh
+
+# This should be executed in a clean working copy of the test repo.
+
+set -e
+set -x
+
+modify_buildable() {
+    filename="$1"
+    text="$2"
+    cat > $filename << EOF
+#include<stdio.h>
+
+int main()
+{
+    $text
+}
+EOF
+    git add "$filename"
+}
+
+BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
+TMP="$BASE/t/tmp"
+GIT_IMERGE="$BASE/git-imerge"
+
+cd "$TMP"
+
+# Clean up detritus from possible previous runs of this test:
+git checkout master
+"$GIT_IMERGE" remove --name=build-left-right || true
+for b in build-left-right-full
+do
+    git branch -D $b || true
+done
+
+git checkout build-left
+"$GIT_IMERGE" start --goal=rebase-with-history --first-parent \
+    --build-command="make_script" \
+    --name=build-left-right --branch=build-left-right-full build-right
+
+# Resolve conflict
+modify_buildable hello.c 'printf("'1' top\n");
+    printf("'1' bot\n");'
+GIT_EDITOR=cat git commit
+"$GIT_IMERGE" continue --no-edit
+# Resolve conflict which breaks build
+modify_buildable hello.c printf\(\"2\\n\"\;
+GIT_EDITOR=cat git commit
+"$GIT_IMERGE" continue --no-edit
+# Resolve the build breakage, no conflict
+modify_buildable hello.c 'printf("'2' top\n");
+    printf("'2' bot\n");'
+GIT_EDITOR=cat git commit
+"$GIT_IMERGE" continue --no-edit
+# modify_buildable hello.c 'printf("'1' top\n");
+#     printf("'1' bot\n");'
+# GIT_EDITOR=cat git commit
+# "$GIT_IMERGE" continue --no-edit
+
+# "$GIT_IMERGE" finish

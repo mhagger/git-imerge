@@ -20,3 +20,8 @@ do
     git update-ref -d refs/heads/$b
 done
 
+"$GIT_IMERGE" remove --name=build-left-right
+for b in build-left-right
+do
+    git update-ref -d refs/heads/$b
+done
