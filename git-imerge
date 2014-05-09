@@ -347,6 +347,7 @@ def get_tree(arg):
 
 BRANCH_PREFIX = 'refs/heads/'
 
+
 def checkout(refname):
     if refname.startswith(BRANCH_PREFIX):
         target = refname[len(BRANCH_PREFIX):]
@@ -376,8 +377,8 @@ def get_commit_parents(commit):
 
 def get_log_message(commit):
     contents = check_output([
-            'git', 'cat-file', 'commit', commit
-            ]).splitlines(True)
+        'git', 'cat-file', 'commit', commit,
+        ]).splitlines(True)
     contents = contents[contents.index('\n') + 1:]
     if contents and contents[-1][-1:] != '\n':
         contents.append('\n')
@@ -694,18 +695,18 @@ class MergeRecord(object):
 
         def set_ref(source):
             check_call([
-                    'git', 'update-ref',
-                    '-m', 'imerge %r: Record %s merge' % (name, source,),
-                    'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
-                    self.sha1,
-                    ])
+                'git', 'update-ref',
+                '-m', 'imerge %r: Record %s merge' % (name, source,),
+                'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
+                self.sha1,
+                ])
 
         def clear_ref(source):
             check_call([
-                    'git', 'update-ref',
-                    '-m', 'imerge %r: Remove obsolete %s merge' % (name, source,),
-                    '-d', 'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
-                    ])
+                'git', 'update-ref',
+                '-m', 'imerge %r: Remove obsolete %s merge' % (name, source,),
+                '-d', 'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
+                ])
 
         if self.flags & self.MANUAL:
             if self.flags & self.AUTO:
@@ -813,7 +814,7 @@ class MergeFrontier(object):
         def create_frontier(path):
             blocks = []
             for ((i1old, i2old, downold), (i1new, i2new, downnew)) in iter_neighbors(path):
-                if downold == True and downnew == False:
+                if downold is True and downnew is False:
                     blocks.append(block[:i1new + 1, :i2new + 1])
             return MergeFrontier(block, blocks)
 
@@ -905,7 +906,7 @@ class MergeFrontier(object):
             # There are no mergeable blocks in block; therefore,
             # block[1,1] must itself be unmergeable.  Record that
             # fact:
-            block[1,1].record_blocked(True)
+            block[1, 1].record_blocked(True)
             return MergeFrontier(block, [])
 
         blocks = []
@@ -961,17 +962,17 @@ class MergeFrontier(object):
             # block has its last mergeable commit somewhere in row
             # i2-1; find its width.
             if (
-                i1 == block.len1 - 1
-                or block.is_mergeable(block.len1 - 1, i2 - 1)
-                ):
-                blocks.append(block[:block.len1,:i2])
+                    i1 == block.len1 - 1
+                    or block.is_mergeable(block.len1 - 1, i2 - 1)
+                    ):
+                blocks.append(block[:block.len1, :i2])
                 break
             else:
                 i1 = find_first_false(
                     lambda i: block.is_mergeable(i, i2 - 1),
                     i1 + 1, block.len1 - 1,
                     )
-                blocks.append(block[:i1,:i2])
+                blocks.append(block[:i1, :i2])
 
             # At this point in the loop, (i1-1, i2-1) is mergeable but
             # (i1, i2-1) is not; e.g., 'A' in the following diagram:
@@ -1094,12 +1095,12 @@ class MergeFrontier(object):
                 for i2 in range(block.len2):
                     v = self.FRONTIER_WITHIN
                     if i1 == block.len1 - 1 and (
-                        next_block is None or i2 >= next_block.len2
-                        ):
+                            next_block is None or i2 >= next_block.len2
+                            ):
                         v |= self.FRONTIER_RIGHT_EDGE
                     if i2 == block.len2 - 1 and (
-                        prev_block is None or i1 >= prev_block.len1
-                        ):
+                            prev_block is None or i1 >= prev_block.len1
+                            ):
                         v |= self.FRONTIER_BOTTOM_EDGE
                     diagram[i1][i2] |= v
             prev_block = block
@@ -1292,10 +1293,10 @@ class MergeFrontier(object):
 
         blockruns = []
         if self.blocks[0].len2 < self.block.len2:
-            blockruns.append([self.block[0,:]])
+            blockruns.append([self.block[0, :]])
         blockruns.append(self)
         if self.blocks[-1].len1 < self.block.len1:
-            blockruns.append([self.block[:,0]])
+            blockruns.append([self.block[:, 0]])
 
         for block1, block2 in iter_neighbors(itertools.chain(*blockruns)):
             yield self.block[block1.len1 - 1:block2.len1, block2.len2 - 1: block1.len2]
@@ -1311,7 +1312,7 @@ class MergeFrontier(object):
             except IndexError:
                 pass
             else:
-                if (block_i1, block_i2) == (1,1):
+                if (block_i1, block_i2) == (1, 1):
                     # That's the one we need to improve this block:
                     return block
                 else:
@@ -1513,7 +1514,7 @@ class Block(object):
 
         def do_merge(i1, commit1, i2, commit2, msg='Autofilling %d-%d...', record=True):
             if (i1, i2) in self:
-                return self[i1,i2].sha1
+                return self[i1, i2].sha1
             (i1orig, i2orig) = self.get_original_indexes(i1, i2)
             sys.stderr.write(msg % (i1orig, i2orig))
             logmsg = 'imerge \'%s\': automatic merge %d-%d' % (self.name, i1orig, i2orig)
@@ -1530,12 +1531,12 @@ class Block(object):
         i2 = self.len2 - 1
         left = self[0, i2].sha1
         for i1 in range(1, self.len1 - 1):
-            left = do_merge(i1, self[i1,0].sha1, i2, left)
+            left = do_merge(i1, self[i1, 0].sha1, i2, left)
 
         i1 = self.len1 - 1
         above = self[i1, 0].sha1
         for i2 in range(1, self.len2 - 1):
-            above = do_merge(i1, above, i2, self[0,i2].sha1)
+            above = do_merge(i1, above, i2, self[0, i2].sha1)
 
         i1, i2 = self.len1 - 1, self.len2 - 1
         if i1 > 1 and i2 > 1:
@@ -1544,12 +1545,12 @@ class Block(object):
             # of the right edge.  We only accept it if both approaches
             # succeed and give identical trees.
             vertex_v1 = do_merge(
-                i1, self[i1,0].sha1, i2, left,
+                i1, self[i1, 0].sha1, i2, left,
                 msg='Autofilling %d-%d (first way)...',
                 record=False,
                 )
             vertex_v2 = do_merge(
-                i1, above, i2, self[0,i2].sha1,
+                i1, above, i2, self[0, i2].sha1,
                 msg='Autofilling %d-%d (second way)...',
                 record=False,
                 )
@@ -1600,7 +1601,7 @@ class Block(object):
             sys.stderr.write('success.\n')
         except AutomaticMergeFailed:
             sys.stderr.write('conflict.\n')
-            self[i1,i2].record_blocked(True)
+            self[i1, i2].record_blocked(True)
             return False
         else:
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
@@ -1654,12 +1655,12 @@ class Block(object):
 
     # A map {(is_known(), manual, is_blocked()) : integer constant}
     MergeState = {
-        (False, False, False) : MERGE_UNKNOWN,
-        (False, False, True) : MERGE_BLOCKED,
-        (True, False, True) : MERGE_UNBLOCKED,
-        (True, True, True) : MERGE_UNBLOCKED,
-        (True, False, False) : MERGE_AUTOMATIC,
-        (True, True, False) : MERGE_MANUAL,
+        (False, False, False): MERGE_UNKNOWN,
+        (False, False, True): MERGE_BLOCKED,
+        (True, False, True): MERGE_UNBLOCKED,
+        (True, True, True): MERGE_UNBLOCKED,
+        (True, False, False): MERGE_AUTOMATIC,
+        (True, True, False): MERGE_MANUAL,
         }
 
     def create_diagram(self):
@@ -1756,9 +1757,9 @@ class SubBlock(Block):
     def convert_original_indexes(self, i1, i2):
         (i1, i2) = self._merge_state.convert_original_indexes(i1, i2)
         if not (
-            self._start1 <= i1 < self._start1 + self.len1
-            and self._start2 <= i2 < self._start2 + self.len2
-            ):
+                self._start1 <= i1 < self._start1 + self.len1
+                and self._start2 <= i2 < self._start2 + self.len2
+                ):
             raise IndexError('Indexes are not within block')
         return (i1 - self._start1, i2 - self._start2)
 
@@ -1784,8 +1785,8 @@ class SubBlock(Block):
 
 class MergeState(Block):
     SOURCE_TABLE = {
-        'auto' : MergeRecord.SAVED_AUTO,
-        'manual' : MergeRecord.SAVED_MANUAL,
+        'auto': MergeRecord.SAVED_AUTO,
+        'manual': MergeRecord.SAVED_MANUAL,
         }
 
     MERGE_STATE_RE = re.compile(
@@ -1803,7 +1804,7 @@ class MergeState(Block):
     def iter_existing_names():
         """Iterate over the names of existing MergeStates in this repo."""
 
-        for line in check_output(['git', 'for-each-ref', 'refs/imerge',]).splitlines():
+        for line in check_output(['git', 'for-each-ref', 'refs/imerge']).splitlines():
             (sha1, type, refname) = line.split()
             if type == 'blob':
                 m = MergeState.MERGE_STATE_RE.match(refname)
@@ -1909,11 +1910,11 @@ class MergeState(Block):
 
     @staticmethod
     def initialize(
-        name, merge_base,
-        tip1, commits1,
-        tip2, commits2,
-        goal=DEFAULT_GOAL, manual=False, branch=None,
-        ):
+            name, merge_base,
+            tip1, commits1,
+            tip2, commits2,
+            goal=DEFAULT_GOAL, manual=False, branch=None,
+            ):
         """Create and return a new MergeState object."""
 
         MergeState.check_name_format(name)
@@ -2067,7 +2068,7 @@ class MergeState(Block):
             state[i1, i2].record_merge(sha1, source)
 
         # Record any blockers:
-        for (i1,i2) in blockers:
+        for (i1, i2) in blockers:
             state[i1, i2].record_blocked(True)
 
         return state
@@ -2090,17 +2091,17 @@ class MergeState(Block):
                 pass
             # Detach head so that we can delete scratch_refname:
             check_call([
-                    'git', 'update-ref', '--no-deref',
-                    '-m', 'Detach HEAD from %s' % (scratch_refname,),
-                    'HEAD', get_commit_sha1('HEAD'),
-                    ])
+                'git', 'update-ref', '--no-deref',
+                '-m', 'Detach HEAD from %s' % (scratch_refname,),
+                'HEAD', get_commit_sha1('HEAD'),
+                ])
 
         # Delete the scratch refname:
         check_call([
-                'git', 'update-ref',
-                '-m', 'imerge %s: remove scratch reference' % (name,),
-                '-d', scratch_refname,
-                ])
+            'git', 'update-ref',
+            '-m', 'imerge %s: remove scratch reference' % (name,),
+            '-d', scratch_refname,
+            ])
 
         # Remove any references referring to intermediate merges:
         for line in check_output([
@@ -2109,10 +2110,10 @@ class MergeState(Block):
             (sha1, type, refname) = line.split()
             try:
                 check_call([
-                        'git', 'update-ref',
-                        '-m', 'imerge: remove merge %r' % (name,),
-                        '-d', refname,
-                        ])
+                    'git', 'update-ref',
+                    '-m', 'imerge: remove merge %r' % (name,),
+                    '-d', refname,
+                    ])
             except CalledProcessError as e:
                 sys.stderr.write(
                     'Warning: error removing reference %r: %s' % (refname, e)
@@ -2123,14 +2124,14 @@ class MergeState(Block):
             MergeState.set_default_name(None)
 
     def __init__(
-        self, name, merge_base,
-        tip1, commits1,
-        tip2, commits2,
-        source,
-        goal=DEFAULT_GOAL,
-        manual=False,
-        branch=None,
-        ):
+            self, name, merge_base,
+            tip1, commits1,
+            tip2, commits2,
+            source,
+            goal=DEFAULT_GOAL,
+            manual=False,
+            branch=None,
+            ):
         Block.__init__(self, name, len(commits1) + 1, len(commits2) + 1)
         self.tip1 = tip1
         self.tip2 = tip2
@@ -2156,7 +2157,7 @@ class MergeState(Block):
 
         if goal == 'rebase':
             self._check_no_merges(
-                [self[0,i2].sha1 for i2 in range(1,self.len2)]
+                [self[0, i2].sha1 for i2 in range(1, self.len2)]
                 )
 
         self.goal = goal
@@ -2214,7 +2215,7 @@ class MergeState(Block):
         for i2 in range(0, self.len2):
             for i1 in range(0, self.len1):
                 if (i1, i2) in self:
-                    record = self[i1,i2]
+                    record = self[i1, i2]
                     if record.sha1 == commit:
                         return (i1, i2)
         raise CommitNotFoundError(commit)
@@ -2265,9 +2266,9 @@ class MergeState(Block):
         else:
             return int(
                 check_output([
-                        'git', 'rev-list', '--count', '--ancestry-path',
-                        '%s..%s' % (commit1, commit2,),
-                        ]).strip()
+                    'git', 'rev-list', '--count', '--ancestry-path',
+                    '%s..%s' % (commit1, commit2,),
+                    ]).strip()
                 ) != 0
 
     @staticmethod
@@ -2297,10 +2298,10 @@ class MergeState(Block):
                 check_call(['git', 'reset', '--hard', commit])
             else:
                 check_call([
-                        'git', 'update-ref',
-                        '-m', 'imerge: recording final merge',
-                        refname, commit,
-                        ])
+                    'git', 'update-ref',
+                    '-m', 'imerge: recording final merge',
+                    refname, commit,
+                    ])
                 checkout(refname)
 
     def simplify_to_full(self, refname, force=False):
@@ -2387,7 +2388,7 @@ class MergeState(Block):
                 % (self.len1 - 1, self.len2 - 1)
                 )
         tree = get_tree(self[-1, -1].sha1)
-        parents = [self[-1,0].sha1, self[0,-1].sha1]
+        parents = [self[-1, 0].sha1, self[0, -1].sha1]
 
         # Create a preliminary commit with a generic commit message:
         sha1 = commit_tree(
@@ -2422,7 +2423,7 @@ class MergeState(Block):
         blockers = []
         for i2 in range(0, self.len2):
             for i1 in range(0, self.len1):
-                record = self[i1,i2]
+                record = self[i1, i2]
                 if record.is_known():
                     record.save(self.name, i1, i2)
                 if record.is_blocked():
@@ -2446,11 +2447,11 @@ class MergeState(Block):
             raise CalledProcessError(retcode, cmd)
         sha1 = out.strip()
         check_call([
-                'git', 'update-ref',
-                '-m', 'imerge %r: Record state' % (self.name,),
-                'refs/imerge/%s/state' % (self.name,),
-                sha1,
-                ])
+            'git', 'update-ref',
+            '-m', 'imerge %r: Record state' % (self.name,),
+            'refs/imerge/%s/state' % (self.name,),
+            sha1,
+            ])
 
     def __str__(self):
         return 'MergeState(\'%s\', tip1=\'%s\', tip2=\'%s\', goal=\'%s\')' % (
@@ -2470,18 +2471,18 @@ def request_user_merge(merge_state, i1, i2):
         raise RuntimeError('The parents of merge %d-%d are not ready' % (i1, i2))
     refname = MergeState.get_scratch_refname(merge_state.name)
     check_call([
-            'git', 'update-ref',
-            '-m', 'imerge %r: Prepare merge %d-%d' % (merge_state.name, i1, i2,),
-            refname, above.sha1,
-            ])
+        'git', 'update-ref',
+        '-m', 'imerge %r: Prepare merge %d-%d' % (merge_state.name, i1, i2,),
+        refname, above.sha1,
+        ])
     checkout(refname)
     logmsg = 'imerge \'%s\': manual merge %d-%d' % (merge_state.name, i1, i2)
     try:
         check_call([
-                'git', 'merge', '--no-commit',
-                '-m', logmsg,
-                left.sha1,
-                ])
+            'git', 'merge', '--no-commit',
+            '-m', logmsg,
+            left.sha1,
+            ])
     except CalledProcessError:
         # We expect an error (otherwise we would have automerged!)
         pass
@@ -2489,12 +2490,12 @@ def request_user_merge(merge_state, i1, i2):
         '\n'
         'Original first commit:\n'
         )
-    check_call(['git', '--no-pager', 'log', '--no-walk', merge_state[i1,0].sha1])
+    check_call(['git', '--no-pager', 'log', '--no-walk', merge_state[i1, 0].sha1])
     sys.stderr.write(
         '\n'
         'Original second commit:\n'
         )
-    check_call(['git', '--no-pager', 'log', '--no-walk', merge_state[0,i2].sha1])
+    check_call(['git', '--no-pager', 'log', '--no-walk', merge_state[0, i2].sha1])
     sys.stderr.write(
         '\n'
         'There was a conflict merging commit %d-%d, shown above.\n'
@@ -2559,12 +2560,12 @@ def incorporate_user_merge(merge_state, edit_log_msg=None):
             # It points to a commit that is already recorded.  We can
             # delete it without losing any information.
             check_call([
-                    'git', 'update-ref',
-                    '-m',
-                    'imerge %r: Remove obsolete scratch reference'
-                    % (merge_state.name,),
-                    '-d', refname,
-                    ])
+                'git', 'update-ref',
+                '-m',
+                'imerge %r: Remove obsolete scratch reference'
+                % (merge_state.name,),
+                '-d', refname,
+                ])
             sys.stderr.write(
                 '%s did not point to a new merge; it has been deleted.\n'
                 % (refname,)
@@ -2604,21 +2605,21 @@ def incorporate_user_merge(merge_state, edit_log_msg=None):
 
     # Now detach head so that we can delete refname.
     check_call([
-            'git', 'update-ref', '--no-deref',
-            '-m', 'Detach HEAD from %s' % (refname,),
-            'HEAD', commit,
-            ])
+        'git', 'update-ref', '--no-deref',
+        '-m', 'Detach HEAD from %s' % (refname,),
+        'HEAD', commit,
+        ])
 
     check_call([
-            'git', 'update-ref',
-            '-m', 'imerge %s: remove scratch reference' % (merge_state.name,),
-            '-d', refname,
-            ])
+        'git', 'update-ref',
+        '-m', 'imerge %s: remove scratch reference' % (merge_state.name,),
+        '-d', refname,
+        ])
 
     try:
         # This might throw NotABlockingCommitError:
         unblocked_block = merge_frontier.get_affected_blocker_block(i1, i2)
-        unblocked_block[1,1].record_blocked(False)
+        unblocked_block[1, 1].record_blocked(False)
         sys.stderr.write(
             'Merge has been recorded for merge %d-%d.\n'
             % unblocked_block.get_original_indexes(1, 1)
