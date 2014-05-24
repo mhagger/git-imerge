@@ -413,6 +413,10 @@ def commit_tree(tree, parents, msg, metadata=None):
     return out.strip()
 
 
+class NothingToDoError(Failure):
+    pass
+
+
 def get_boundaries(tip1, tip2):
     """Get the boundaries of an incremental merge.
 
@@ -439,10 +443,9 @@ def get_boundaries(tip1, tip2):
         ]
     commits1.reverse()
     if not commits1:
-        sys.stdout.write(
+        NothingToDoError(
             'There are no commits on %r that are not already in %r\n' % (tip1, tip2)
             )
-        sys.exit(0)
 
     ancestry_path2 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip2)))
     commits2 = [
@@ -452,10 +455,9 @@ def get_boundaries(tip1, tip2):
         ]
     commits2.reverse()
     if not commits2:
-        sys.stdout.write(
+        NothingToDoError(
             'There are no commits on %r that are not already in %r\n' % (tip2, tip1)
             )
-        sys.exit(0)
 
     return (merge_base, commits1, commits2)
 
@@ -3121,7 +3123,11 @@ def main(args):
                     'Please specify --branch for storing results.'
                     )
 
-        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+        try:
+            (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+        except NothingToDoError as e:
+            sys.stdout.write("Already up-to-date.")
+            sys.exit(0)
         merge_state = MergeState.initialize(
             name, merge_base,
             tip1, commits1,
@@ -3182,7 +3188,11 @@ def main(args):
                     'Please specify --branch for storing results.'
                     )
 
-        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+        try:
+            (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+        except NothingToDoError as e:
+            sys.stdout.write("Already up-to-date.")
+            sys.exit(0)
 
         merge_state = MergeState.initialize(
             options.name, merge_base,
