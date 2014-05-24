@@ -545,7 +545,7 @@ def reparent(commit, parent_sha1s, msg=None):
     return out.strip()
 
 
-class AutomaticMergeFailed(Exception):
+class LogicalFailure(Exception):
     def __init__(self, commit1, commit2):
         Exception.__init__(
             self, 'Automatic merge of %s and %s failed' % (commit1, commit2,)
@@ -553,12 +553,12 @@ class AutomaticMergeFailed(Exception):
         self.commit1, self.commit2 = commit1, commit2
 
 
-class AutomaticBuildFailed(Exception):
-    def __init__(self, commit1, commit2):
-        Exception.__init__(
-            self, 'Automatic build of %s and %s failed' % (commit1, commit2,)
-            )
-        self.commit1, self.commit2 = commit1, commit2
+class AutomaticMergeFailed(LogicalFailure):
+    pass
+
+
+class AutomaticTestFailed(LogicalFailure):
+    pass
 
 
 def automerge(commit1, commit2, msg=None):
@@ -581,15 +581,12 @@ def automerge(commit1, commit2, msg=None):
         call_silently(['git', 'reset', '--merge'])
         raise AutomaticMergeFailed(commit1, commit2)
 
-    build_script = MergeState.get_default_test_command()
-    if build_script:
+    test_script = MergeState.get_default_test_command()
+    if test_script is not None:
         try:
-            check_call(['/bin/sh', build_script])
+            check_call(['/bin/sh', '-c', test_script])
         except CalledProcessError as e:
-            if e.returncode == 125:
-                return get_commit_sha1('HEAD')
-            else:
-                raise AutomaticBuildFailed(commit1, commit2)
+            raise AutomaticTestFailed(commit1, commit2)
 
     return get_commit_sha1('HEAD')
 
@@ -1497,10 +1494,10 @@ class Block(object):
                 sys.stderr.write('success.\n')
                 return True
             except AutomaticMergeFailed:
-                sys.stderr.write('Merge failure.\n')
+                sys.stderr.write('merge failure.\n')
                 return False
-            except AutomaticBuildFailed:
-                sys.stderr.write('Build failure.\n')
+            except AutomaticTestFailed:
+                sys.stderr.write('test failure.\n')
                 return False
 
     def auto_outline(self):
@@ -1802,7 +1799,7 @@ class MergeState(Block):
         re.VERBOSE,
         )
 
-    DEFAULT_BUILD_COMMAND = None
+    DEFAULT_TEST_COMMAND = None
 
     @staticmethod
     def iter_existing_names():
@@ -1867,7 +1864,7 @@ class MergeState(Block):
 
         if name is None:
             try:
-                check_call(['git', 'config', '--unset', 'imerge.default'])
+                check_call(['git', 'config', '--unset-all', 'imerge.default'])
             except CalledProcessError as e:
                 if e.returncode == 5:
                     # Value was not set
@@ -1894,7 +1891,7 @@ class MergeState(Block):
 
         if name is None:
             try:
-                check_call(['git', 'config', '--unset', 'imerge.command'])
+                check_call(['git', 'config', '--unset-all', 'imerge.testcommand'])
             except CalledProcessError as e:
                 if e.returncode == 5:
                     # Value was not set
@@ -1902,21 +1899,21 @@ class MergeState(Block):
                 else:
                     raise
         else:
-            check_call(['git', 'config', 'imerge.command', name])
+            check_call(['git', 'config', 'imerge.testcommand', name])
 
     @staticmethod
     def get_default_test_command():
         """Get the name of the test command, or None if none is currently set."""
 
-        if MergeState.DEFAULT_BUILD_COMMAND:
-            return MergeState.DEFAULT_BUILD_COMMAND
-        else:
+        if MergeState.DEFAULT_TEST_COMMAND is None:
             try:
-                MergeState.DEFAULT_BUILD_COMMAND = \
-                    check_output(['git', 'config', 'imerge.command']).rstrip()
-                return MergeState.DEFAULT_BUILD_COMMAND
+                MergeState.DEFAULT_TEST_COMMAND = \
+                    check_output(['git', 'config', 'imerge.testcommand']).rstrip()
+                return MergeState.DEFAULT_TEST_COMMAND
             except CalledProcessError:
                 return None
+
+        return MergeState.DEFAULT_TEST_COMMAND
 
     @staticmethod
     def _check_no_merges(commits):
@@ -1949,7 +1946,7 @@ class MergeState(Block):
         name, merge_base,
         tip1, commits1,
         tip2, commits2,
-        goal=DEFAULT_GOAL, manual=False, branch=None, build_command=None,
+        goal=DEFAULT_GOAL, manual=False, branch=None, test_command=None,
         ):
         """Create and return a new MergeState object."""
 
@@ -1973,7 +1970,7 @@ class MergeState(Block):
             goal=goal,
             manual=manual,
             branch=branch,
-            build_command=build_command,
+            test_command=test_command,
             )
 
     @staticmethod
@@ -2168,7 +2165,7 @@ class MergeState(Block):
         goal=DEFAULT_GOAL,
         manual=False,
         branch=None,
-        build_command=None,
+        test_command=None,
         ):
         Block.__init__(self, name, len(commits1) + 1, len(commits2) + 1)
         self.tip1 = tip1
@@ -2176,7 +2173,6 @@ class MergeState(Block):
         self.goal = goal
         self.manual = bool(manual)
         self.branch = branch or name
-        self.build_command = build_command
 
         # A simulated 2D array.  Values are None or MergeRecord instances.
         self._data = [[None] * self.len2 for i1 in range(self.len1)]
@@ -2708,6 +2704,20 @@ def read_merge_state(name=None, default_to_unique=True):
 
 @Failure.wrap
 def main(args):
+    def add_test_command_argument(subparser):
+        subparser.add_argument(
+            '--test-command',
+            action='store', default=None,
+            help=(
+                'in addition to identifying for textual conflicts, run the test '
+                'or test script specified by TEST to identify where logical '
+                'conflicts are introduced. The test script is expected to return 0 '
+                'if the source is good, exit with code 1-127 if the source is bad, '
+                'except for exit code 125 which indicates the source code can not '
+                'be built or tested.'
+                ),
+            )
+
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -2736,18 +2746,7 @@ def main(args):
         action='store', default=None,
         help='the name of the branch to which the result will be stored',
         )
-    subparser.add_argument(
-        '--build-command',
-        action='store', default=None,
-        help=(
-            'in addition to identifying for textual conflicts, run the build '
-            'or test script specified by TEST to identify where logical '
-            'conflicts are introduced. The test script is expected to return 0 '
-            'if the source is good, exit with code 1-127 if the source is bad, '
-            'except for exit code 125 which indicates the source code can not '
-            'be built or tested.'
-            ),
-        )
+    add_test_command_argument(subparser)
     subparser.add_argument(
         '--manual',
         action='store_true', default=False,
@@ -2789,18 +2788,7 @@ def main(args):
         action='store', default=None,
         help='the name of the branch to which the result will be stored',
         )
-    subparser.add_argument(
-        '--build-command',
-        action='store', default=None,
-        help=(
-            'in addition to identifying for textual conflicts, run the build '
-            'or test script specified by TEST to identify where logical '
-            'conflicts are introduced. The test script is expected to return 0 '
-            'if the source is good, exit with code 1-127 if the source is bad, '
-            'except for exit code 125 which indicates the source code can not '
-            'be built or tested.'
-            ),
-        )
+    add_test_command_argument(subparser)
     subparser.add_argument(
         '--manual',
         action='store_true', default=False,
@@ -2839,18 +2827,7 @@ def main(args):
         action='store', default=None,
         help='the name of the branch to which the result will be stored',
         )
-    subparser.add_argument(
-        '--build-command',
-        action='store', default=None,
-        help=(
-            'in addition to identifying for textual conflicts, run the build '
-            'or test script specified by TEST to identify where logical '
-            'conflicts are introduced. The test script is expected to return 0 '
-            'if the source is good, exit with code 1-127 if the source is bad, '
-            'except for exit code 125 which indicates the source code can not '
-            'be built or tested.'
-            ),
-        )
+    add_test_command_argument(subparser)
     subparser.add_argument(
         '--manual',
         action='store_true', default=False,
@@ -2991,18 +2968,7 @@ def main(args):
         action='store', default=None,
         help='the name of the branch to which the result will be stored',
         )
-    subparser.add_argument(
-        '--build-command',
-        action='store', default=None,
-        help=(
-            'in addition to identifying for textual conflicts, run the build '
-            'or test script specified by TEST to identify where logical '
-            'conflicts are introduced. The test script is expected to return 0 '
-            'if the source is good, exit with code 1-127 if the source is bad, '
-            'except for exit code 125 which indicates the source code can not '
-            'be built or tested.'
-            ),
-        )
+    add_test_command_argument(subparser)
     subparser.add_argument(
         '--manual',
         action='store_true', default=False,
@@ -3149,11 +3115,11 @@ def main(args):
             tip2, commits2,
             goal=options.goal, manual=options.manual,
             branch=(options.branch or options.name),
-            build_command=options.build_command,
+            test_command=options.test_command,
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
-        MergeState.set_default_test_command(options.build_command)
+        MergeState.set_default_test_command(options.test_command)
     elif options.subcommand == 'start':
         require_clean_work_tree('proceed')
 
@@ -3179,11 +3145,11 @@ def main(args):
             tip2, commits2,
             goal=options.goal, manual=options.manual,
             branch=(options.branch or options.name),
-            build_command=options.build_command,
+            test_command=options.test_command,
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
-        MergeState.set_default_test_command(options.build_command)
+        MergeState.set_default_test_command(options.test_command)
 
         try:
             merge_state.auto_complete_frontier()
@@ -3239,11 +3205,11 @@ def main(args):
             tip2, commits2,
             goal=options.goal, manual=options.manual,
             branch=options.branch,
-            build_command=options.build_command,
+            test_command=options.test_command,
             )
         merge_state.save()
         MergeState.set_default_name(name)
-        MergeState.set_default_test_command(options.build_command)
+        MergeState.set_default_test_command(options.test_command)
 
         try:
             merge_state.auto_complete_frontier()
@@ -3303,11 +3269,11 @@ def main(args):
             tip2, commits2,
             goal=options.goal, manual=options.manual,
             branch=options.branch,
-            build_command=options.build_command,
+            test_command=options.test_command,
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
-        MergeState.set_default_test_command(options.build_command)
+        MergeState.set_default_test_command(options.test_command)
 
         try:
             merge_state.auto_complete_frontier()
