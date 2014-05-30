@@ -2652,7 +2652,7 @@ def main(args):
     def add_name_argument(subparser, help=None):
         if help is None:
             subcommand = subparser.prog.split()[1]
-            help = 'name of merge to {0}'.format(subcommand)
+            help = 'name of incremental merge to {0}'.format(subcommand)
 
         subparser.add_argument(
             '--name', action='store', default=None, help=help,
