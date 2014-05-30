@@ -2647,6 +2647,8 @@ def read_merge_state(name=None, default_to_unique=True):
 
 @Failure.wrap
 def main(args):
+    NAME_INIT_HELP = 'name to use for this incremental merge'
+
     def add_name_argument(subparser, help=None):
         if help is None:
             subcommand = subparser.prog.split()[1]
@@ -2731,7 +2733,7 @@ def main(args):
             '(equivalent to "init" followed by "continue")'
             ),
         )
-    add_name_argument(subparser)
+    add_name_argument(subparser, help=NAME_INIT_HELP)
     add_goal_argument(subparser)
     add_branch_argument(subparser)
     add_manual_argument(subparser)
@@ -2742,7 +2744,7 @@ def main(args):
         'merge',
         help='start a simple merge via incremental merge',
         )
-    add_name_argument(subparser)
+    add_name_argument(subparser, help=NAME_INIT_HELP)
     add_goal_argument(subparser, default='merge')
     add_branch_argument(subparser)
     add_manual_argument(subparser)
@@ -2753,7 +2755,7 @@ def main(args):
         'rebase',
         help='start a simple rebase via incremental merge',
         )
-    add_name_argument(subparser)
+    add_name_argument(subparser, help=NAME_INIT_HELP)
     add_goal_argument(subparser, default='rebase')
     add_branch_argument(subparser)
     add_manual_argument(subparser)
@@ -2841,7 +2843,7 @@ def main(args):
         'init',
         help='initialize a new incremental merge',
         )
-    add_name_argument(subparser)
+    add_name_argument(subparser, help=NAME_INIT_HELP)
     add_goal_argument(subparser)
     add_branch_argument(subparser)
     add_manual_argument(subparser)
