@@ -1,0 +1,269 @@
+#!bash
+
+__git_imerge_branches () {
+	git for-each-ref --format='%(refname)' refs/heads/ refs/remotes/ 2>/dev/null |
+	sed -e 's!^refs/heads/!!' -e 's!^refs/remotes/!!'
+}
+
+__git_imerge_names () {
+	git for-each-ref --format='%(refname)' refs/imerge/ 2>/dev/null |
+	sed -e 's/^refs\/imerge\/\(.*\)\/.*/\1/' -e '/manual/d' -e '/auto/d'
+}
+
+__git_imerge_goals="\
+merge
+rebase
+rebase-with-history
+full
+"
+
+__git_imerge_commands="\
+start
+merge
+rebase
+continue
+finish
+diagram
+list
+init
+record
+autofill
+simplify
+remove
+reparent
+"
+
+__git_imerge_start_options="\
+--help
+--manual
+--name
+--branch
+--goal
+--first-parent
+"
+
+__git_imerge_init_options=$__git_imerge_start_options
+
+__git_imerge_continue_options="\
+--help
+--name
+--edit
+--no-edit
+"
+
+__git_imerge_finish_options="\
+--help
+--name
+--goal
+--branch
+--force
+"
+
+__git_imerge_simplify_options=$__git_imerge_finish_options
+
+__git_imerge_merge_options="\
+--help
+--name
+--goal
+--branch
+--manual
+"
+
+__git_imerge_list_options="\
+--help
+"
+
+__git_imerge_reparent_options=$__git_imerge_list_options
+
+__git_imerge_record_options="\
+--help
+--name
+--edit
+--no-edit
+"
+
+__git_imerge_autofill_options="\
+--help
+--name
+"
+
+__git_imerge_diagram_options="\
+--help
+--name
+--commits
+--frontier
+--html
+--color
+--no-color
+"
+
+__git_imerge_remove_options=$__git_imerge_autofill_options
+
+__git_imerge_rebase_options=$__git_imerge_merge_options
+
+__git-imerge_start_completion() {
+	case "$1_$cur" in
+	--help_|--branch_|_--branch=|--name_|_--name=)
+		return
+		;;
+	--goal_*|*_--goal=*)
+		__gitcomp "$__git_imerge_goals"  "" "${cur##--goal=}"
+		return
+		;;
+	*-|*_-*?)
+		__gitcomp "$__git_imerge_start_options"
+		return
+		;;
+	esac
+	__gitcomp "$(__git_imerge_branches)"
+}
+
+__git-imerge_init_completion() {
+	__git-imerge_start_completion $1
+}
+
+__git-imerge_continue_completion() {
+	case "$1_$cur" in
+	--help_)
+		return
+		;;
+	--name_*|*_--name=*)
+                __gitcomp "$(__git_imerge_names)" "" "${cur##--name=}"
+                return
+                ;;
+	esac
+	__gitcomp "$__git_imerge_continue_options"
+}
+
+__git-imerge_finish_completion() {
+	case "$1_$cur" in
+	--help_)
+		return
+		;;
+	--goal_*|*_--goal=*)
+		__gitcomp "$__git_imerge_goals" "" "${cur##--goal=}"
+		return
+		;;
+	--branch_*|*_--branch=*)
+		__gitcomp "$(__git_imerge_branches)" "" "${cur##--branch=}"
+		return
+		;;
+	--name_*|*_--name=*)
+                __gitcomp "$(__git_imerge_names)" "" "${cur##--name=}"
+                return
+                ;;
+	esac
+	__gitcomp "$__git_imerge_finish_options"
+}
+
+__git-imerge_simplify_completion() {
+	__git-imerge_finish_completion $1
+}
+
+__git-imerge_merge_completion() {
+	case "$1_$cur" in
+	--help_|--branch_|_--branch=|--name_|_--name=)
+		return
+		;;
+	--goal_*|*_--goal=*)
+		__gitcomp "$__git_imerge_goals" "" "${cur##--goal=}"
+		return
+		;;
+	*-|*_-*?)
+		__gitcomp "$__git_imerge_merge_options"
+		return
+		;;
+	esac
+	__gitcomp "$(__git_imerge_branches)"
+}
+
+__git-imerge_rebase_completion() {
+	__git-imerge_merge_completion $1
+}
+
+__git-imerge_list_completion() {
+	case "$1" in
+	--help)
+		return
+		;;
+	esac
+	__gitcomp "$__git_imerge_list_options"
+}
+
+__git-imerge_reparent_completion() {
+	__git-imerge_list_completion $1
+}
+
+__git-imerge_record_completion() {
+	case "$1_$cur" in
+	--help_)
+		return
+		;;
+	--name_*|*_--name=*)
+		__gitcomp "$(__git_imerge_names)" "" "${cur##--name=}"
+                return
+                ;;
+	esac
+	__gitcomp "$__git_imerge_record_options"
+}
+
+__git-imerge_autofill_completion() {
+	case "$1_$cur" in
+	--help_)
+		return
+		;;
+	--name_*|*_--name=*)
+		__gitcomp "$(__git_imerge_names)" "" "${cur##--name=}"
+                return
+                ;;
+	esac
+	__gitcomp "$__git_imerge_autofill_options"
+}
+
+__git-imerge_remove_completion() {
+	__git-imerge_autofill_completion $1
+}
+
+__git-imerge_diagram_completion() {
+	case "$1_$cur" in
+	--help_|--html_|_--html=)
+		return
+		;;
+	--name_*|*_--name=*)
+		__gitcomp "$(__git_imerge_names)" "" "${cur##--name=}"
+		return
+                ;;
+	esac
+	__gitcomp "$__git_imerge_diagram_options"
+}
+
+_git_imerge () {
+	# Disable default filename completion.  Note that "compopt" is only
+	# available in Bash 4 and newer, so we check for existence before
+	# trying to use it.
+	type compopt >/dev/null 2>&1 && compopt +o default +o bashdefault
+
+	local i command cur_opt
+	for ((i=0; i <= ${cword}; i++)); do
+		if [ -n "$command" ] && [ "${words[i]}" != "$cur" ]; then
+			cur_opt="${words[i]}"
+		fi
+		if [ -z "$command" ] && \
+		   [ "$i" -lt "${cword}" ] && \
+		   [[ "${words[i-1]}" == *"imerge"* ]]
+		then
+			command="${words[i]}"
+		fi
+	done
+
+	if test -z "$command"; then
+		__gitcomp "$__git_imerge_commands"
+		return
+	fi
+
+	if [ -z `type -t __git-imerge_"$command"_completion "$cur_opt"` ]; then
+		return
+	fi
+
+	__git-imerge_"$command"_completion "$cur_opt"
+}
