@@ -48,6 +48,10 @@ command.
 An incremental merge can be interrupted and resumed arbitrarily, or
 even pushed to a server to allow somebody else to work on it.
 
+``git-imerge`` comes with a Bash completion script. It can be installed
+by copying ``git-imerge.bashcomplete`` to the place where usually completion
+scripts are installed on your system, e.g. /etc/bash_completion.d/.
+
 **git-imerge is experimental!  If it breaks, you get to keep the
 pieces.  Feedback and bug reports are welcome!**
 
@@ -72,6 +76,7 @@ Requirements
 
 * A recent version of Git.
 
+Bash completion requires Git's completion being available.
 
 Instructions
 ============
