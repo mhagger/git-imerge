@@ -622,7 +622,7 @@ class GitConfigStore(object):
                 raise GitConfigError(e.returncode, e.output)
 
 
-def automerge(commit1, commit2, msg=None):
+def automerge(commit1, commit2, msg=None, test_command=None):
     """Attempt an automatic merge of commit1 and commit2.
 
     Return the SHA1 of the resulting commit, or raise
@@ -642,10 +642,9 @@ def automerge(commit1, commit2, msg=None):
         call_silently(['git', 'reset', '--merge'])
         raise AutomaticMergeFailed(commit1, commit2)
 
-    test_script = MergeState.get_default_test_command()
-    if test_script is not None:
+    if test_command is not None:
         try:
-            check_call(['/bin/sh', '-c', test_script])
+            check_call(['/bin/sh', '-c', test_command])
         except CalledProcessError as e:
             raise AutomaticTestFailed(commit1, commit2)
 
@@ -1450,6 +1449,7 @@ class Block(object):
         self.name = name
         self.len1 = len1
         self.len2 = len2
+        self.gcs  = GitConfigStore(name)
 
     def get_merge_state(self):
         """Return the MergeState instance containing this Block."""
@@ -1551,7 +1551,9 @@ class Block(object):
                 )
             try:
                 print("Automerging from is_mergeable")
-                automerge(self[i1, 0].sha1, self[0, i2].sha1)
+                automerge(self[i1, 0].sha1, self[0, i2].sha1,
+                          test_command=self.gcs.get(self.name + '.testcommand'),
+                          )
                 sys.stderr.write('success.\n')
                 return True
             except AutomaticMergeFailed:
@@ -1578,7 +1580,9 @@ class Block(object):
             logmsg = 'imerge \'%s\': automatic merge %d-%d' % (self.name, i1orig, i2orig)
             try:
                 print("Automerging from auto_outline")
-                merge = automerge(commit1, commit2, msg=logmsg)
+                merge = automerge(commit1, commit2, msg=logmsg,
+                                  test_command=self.gcs.get(self.name + '.testcommand'),
+                                  )
                 sys.stderr.write('success.\n')
             except AutomaticMergeFailed as e:
                 sys.stderr.write('unexpected conflict.  Backtracking...\n')
@@ -1657,6 +1661,7 @@ class Block(object):
                 self[i1, i2 - 1].sha1,
                 self[i1 - 1, i2].sha1,
                 msg=logmsg,
+                test_command=self.gcs.get(self.name + '.testcommand'),
                 )
             sys.stderr.write('success.\n')
         except AutomaticMergeFailed:
@@ -1936,38 +1941,6 @@ class MergeState(Block):
             return gcs.get("default")
         except GitConfigError:
             return None
-
-    @staticmethod
-    def set_default_test_command(name):
-        """Set the default test command to the specified one.
-
-        name can be None to cause the default to be cleared."""
-
-        if name is None:
-            try:
-                check_call(['git', 'config', '--unset-all', 'imerge.testcommand'])
-            except CalledProcessError as e:
-                if e.returncode == 5:
-                    # Value was not set
-                    pass
-                else:
-                    raise
-        else:
-            check_call(['git', 'config', 'imerge.testcommand', name])
-
-    @staticmethod
-    def get_default_test_command():
-        """Get the name of the test command, or None if none is currently set."""
-
-        if MergeState.DEFAULT_TEST_COMMAND is None:
-            try:
-                MergeState.DEFAULT_TEST_COMMAND = \
-                    check_output(['git', 'config', 'imerge.testcommand']).rstrip()
-                return MergeState.DEFAULT_TEST_COMMAND
-            except CalledProcessError:
-                return None
-
-        return MergeState.DEFAULT_TEST_COMMAND
 
     @staticmethod
     def _check_no_merges(commits):
@@ -3173,7 +3146,10 @@ def main(args):
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
-        MergeState.set_default_test_command(options.test_command)
+        gcs = GitConfigStore(options.name)
+        if options.test_command is not None:
+            gcs.set(options.name + '.testcommand', options.test_command)
+
     elif options.subcommand == 'start':
         require_clean_work_tree('proceed')
 
@@ -3203,7 +3179,9 @@ def main(args):
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
-        MergeState.set_default_test_command(options.test_command)
+        gcs = GitConfigStore(options.name)
+        if options.test_command is not None:
+            gcs.set(options.name + '.testcommand', options.test_command)
 
         try:
             merge_state.auto_complete_frontier()
@@ -3263,7 +3241,9 @@ def main(args):
             )
         merge_state.save()
         MergeState.set_default_name(name)
-        MergeState.set_default_test_command(options.test_command)
+        gcs = GitConfigStore(options.name)
+        if options.test_command is not None:
+            gcs.set(options.name + '.testcommand', options.test_command)
 
         try:
             merge_state.auto_complete_frontier()
@@ -3327,7 +3307,9 @@ def main(args):
             )
         merge_state.save()
         MergeState.set_default_name(options.name)
-        MergeState.set_default_test_command(options.test_command)
+        gcs = GitConfigStore(options.name)
+        if options.test_command is not None:
+            gcs.set(options.name + '.testcommand', options.test_command)
 
         try:
             merge_state.auto_complete_frontier()
@@ -3402,6 +3384,8 @@ def main(args):
             merge_state.save()
         merge_state.simplify(refname, force=options.force)
         MergeState.remove(merge_state.name)
+        gcs = GitConfigStore(merge_state.name)
+        gcs.unset(merge_state.name + '.testcommand')
     elif options.subcommand == 'diagram':
         if not (options.commits or options.frontier):
             options.frontier = True

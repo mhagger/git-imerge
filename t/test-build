@@ -35,7 +35,7 @@ done
 
 git checkout build-left
 "$GIT_IMERGE" start --goal=rebase-with-history --first-parent \
-    --build-command="make_script" \
+    --test-command="./make_script" \
     --name=build-left-right --branch=build-left-right-full build-right
 
 # Resolve conflict
