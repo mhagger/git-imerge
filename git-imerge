@@ -561,6 +561,67 @@ class AutomaticTestFailed(LogicalFailure):
     pass
 
 
+class GitConfigError(Exception):
+    def __init__(self, returncode, output):
+        Exception.__init__(
+            self, 'Git config failed with exit code %s: %s' % (returncode, output,)
+            )
+
+
+def memo(obj):
+    cache = {}
+    @functools.wraps(obj)
+    def wrap(*args, **kwds):
+        if args not in cache:
+            cache[args] = obj(*args, **kwds)
+        return cache[args]
+    return wrap
+
+
+@memo
+class GitConfigStore(object):
+    def __init__(self, name, config_prefix='imerge'):
+        self.config_prefix = config_prefix
+        self.config = self._get_all_keys()
+
+    def _get_all_keys(self):
+        d = {}
+        try:
+            items_with_prefix = check_output(
+                ['git', 'config', '--get-regex', self.config_prefix]
+                ).rstrip().split('\n')
+            for row in items_with_prefix:
+                k, v = row.split()
+                d[k[len(self.config_prefix + '.'):]] = v
+            return d
+        except CalledProcessError:
+            return {}
+
+    def get(self, key):
+        return self.config.get(key)
+
+    def set(self, key, value):
+        self.config[key] = value
+        config_key = '.'.join([self.config_prefix, key])
+        try:
+            check_call(['git', 'config', config_key, value])
+        except CalledProcessError as e:
+            raise GitConfigError(e.returncode, e.output)
+
+    def unset(self, key):
+        if key in self.config:
+            del self.config[key]
+        config_key = '.'.join([self.config_prefix, key])
+        try:
+            check_call(['git', 'config', '--unset', config_key])
+        except CalledProcessError as e:
+            if e.returncode == 5:
+                # Value was not set
+                pass
+            else:
+                raise GitConfigError(e.returncode, e.output)
+
+
 def automerge(commit1, commit2, msg=None):
     """Attempt an automatic merge of commit1 and commit2.
 
@@ -1861,26 +1922,19 @@ class MergeState(Block):
         """Set the default merge to the specified one.
 
         name can be None to cause the default to be cleared."""
-
+        gcs = GitConfigStore(name)
         if name is None:
-            try:
-                check_call(['git', 'config', '--unset-all', 'imerge.default'])
-            except CalledProcessError as e:
-                if e.returncode == 5:
-                    # Value was not set
-                    pass
-                else:
-                    raise
+            gcs.unset("default")
         else:
-            check_call(['git', 'config', 'imerge.default', name])
+            gcs.set("default", name)
 
     @staticmethod
     def get_default_name():
         """Get the name of the default merge, or None if none is currently set."""
-
+        gcs = GitConfigStore(None)
         try:
-            return check_output(['git', 'config', 'imerge.default']).rstrip()
-        except CalledProcessError:
+            return gcs.get("default")
+        except GitConfigError:
             return None
 
     @staticmethod
