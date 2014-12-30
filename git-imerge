@@ -466,6 +466,18 @@ def linear_ancestry(commit1, commit2):
     return commits
 
 
+def compute_merge_base(tip1, tip2):
+    try:
+        merge_bases = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
+    except CalledProcessError:
+        raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
+    if not merge_bases:
+        raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
+    if len(merge_bases) > 1:
+        raise Failure('%r and %r do not have a unique merge base' % (tip1, tip2))
+    return merge_bases[0]
+
+
 def get_boundaries(tip1, tip2):
     """Get the boundaries of an incremental merge.
 
@@ -473,16 +485,7 @@ def get_boundaries(tip1, tip2):
     (merge_base, commits1, commits2) describing the edges of the
     imerge.  Raise Failure if there are any problems."""
 
-    try:
-        merge_base = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
-    except CalledProcessError:
-        raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
-    if not merge_base:
-        raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
-    if len(merge_base) > 1:
-        raise Failure('%r and %r do not have a unique merge base' % (tip1, tip2))
-
-    [merge_base] = merge_base
+    merge_base = compute_merge_base(tip1, tip2)
 
     commits1 = linear_ancestry(merge_base, tip1)
     if not commits1:
