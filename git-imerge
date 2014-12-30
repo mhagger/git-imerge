@@ -444,6 +444,28 @@ class NothingToDoError(Failure):
             )
 
 
+def linear_ancestry(commit1, commit2):
+    """Compute the linear ancestry between commit1 and commit2.
+
+    Compute what *should* be the output of
+
+        git --first-parent --ancestry-path commit1..commit2
+
+    if it worked correctly; i.e., the list of commits in the
+    first-parent chain going backwards from commit2 that are also
+    descendents of commit1. Return a list of SHA-1s in 'chronological'
+    order."""
+
+    ancestry_path = set(rev_list('--ancestry-path', '%s..%s' % (commit1, commit2)))
+    commits = [
+        sha1
+        for sha1 in rev_list('--first-parent', '%s..%s' % (commit1, commit2))
+        if sha1 in ancestry_path
+        ]
+    commits.reverse()
+    return commits
+
+
 def get_boundaries(tip1, tip2):
     """Get the boundaries of an incremental merge.
 
@@ -462,23 +484,11 @@ def get_boundaries(tip1, tip2):
 
     [merge_base] = merge_base
 
-    ancestry_path1 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip1)))
-    commits1 = [
-        sha1
-        for sha1 in rev_list('--first-parent', '%s..%s' % (merge_base, tip1))
-        if sha1 in ancestry_path1
-        ]
-    commits1.reverse()
+    commits1 = linear_ancestry(merge_base, tip1)
     if not commits1:
         raise NothingToDoError(tip1, tip2)
 
-    ancestry_path2 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip2)))
-    commits2 = [
-        sha1
-        for sha1 in rev_list('--first-parent', '%s..%s' % (merge_base, tip2))
-        if sha1 in ancestry_path2
-        ]
-    commits2.reverse()
+    commits2 = linear_ancestry(merge_base, tip2)
     if not commits2:
         raise NothingToDoError(tip2, tip1)
 
