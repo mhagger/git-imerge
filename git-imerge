@@ -962,6 +962,10 @@ class MergeFrontier(object):
         if block.len1 <= 1 or block.len2 <= 1 or block.is_blocked(1, 1):
             return MergeFrontier(block, [])
 
+        if block.is_mergeable(block.len1 - 1, block.len2 - 1):
+            # The whole block is mergable!
+            return MergeFrontier(block, [block])
+
         if not block.is_mergeable(1, 1):
             # There are no mergeable blocks in block; therefore,
             # block[1,1] must itself be unmergeable.  Record that
