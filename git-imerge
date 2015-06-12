@@ -260,6 +260,30 @@ else:
         return s
 
 
+def get_default_edit():
+    """Should '--edit' be used when committing intermediate user merges?
+
+    When 'git imerge continue' or 'git imerge record' finds a user
+    merge that can be committed, should it (by default) ask the user
+    to edit the commit message? This behavior can be configured via
+    'imerge.editmergemessages'. If it is not configured, return True.
+
+    Please note that this function is only used to choose the default
+    value. It can be overridden on the command line using '--edit' or
+    '--no-edit'.
+
+    """
+
+    try:
+        return {'true' : True, 'false' : False}[
+            check_output(
+                ['git', 'config', '--bool', 'imerge.editmergemessages']
+                ).rstrip()
+            ]
+    except CalledProcessError:
+        return True
+
+
 class UncleanWorkTreeError(Failure):
     pass
 
@@ -2622,11 +2646,13 @@ def incorporate_user_merge(merge_state, edit_log_msg=None):
         # There are staged changes; commit them if possible.
         cmd = ['git', 'commit', '--no-verify']
 
-        if edit_log_msg is not None:
-            if edit_log_msg:
-                cmd += ['--edit']
-            else:
-                cmd += ['--no-edit']
+        if edit_log_msg is None:
+            edit_log_msg = get_default_edit()
+
+        if edit_log_msg:
+            cmd += ['--edit']
+        else:
+            cmd += ['--no-edit']
 
         try:
             check_call(cmd)
