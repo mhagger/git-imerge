@@ -266,7 +266,7 @@ def get_default_edit():
     When 'git imerge continue' or 'git imerge record' finds a user
     merge that can be committed, should it (by default) ask the user
     to edit the commit message? This behavior can be configured via
-    'imerge.editmergemessages'. If it is not configured, return True.
+    'imerge.editmergemessages'. If it is not configured, return False.
 
     Please note that this function is only used to choose the default
     value. It can be overridden on the command line using '--edit' or
@@ -281,7 +281,7 @@ def get_default_edit():
                 ).rstrip()
             ]
     except CalledProcessError:
-        return True
+        return False
 
 
 class UncleanWorkTreeError(Failure):
