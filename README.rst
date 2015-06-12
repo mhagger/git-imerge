@@ -241,6 +241,25 @@ for combining the work done by two people in parallel on an
 incremental merge, so for now you'll just have to take turns.
 
 
+Interaction with ``git rerere``
+-------------------------------
+
+``git rerere`` is a nice tool that records how you resolve merge
+conflicts, and if it sees the same conflict again it tries to
+automatically reuse the same resolution.
+
+Since ``git-imerge`` attempts so many similar test merges, it is easy
+to imagine ``rerere`` getting confused. Moreover, ``git-imerge``
+relies on a merge resolving (or not resolving) consistently if it is
+carried out more than once. Having ``rerere`` store extra information
+behind the scenes could therefore confuse ``git-imerge``.
+
+Indeed, in testing it appeared that during incremental merges, the
+interation of ``git-imerge`` with ``rerere`` was sometimes causing
+merge conflicts to be resolved incorrectly. Therefore, ``git-imerge``
+explicitly turns rerere off temporarily whenever it invokes git.
+
+
 License
 =======
 
