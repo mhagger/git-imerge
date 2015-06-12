@@ -176,6 +176,21 @@ history by using either the ``finish`` or ``simplify`` command.  The
     intermediate merges and retain them all in the permanent history.
 
 
+Technical notes
+===============
+
+Suspending/resuming
+-------------------
+
+When ``git-merge`` needs to ask the user to do a merge manually, it
+creates a temporary branch ``refs/heads/imerge/NAME`` to hold the
+result. If you want to suspend an incremental merge to do something
+else before continuing, all you need to do is abort any pending merge
+using ``git merge --abort`` and switch to your other branch. When you
+are ready to resume the incremental merge, just type ``git imerge
+continue``.
+
+
 License
 =======
 
