@@ -2314,7 +2314,7 @@ class MergeState(Block):
         except ValueError:
             # refname doesn't already exist; simply point it at commit:
             check_call(['git', 'update-ref', refname, commit])
-            checkout(refname)
+            checkout(refname, quiet=True)
         else:
             # refname already exists.  This has two ramifications:
             # 1. HEAD might point at it
@@ -2338,7 +2338,7 @@ class MergeState(Block):
                     '-m', 'imerge: recording final merge',
                     refname, commit,
                     ])
-                checkout(refname)
+                checkout(refname, quiet=True)
 
     def simplify_to_full(self, refname, force=False):
         for i1 in range(1, self.len1):
