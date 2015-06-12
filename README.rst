@@ -52,9 +52,6 @@ even pushed to a server to allow somebody else to work on it.
 by copying ``git-imerge.bashcomplete`` to the place where usually completion
 scripts are installed on your system, e.g. /etc/bash_completion.d/.
 
-**git-imerge is experimental!  If it breaks, you get to keep the
-pieces.  Feedback and bug reports are welcome!**
-
 
 Requirements
 ============
@@ -77,6 +74,7 @@ Requirements
 * A recent version of Git.
 
 Bash completion requires Git's completion being available.
+
 
 Instructions
 ============
@@ -182,7 +180,8 @@ License
 =======
 
 ``git-imerge`` is released as open-source software under the GNU
-General Public License (GPL), version 2 or later.
+General Public License (GPL), version 2 or later. See file ``COPYING``
+for more information.
 
 
 References
