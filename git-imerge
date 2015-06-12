@@ -444,6 +444,54 @@ class NothingToDoError(Failure):
             )
 
 
+def linear_ancestry(commit1, commit2):
+    """Compute the linear ancestry between commit1 and commit2.
+
+    Compute what *should* be the output of
+
+        git --first-parent --ancestry-path commit1..commit2
+
+    if it worked correctly; i.e., the list of commits in the
+    first-parent chain going backwards from commit2 that are also
+    descendents of commit1. Return a list of SHA-1s in 'chronological'
+    order."""
+
+    ancestry_path = set(rev_list('--ancestry-path', '%s..%s' % (commit1, commit2)))
+    commits = [
+        sha1
+        for sha1 in rev_list('--first-parent', '%s..%s' % (commit1, commit2))
+        if sha1 in ancestry_path
+        ]
+    commits.reverse()
+    return commits
+
+
+def compute_best_merge_base(tip1, tip2):
+    try:
+        merge_bases = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
+    except CalledProcessError:
+        raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
+    if not merge_bases:
+        raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
+    if len(merge_bases) == 1:
+        return merge_bases[0]
+
+    # There are multiple merge bases. The "best" one is the one that
+    # is the "closest" to the tips, which we define to be the one with
+    # the fewest non-merge commits in "merge_base..tip". (It can be
+    # shown that the result is independent of which tip is used in the
+    # computation.)
+    best_base = best_count = None
+    for merge_base in merge_bases:
+        cmd = ['git', 'rev-list', '--no-merges', '--count', '%s..%s' % (merge_base, tip1)]
+        count = int(check_output(cmd).strip())
+        if best_base is None or count < best_count:
+            best_base = merge_base
+            best_count = count
+
+    return best_base
+
+
 def get_boundaries(tip1, tip2):
     """Get the boundaries of an incremental merge.
 
@@ -451,34 +499,13 @@ def get_boundaries(tip1, tip2):
     (merge_base, commits1, commits2) describing the edges of the
     imerge.  Raise Failure if there are any problems."""
 
-    try:
-        merge_base = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
-    except CalledProcessError:
-        raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
-    if not merge_base:
-        raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
-    if len(merge_base) > 1:
-        raise Failure('%r and %r do not have a unique merge base' % (tip1, tip2))
+    merge_base = compute_best_merge_base(tip1, tip2)
 
-    [merge_base] = merge_base
-
-    ancestry_path1 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip1)))
-    commits1 = [
-        sha1
-        for sha1 in rev_list('--first-parent', '%s..%s' % (merge_base, tip1))
-        if sha1 in ancestry_path1
-        ]
-    commits1.reverse()
+    commits1 = linear_ancestry(merge_base, tip1)
     if not commits1:
         raise NothingToDoError(tip1, tip2)
 
-    ancestry_path2 = set(rev_list('--ancestry-path', '%s..%s' % (merge_base, tip2)))
-    commits2 = [
-        sha1
-        for sha1 in rev_list('--first-parent', '%s..%s' % (merge_base, tip2))
-        if sha1 in ancestry_path2
-        ]
-    commits2.reverse()
+    commits2 = linear_ancestry(merge_base, tip2)
     if not commits2:
         raise NothingToDoError(tip2, tip1)
 
