@@ -25,7 +25,7 @@ git checkout c
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge0.html
 "$GIT_IMERGE" autofill || true
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge1.html
-"$GIT_IMERGE" continue
+"$GIT_IMERGE" continue --edit
 echo 'cd version' >conflict.txt
 git add conflict.txt
 "$GIT_IMERGE" continue --no-edit
@@ -41,7 +41,7 @@ git checkout c
 echo 'cd version' >conflict.txt
 git add conflict.txt
 GIT_EDITOR=cat git commit
-"$GIT_IMERGE" continue
+"$GIT_IMERGE" continue --edit
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge4.html
 "$GIT_IMERGE" finish --branch=c-d-full
 
