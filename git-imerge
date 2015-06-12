@@ -348,12 +348,16 @@ def get_tree(arg):
 BRANCH_PREFIX = 'refs/heads/'
 
 
-def checkout(refname):
+def checkout(refname, quiet=False):
+    cmd = ['git', 'checkout']
+    if quiet:
+        cmd += ['--quiet']
     if refname.startswith(BRANCH_PREFIX):
         target = refname[len(BRANCH_PREFIX):]
     else:
         target = '%s^0' % (refname,)
-    check_call(['git', 'checkout', target])
+    cmd += [target]
+    check_call(cmd)
 
 
 def get_commit_sha1(arg):
