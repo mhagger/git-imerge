@@ -52,9 +52,6 @@ even pushed to a server to allow somebody else to work on it.
 by copying ``git-imerge.bashcomplete`` to the place where usually completion
 scripts are installed on your system, e.g. /etc/bash_completion.d/.
 
-**git-imerge is experimental!  If it breaks, you get to keep the
-pieces.  Feedback and bug reports are welcome!**
-
 
 Requirements
 ============
@@ -77,6 +74,7 @@ Requirements
 * A recent version of Git.
 
 Bash completion requires Git's completion being available.
+
 
 Instructions
 ============
@@ -178,11 +176,96 @@ history by using either the ``finish`` or ``simplify`` command.  The
     intermediate merges and retain them all in the permanent history.
 
 
+Technical notes
+===============
+
+Suspending/resuming
+-------------------
+
+When ``git-merge`` needs to ask the user to do a merge manually, it
+creates a temporary branch ``refs/heads/imerge/NAME`` to hold the
+result. If you want to suspend an incremental merge to do something
+else before continuing, all you need to do is abort any pending merge
+using ``git merge --abort`` and switch to your other branch. When you
+are ready to resume the incremental merge, just type ``git imerge
+continue``.
+
+
+Storage
+-------
+
+``git-merge`` records all of the intermediate state about an
+incremental merge in the Git object database as a bunch of references
+under ``refs/imerge/NAME``, where ``NAME`` is the name of the imerge:
+
+* ``refs/imerge/NAME/state`` points to a blob that describes the
+  current state of the imerge in JSON format; for example,
+
+  * The tips of the two branches that are being merged
+
+  * The current "blocker" merges (merges that the user will have to do
+    by hand), if any
+
+  * The simplification goal
+
+  * The name of the branch to which the result will be written.
+
+* ``refs/imerge/NAME/manual/I-J`` and ``refs/imerge/NAME/auto/I-J``
+  refer to the manual and automatic merge commits, respectively, that
+  have been done so far as part of the incremental merge. ``I`` and
+  ``J`` are integers indicating the location ``(I,J)`` of the merge in
+  the incremental merge diagram.
+
+
+Transferring an in-progress imerge between repositories
+-------------------------------------------------------
+
+It might sometimes be convenient to transfer an in-progress
+incremental merge from one Git repository to another. For example, you
+might want to make a backup of the current state, or continue an
+imerge at home that you started at work, or ask a colleague to do a
+particular pairwise merge for you. Since all of the imerge state is
+stored in the Git object database, this can be done by
+pushing/fetching the references named in the previous section. For
+example, ::
+
+    git push --prune origin +refs/imerge/NAME/*:refs/imerge/NAME/*
+
+or ::
+
+    git fetch --prune origin +refs/imerge/NAME/*:refs/imerge/NAME/*
+
+Please note that these commands *overwrite* any state that already
+existed in the destination repository. There is currently no support
+for combining the work done by two people in parallel on an
+incremental merge, so for now you'll just have to take turns.
+
+
+Interaction with ``git rerere``
+-------------------------------
+
+``git rerere`` is a nice tool that records how you resolve merge
+conflicts, and if it sees the same conflict again it tries to
+automatically reuse the same resolution.
+
+Since ``git-imerge`` attempts so many similar test merges, it is easy
+to imagine ``rerere`` getting confused. Moreover, ``git-imerge``
+relies on a merge resolving (or not resolving) consistently if it is
+carried out more than once. Having ``rerere`` store extra information
+behind the scenes could therefore confuse ``git-imerge``.
+
+Indeed, in testing it appeared that during incremental merges, the
+interation of ``git-imerge`` with ``rerere`` was sometimes causing
+merge conflicts to be resolved incorrectly. Therefore, ``git-imerge``
+explicitly turns rerere off temporarily whenever it invokes git.
+
+
 License
 =======
 
 ``git-imerge`` is released as open-source software under the GNU
-General Public License (GPL), version 2 or later.
+General Public License (GPL), version 2 or later. See file ``COPYING``
+for more information.
 
 
 References
