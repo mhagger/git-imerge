@@ -255,7 +255,7 @@ carried out more than once. Having ``rerere`` store extra information
 behind the scenes could therefore confuse ``git-imerge``.
 
 Indeed, in testing it appeared that during incremental merges, the
-interation of ``git-imerge`` with ``rerere`` was sometimes causing
+interaction of ``git-imerge`` with ``rerere`` was sometimes causing
 merge conflicts to be resolved incorrectly. Therefore, ``git-imerge``
 explicitly turns rerere off temporarily whenever it invokes git.
 
