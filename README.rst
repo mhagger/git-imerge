@@ -182,7 +182,7 @@ Technical notes
 Suspending/resuming
 -------------------
 
-When ``git-merge`` needs to ask the user to do a merge manually, it
+When ``git-imerge`` needs to ask the user to do a merge manually, it
 creates a temporary branch ``refs/heads/imerge/NAME`` to hold the
 result. If you want to suspend an incremental merge to do something
 else before continuing, all you need to do is abort any pending merge
@@ -194,7 +194,7 @@ continue``.
 Storage
 -------
 
-``git-merge`` records all of the intermediate state about an
+``git-imerge`` records all of the intermediate state about an
 incremental merge in the Git object database as a bunch of references
 under ``refs/imerge/NAME``, where ``NAME`` is the name of the imerge:
 
