@@ -249,7 +249,11 @@ _git_imerge () {
 	# For example:
 	# words=(git imerge start master)
 	# command="start"
-	for ((i=0; i <= ${cword}; i++)); do
+	#
+	# Start looking at index 1 because the logic can be simpler when
+	# it assumes that "imerge" will always be in the position before
+	# the subcommand.
+	for ((i=1; i <= ${cword}; i++)); do
 		if [ -n "$command" ] && [ "${words[i]}" != "$cur" ]; then
 			cur_opt="${words[i]}"
 		fi
