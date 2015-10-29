@@ -139,8 +139,6 @@ class Failure(Exception):
 
         return wrapper
 
-    pass
-
 
 class AnsiColor:
     BLACK = '\033[0;30m'
