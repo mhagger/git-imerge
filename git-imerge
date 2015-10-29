@@ -1909,6 +1909,13 @@ class SubBlock(Block):
             )
 
 
+class MissingMergeFailure(Failure):
+    def __init__(self, i1, i2):
+        Failure.__init__(self, 'Merge %d-%d is not yet done' % (i1, i2))
+        self.i1 = i1
+        self.i2 = i2
+
+
 class MergeState(Block):
     SOURCE_TABLE = {
         'auto': MergeRecord.SAVED_AUTO,
@@ -2466,22 +2473,34 @@ class MergeState(Block):
 
         self._set_refname(refname, commit, force=force)
 
-    def simplify_to_rebase(self, refname, force=False):
-        i1 = self.len1 - 1
-        path = []
-        for i2 in range(1, self.len2):
-            record = self[i1, i2]
-            if not record.is_known():
-                raise Failure(
-                    'Cannot simplify to rebase because merge %d-%d is not yet done'
-                    % (i1, i2)
-                    )
-            path.append((record.sha1, self[0, i2].sha1))
+    def _simplify_to_path(self, refname, base, path, force=False):
+        """Simplify based on path and set refname to the result.
 
-        # A rebase simplification is allowed to discard history, as
-        # long as the *pre-simplification* apex commit is a descendant
-        # of the branch to be moved.
-        apex = self[-1, -1].sha1
+        The base and path arguments are defined similarly to
+        create_commit_chain(), except that instead of SHA-1s they
+        represent commits via (i1, i2) tuples.
+
+        """
+
+        base_sha1 = self[base].sha1
+        path_sha1 = []
+        for (commit, metadata) in path:
+            commit_record = self[commit]
+            if not commit_record.is_known():
+                raise MissingMergeFailure(*commit)
+            metadata_record = self[metadata]
+            if not metadata_record.is_known():
+                raise MissingMergeFailure(*metadata_record)
+            path_sha1.append((commit_record.sha1, metadata_record.sha1))
+
+        # A path simplification is allowed to discard history, as long
+        # as the *pre-simplification* apex commit is a descendant of
+        # the branch to be moved.
+        if path:
+            apex = path_sha1[-1][0]
+        else:
+            apex = base_sha1
+
         if not force and not is_ff(refname, apex):
             raise Failure(
                 '%s cannot be updated to %s without discarding history.\n'
@@ -2492,9 +2511,24 @@ class MergeState(Block):
         # The update is OK, so here we can set force=True:
         self._set_refname(
             refname,
-            create_commit_chain(self[i1, 0].sha1, path),
+            create_commit_chain(base_sha1, path_sha1),
             force=True,
             )
+
+    def simplify_to_rebase(self, refname, force=False):
+        i1 = self.len1 - 1
+        path = [
+            ((i1, i2), (0, i2))
+            for i2 in range(1, self.len2)
+            ]
+
+        try:
+            self._simplify_to_path(refname, (i1, 0), path, force=force)
+        except MissingMergeFailure as e:
+            raise Failure(
+                'Cannot simplify to rebase because merge %d-%d is not yet done'
+                % (e.i1, e.i2)
+                )
 
     def simplify_to_merge(self, refname, force=False):
         if not (-1, -1) in self:
