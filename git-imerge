@@ -576,6 +576,23 @@ class TemporaryHead(object):
         return False
 
 
+def is_ff(refname, commit):
+    """Would updating refname to commit be a fast-forward update?
+
+    Return True iff refname is not currently set or it points to an
+    ancestor of commit.
+
+    """
+
+    try:
+        ref_oldval = get_commit_sha1(refname)
+    except ValueError:
+        # refname doesn't already exist; no problem.
+        return True
+    else:
+        return MergeState._is_ancestor(ref_oldval, commit)
+
+
 def reparent(commit, parent_sha1s, msg=None):
     """Create a new commit object like commit, but with the specified parents.
 
@@ -2461,28 +2478,23 @@ class MergeState(Block):
                     )
             path.append((record.sha1, self[0, i2].sha1))
 
-        if not force:
-            # A rebase simplification is allowed to discard history,
-            # as long as the *pre-simplification* apex commit is a
-            # descendant of the branch to be moved.
-            try:
-                ref_oldval = get_commit_sha1(refname)
-            except ValueError:
-                # refname doesn't already exist; no problem.
-                pass
-            else:
-                commit = self[-1, -1].sha1
-                if not MergeState._is_ancestor(ref_oldval, commit):
-                    raise Failure(
-                        '%s is not an ancestor of %s; use --force if you are sure'
-                        % (commit, refname,)
-                        )
+        # A rebase simplification is allowed to discard history, as
+        # long as the *pre-simplification* apex commit is a descendant
+        # of the branch to be moved.
+        apex = self[-1, -1].sha1
+        if not force and not is_ff(refname, apex):
+            raise Failure(
+                '%s cannot be updated to %s without discarding history.\n'
+                'Use --force if you are sure, or choose a different reference'
+                % (refname, apex,)
+                )
 
-        commit = create_commit_chain(self[i1, 0].sha1, path)
-
-        # We checked above that the update is OK, so here we can set
-        # force=True:
-        self._set_refname(refname, commit, force=True)
+        # The update is OK, so here we can set force=True:
+        self._set_refname(
+            refname,
+            create_commit_chain(self[i1, 0].sha1, path),
+            force=True,
+            )
 
     def simplify_to_merge(self, refname, force=False):
         if not (-1, -1) in self:
