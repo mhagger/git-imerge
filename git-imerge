@@ -140,8 +140,6 @@ class Failure(Exception):
 
         return wrapper
 
-    pass
-
 
 class AnsiColor:
     BLACK = '\033[0;30m'
@@ -579,6 +577,23 @@ class TemporaryHead(object):
         return False
 
 
+def is_ff(refname, commit):
+    """Would updating refname to commit be a fast-forward update?
+
+    Return True iff refname is not currently set or it points to an
+    ancestor of commit.
+
+    """
+
+    try:
+        ref_oldval = get_commit_sha1(refname)
+    except ValueError:
+        # refname doesn't already exist; no problem.
+        return True
+    else:
+        return MergeState._is_ancestor(ref_oldval, commit)
+
+
 def reparent(commit, parent_sha1s, msg=None):
     """Create a new commit object like commit, but with the specified parents.
 
@@ -626,6 +641,53 @@ def reparent(commit, parent_sha1s, msg=None):
     if retcode:
         raise Failure('Could not reparent commit %s' % (commit,))
     return out.strip()
+
+
+def create_commit_chain(base, path):
+    """Point refname at the chain of commits indicated by path.
+
+    path is a list [(commit, metadata), ...]. Create a series of
+    commits corresponding to the entries in path. Each commit's tree
+    is taken from the corresponding old commit, and each commit's
+    metadata is taken from the corresponding metadata commit. Use base
+    as the parent of the first commit, or make the first commit a root
+    commit if base is None. Reuse existing commits from the list
+    whenever possible.
+
+    Return a commit object corresponding to the last commit in the
+    chain.
+
+    """
+
+    reusing = True
+    if base is None:
+        if not path:
+            raise ValueError('neither base nor path specified')
+        parents = []
+    else:
+        parents = [base]
+
+    for (commit, metadata) in path:
+        if reusing:
+            if commit == metadata and get_commit_parents(commit) == parents:
+                # We can reuse this commit, too.
+                parents = [commit]
+                continue
+            else:
+                reusing = False
+
+        # Create a commit, copying the old log message and author info
+        # from the metadata commit:
+        tree = get_tree(commit)
+        new_commit = commit_tree(
+            tree, parents,
+            msg=get_log_message(metadata),
+            metadata=get_author_info(metadata),
+            )
+        parents = [new_commit]
+
+    [commit] = parents
+    return commit
 
 
 class AutomaticMergeFailed(Exception):
@@ -1848,6 +1910,13 @@ class SubBlock(Block):
             )
 
 
+class MissingMergeFailure(Failure):
+    def __init__(self, i1, i2):
+        Failure.__init__(self, 'Merge %d-%d is not yet done' % (i1, i2))
+        self.i1 = i1
+        self.i2 = i2
+
+
 class MergeState(Block):
     SOURCE_TABLE = {
         'auto': MergeRecord.SAVED_AUTO,
@@ -2405,87 +2474,77 @@ class MergeState(Block):
 
         self._set_refname(refname, commit, force=force)
 
-    def simplify_to_rebase(self, refname, force=False):
-        i1 = self.len1 - 1
-        for i2 in range(1, self.len2):
-            if not (i1, i2) in self:
-                raise Failure(
-                    'Cannot simplify to rebase because merge %d-%d is not yet done'
-                    % (i1, i2)
-                    )
+    def _simplify_to_path(self, refname, base, path, force=False):
+        """Simplify based on path and set refname to the result.
 
-        if not force:
-            # A rebase simplification is allowed to discard history,
-            # as long as the *pre-simplification* apex commit is a
-            # descendant of the branch to be moved.
-            try:
-                ref_oldval = get_commit_sha1(refname)
-            except ValueError:
-                # refname doesn't already exist; no problem.
-                pass
-            else:
-                commit = self[-1, -1].sha1
-                if not MergeState._is_ancestor(ref_oldval, commit):
-                    raise Failure(
-                        '%s is not an ancestor of %s; use --force if you are sure'
-                        % (commit, refname,)
-                        )
+        The base and path arguments are defined similarly to
+        create_commit_chain(), except that instead of SHA-1s they
+        represent commits via (i1, i2) tuples.
 
-        commit = self[i1, 0].sha1
-        for i2 in range(1, self.len2):
-            orig = self[0, i2].sha1
-            tree = get_tree(self[i1, i2].sha1)
-            authordata = get_author_info(orig)
+        """
 
-            # Create a commit, copying the old log message and author info:
-            commit = commit_tree(
-                tree, [commit], msg=get_log_message(orig), metadata=authordata,
+        base_sha1 = self[base].sha1
+        path_sha1 = []
+        for (commit, metadata) in path:
+            commit_record = self[commit]
+            if not commit_record.is_known():
+                raise MissingMergeFailure(*commit)
+            metadata_record = self[metadata]
+            if not metadata_record.is_known():
+                raise MissingMergeFailure(*metadata_record)
+            path_sha1.append((commit_record.sha1, metadata_record.sha1))
+
+        # A path simplification is allowed to discard history, as long
+        # as the *pre-simplification* apex commit is a descendant of
+        # the branch to be moved.
+        if path:
+            apex = path_sha1[-1][0]
+        else:
+            apex = base_sha1
+
+        if not force and not is_ff(refname, apex):
+            raise Failure(
+                '%s cannot be updated to %s without discarding history.\n'
+                'Use --force if you are sure, or choose a different reference'
+                % (refname, apex,)
                 )
 
-        # We checked above that the update is OK, so here we can set
-        # force=True:
-        self._set_refname(refname, commit, force=True)
+        # The update is OK, so here we can set force=True:
+        self._set_refname(
+            refname,
+            create_commit_chain(base_sha1, path_sha1),
+            force=True,
+            )
+
+    def simplify_to_rebase(self, refname, force=False):
+        i1 = self.len1 - 1
+        path = [
+            ((i1, i2), (0, i2))
+            for i2 in range(1, self.len2)
+            ]
+
+        try:
+            self._simplify_to_path(refname, (i1, 0), path, force=force)
+        except MissingMergeFailure as e:
+            raise Failure(
+                'Cannot simplify to rebase because merge %d-%d is not yet done'
+                % (e.i1, e.i2)
+                )
 
     def simplify_to_rebase_reversed(self, refname, force=False):
         i2 = self.len2 - 1
-        for i1 in range(1, self.len1):
-            if not (i1, i2) in self:
-                raise Failure(
-                    'Cannot simplify to rebase because merge %d-%d is not yet done'
-                    % (i1, i2)
-                    )
+        path = [
+            ((i1, i2), (i1, 0))
+            for i1 in range(1, self.len1)
+            ]
 
-        if not force:
-            # A rebase simplification is allowed to discard history,
-            # as long as the *pre-simplification* apex commit is a
-            # descendant of the branch to be moved.
-            try:
-                ref_oldval = get_commit_sha1(refname)
-            except ValueError:
-                # refname doesn't already exist; no problem.
-                pass
-            else:
-                commit = self[-1, -1].sha1
-                if not MergeState._is_ancestor(ref_oldval, commit):
-                    raise Failure(
-                        '%s is not an ancestor of %s; use --force if you are sure'
-                        % (commit, refname,)
-                        )
-
-        commit = self[0, i2].sha1
-        for i1 in range(1, self.len1):
-            orig = self[i1, 0].sha1
-            tree = get_tree(self[i1, i2].sha1)
-            authordata = get_author_info(orig)
-
-            # Create a commit, copying the old log message and author info:
-            commit = commit_tree(
-                tree, [commit], msg=get_log_message(orig), metadata=authordata,
+        try:
+            self._simplify_to_path(refname, (0, i2), path, force=force)
+        except MissingMergeFailure as e:
+            raise Failure(
+                'Cannot simplify to rebase-reversed because merge %d-%d is not yet done'
+                % (e.i1, e.i2)
                 )
-
-        # We checked above that the update is OK, so here we can set
-        # force=True:
-        self._set_refname(refname, commit, force=True)
 
     def simplify_to_merge(self, refname, force=False):
         if not (-1, -1) in self:
