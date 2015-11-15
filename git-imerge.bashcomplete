@@ -244,7 +244,16 @@ _git_imerge () {
 	type compopt >/dev/null 2>&1 && compopt +o default +o bashdefault
 
 	local i command cur_opt
-	for ((i=0; i <= ${cword}; i++)); do
+
+	# find which git-imerge subcommand is on the line
+	# For example:
+	# words=(git imerge start master)
+	# command="start"
+	#
+	# Start looking at index 1 because the logic can be simpler when
+	# it assumes that "imerge" will always be in the position before
+	# the subcommand.
+	for ((i=1; i <= ${cword}; i++)); do
 		if [ -n "$command" ] && [ "${words[i]}" != "$cur" ]; then
 			cur_opt="${words[i]}"
 		fi
