@@ -23,6 +23,9 @@ $(module)/talk.html: $(module)/talk.rst
 
 install: $(BIN)
 	install $(BIN) $(PREFIX)/bin
+	@mkdir -p /etc/bash_completion.d
+	cp -f git-imerge.bashcomplete /etc/bash_completion.d/git-imerge
 
 uninstall:
 	rm $(PREFIX)/bin/$(BIN)
+	rm -f /etc/bash_completion.d/git-imerge
