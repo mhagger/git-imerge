@@ -28,5 +28,5 @@ install: $(BIN)
 	cp -f git-imerge.bashcomplete $(DESTDIR)/etc/bash_completion.d/git-imerge
 
 uninstall:
-	rm $(PREFIX)/bin/$(BIN)
-	rm -f /etc/bash_completion.d/git-imerge
+	rm $(DESTDIR)$(PREFIX)/bin/$(BIN)
+	rm -f $(DESTDIR)/etc/bash_completion.d/git-imerge
