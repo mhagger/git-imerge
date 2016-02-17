@@ -1,6 +1,6 @@
 
 BIN=git-imerge
-PREFIX=/usr/local
+PREFIX?=/usr/local
 
 RST := \
     README.rst \
