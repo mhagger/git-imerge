@@ -1,6 +1,6 @@
 
 BIN=git-imerge
-PREFIX=/usr/local
+PREFIX?=/usr/local
 
 RST := \
     README.rst \
@@ -22,10 +22,9 @@ $(module)/talk.html: $(module)/talk.rst
 	rst2s5 --theme=small-white --current-slide $< $@
 
 install: $(BIN)
-	install $(BIN) $(PREFIX)/bin
-	@mkdir -p /etc/bash_completion.d
-	cp -f git-imerge.bashcomplete /etc/bash_completion.d/git-imerge
+	install -Dm755 $(BIN) $(DESTDIR)$(PREFIX)/bin/$(BIN)
+	install -Dm644 git-imerge.bashcomplete $(DESTDIR)/etc/bash_completion.d/git-imerge
 
 uninstall:
-	rm $(PREFIX)/bin/$(BIN)
-	rm -f /etc/bash_completion.d/git-imerge
+	rm $(DESTDIR)$(PREFIX)/bin/$(BIN)
+	rm -f $(DESTDIR)/etc/bash_completion.d/git-imerge
