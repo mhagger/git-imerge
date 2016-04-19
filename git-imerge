@@ -418,10 +418,10 @@ def get_author_info(commit):
 
     Return a map {str : str}."""
 
-    a = check_output([
-        'git', '--no-pager', 'log', '-n1',
-        '--format=%an%x00%ae%x00%ai', commit
-        ]).strip().split('\x00')
+    a = map(
+        lambda fmt: check_output(['git', '--no-pager', 'log', '-n1', '--format=' + fmt, commit]).strip(),
+        ["%an", "%ae", "%ai"]
+        )
 
     return {
         'GIT_AUTHOR_NAME': env_encode(a[0]),
