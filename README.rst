@@ -104,7 +104,8 @@ where
     is the name for this merge (and also the default name of the
     branch to which the results will be saved).
 
-``GOAL`` describes how you want to simplify the results (see next
+``GOAL``
+    describes how you want to simplify the results (see next
     section).
 
 After the incremental merge is started, you will be presented with any
@@ -189,6 +190,11 @@ else before continuing, all you need to do is abort any pending merge
 using ``git merge --abort`` and switch to your other branch. When you
 are ready to resume the incremental merge, just type ``git imerge
 continue``.
+
+If you need to completely abort an in-progress incremental merge,
+first remove the temporary branches ``git-imerge`` creates using
+``git-imerge remove``, then checkout the branch you were in before you
+started the incremental merge with ``git checkout ORIGINAL_BRANCH``.
 
 
 Storage
