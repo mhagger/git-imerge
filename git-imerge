@@ -1066,9 +1066,7 @@ class MergeFrontier(object):
 
     def __init__(self, block, blocks=None):
         self.block = block
-        blocks = list(self._iter_non_empty_blocks(blocks or []))
-        blocks.sort(key=lambda block: block.len1)
-        self.blocks = list(self._iter_non_redundant_blocks(blocks))
+        self.blocks = self._normalized_blocks(blocks or [])
 
     def __iter__(self):
         """Iterate over blocks from bottom left to upper right."""
@@ -1266,34 +1264,43 @@ class MergeFrontier(object):
         f.write('</table>\n</body>\n</html>\n')
 
     @staticmethod
-    def _iter_non_empty_blocks(blocks):
-        for block in blocks:
-            if block.len1 > 1 and block.len2 > 1:
-                yield block
+    def _normalized_blocks(blocks):
+        """Return a normalized list of blocks from the argument.
 
-    @staticmethod
-    def _iter_non_redundant_blocks(blocks):
+        * Remove empty blocks.
+
+        * Remove redundant blocks.
+
+        * Sort the blocks according to their len1 members.
+
+        """
+
         def contains(block1, block2):
             """Return true if block1 contains block2."""
 
             return block1.len1 >= block2.len1 and block1.len2 >= block2.len2
 
-        i = iter(blocks)
-        try:
-            last = next(i)
-        except StopIteration:
-            return
+        blocks = sorted(blocks, key=lambda block: block.len1)
+        ret = []
 
-        for block in i:
-            if contains(last, block):
-                pass
-            elif contains(block, last):
-                last = block
-            else:
-                yield last
-                last = block
+        for block in blocks:
+            if block.len1 == 0 or block.len2 == 0:
+                continue
+            while True:
+                if not ret:
+                    ret.append(block)
+                    break
 
-        yield last
+                last = ret[-1]
+                if contains(last, block):
+                    break
+                elif contains(block, last):
+                    ret.pop()
+                else:
+                    ret.append(block)
+                    break
+
+        return ret
 
     def remove_failure(self, i1, i2):
         """Refine the merge frontier given that the specified merge fails."""
@@ -1312,7 +1319,7 @@ class MergeFrontier(object):
                 newblocks.append(block)
 
         if shrunk_block:
-            self.blocks = list(self._iter_non_redundant_blocks(newblocks))
+            self.blocks = self._normalized_blocks(newblocks)
 
     def partition(self, block):
         """Return two MergeFrontier instances partitioned by block.
