@@ -2570,6 +2570,37 @@ def request_user_merge(merge_state, i1, i2):
         )
 
 
+def commit_user_merge(merge_state, edit_log_msg=None):
+    """If there is staged content that is ready to be committed, do so.
+
+    If there is staged content that is ready to be committed, commit
+    it and return True; otherwise, return False."""
+
+    try:
+        check_call(['git', 'diff-index', '--cached', '--quiet', 'HEAD', '--'])
+        return False
+    except CalledProcessError:
+        pass
+
+    # There are staged changes; commit them if possible.
+    cmd = ['git', 'commit', '--no-verify']
+
+    if edit_log_msg is None:
+        edit_log_msg = get_default_edit()
+
+    if edit_log_msg:
+        cmd += ['--edit']
+    else:
+        cmd += ['--no-edit']
+
+    try:
+        check_call(cmd)
+    except CalledProcessError:
+        raise Failure('Could not commit staged changes.')
+
+    return True
+
+
 def incorporate_user_merge(merge_state, edit_log_msg=None):
     """If the user has done a merge for us, incorporate the results.
 
@@ -2641,30 +2672,12 @@ def incorporate_user_merge(merge_state, edit_log_msg=None):
     # If we reach this point, then the scratch reference exists and is
     # checked out.  Now check whether there is staged content that
     # can be committed:
-
-    merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-
-    try:
-        check_call(['git', 'diff-index', '--cached', '--quiet', 'HEAD', '--'])
-    except CalledProcessError:
-        # There are staged changes; commit them if possible.
-        cmd = ['git', 'commit', '--no-verify']
-
-        if edit_log_msg is None:
-            edit_log_msg = get_default_edit()
-
-        if edit_log_msg:
-            cmd += ['--edit']
-        else:
-            cmd += ['--no-edit']
-
-        try:
-            check_call(cmd)
-        except CalledProcessError:
-            raise Failure('Could not commit staged changes.')
+    if commit_user_merge(merge_state, edit_log_msg=edit_log_msg):
         commit = get_commit_sha1('HEAD')
 
     require_clean_work_tree('proceed')
+
+    merge_frontier = MergeFrontier.map_known_frontier(merge_state)
 
     # This might throw ManualMergeUnusableError:
     (i1, i2) = merge_state.incorporate_manual_merge(commit)
