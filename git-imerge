@@ -379,6 +379,18 @@ def rev_list(*args):
         ]
 
 
+git_dir_cache = None
+
+def git_dir():
+    global git_dir_cache
+
+    if git_dir_cache is None:
+        git_dir_cache = check_output(
+            ['git', 'rev-parse', '--git-dir']
+            ).rstrip('\n')
+    return git_dir_cache
+
+
 def get_type(arg):
     """Return the type of a git object ('commit', 'tree', 'blob', or 'tag')."""
 
@@ -2590,19 +2602,39 @@ def request_user_merge(merge_state, i1, i2):
         )
 
 
-def commit_user_merge(merge_state, edit_log_msg=None):
-    """If there is staged content that is ready to be committed, do so.
-
-    If there is staged content that is ready to be committed, commit
-    it and return True; otherwise, return False."""
-
+def simple_merge_in_progress():
+    # Check if a merge (of a single branch) is in progress:
     try:
-        check_call(['git', 'diff-index', '--cached', '--quiet', 'HEAD', '--'])
+        with open(os.path.join(git_dir(), 'MERGE_HEAD')) as f:
+            heads = [line.rstrip() for line in f]
+    except IOError:
         return False
-    except CalledProcessError:
-        pass
 
-    # There are staged changes; commit them if possible.
+    return len(heads) == 1
+
+
+def commit_user_merge(merge_state, edit_log_msg=None):
+    """If a merge is in progress and ready to be committed, commit it.
+
+    If a simple merge is in progress and any changes in the working
+    tree are staged, commit the merge commit and return True.
+    Otherwise, return False.
+
+    """
+
+    if not simple_merge_in_progress():
+        return False
+
+    # Check if all conflicts are resolved and everything in the
+    # working tree is staged:
+    refresh_index()
+    if unstaged_changes():
+        raise UncleanWorkTreeError(
+            'Cannot proceed: You have unstaged changes.' % (action,)
+            )
+
+    # A merge is in progress, and either all changes have been staged
+    # or no changes are necessary. Create a merge commit.
     cmd = ['git', 'commit', '--no-verify']
 
     if edit_log_msg is None:
