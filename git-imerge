@@ -418,10 +418,14 @@ def get_author_info(commit):
 
     Return a map {str : str}."""
 
+    # We use newlines as separators here because msysgit has problems
+    # with NUL characters; see
+    #
+    #     https://github.com/mhagger/git-imerge/pull/71
     a = check_output([
         'git', '--no-pager', 'log', '-n1',
-        '--format=%an%x00%ae%x00%ai', commit
-        ]).strip().split('\x00')
+        '--format=%an%n%ae%n%ai', commit
+        ]).strip().splitlines()
 
     return {
         'GIT_AUTHOR_NAME': env_encode(a[0]),
