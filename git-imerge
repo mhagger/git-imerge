@@ -309,6 +309,19 @@ def unstaged_changes():
         return True
 
 
+def uncommitted_changes():
+    """Return True iff the index contains uncommitted changes."""
+
+    try:
+        check_call([
+            'git', 'diff-index', '--cached', '--quiet',
+            '--ignore-submodules', 'HEAD', '--',
+            ])
+        return False
+    except CalledProcessError:
+        return True
+
+
 def require_clean_work_tree(action):
     """Verify that the current tree is clean.
 
@@ -330,12 +343,7 @@ def require_clean_work_tree(action):
     if unstaged_changes():
         error.append('Cannot %s: You have unstaged changes.' % (action,))
 
-    try:
-        check_call([
-            'git', 'diff-index', '--cached', '--quiet',
-            '--ignore-submodules', 'HEAD', '--',
-            ])
-    except CalledProcessError:
+    if uncommitted_changes():
         if not error:
             error.append('Cannot %s: Your index contains uncommitted changes.' % (action,))
         else:
