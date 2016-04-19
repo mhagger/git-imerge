@@ -299,6 +299,16 @@ def refresh_index():
         raise UncleanWorkTreeError(err.rstrip() or out.rstrip())
 
 
+def unstaged_changes():
+    """Return True iff there are unstaged changes in the working copy"""
+
+    try:
+        check_call(['git', 'diff-files', '--quiet', '--ignore-submodules'])
+        return False
+    except CalledProcessError:
+        return True
+
+
 def require_clean_work_tree(action):
     """Verify that the current tree is clean.
 
@@ -317,9 +327,7 @@ def require_clean_work_tree(action):
     refresh_index()
 
     error = []
-    try:
-        check_call(['git', 'diff-files', '--quiet', '--ignore-submodules'])
-    except CalledProcessError:
+    if unstaged_changes():
         error.append('Cannot %s: You have unstaged changes.' % (action,))
 
     try:
