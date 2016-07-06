@@ -918,6 +918,148 @@ class NotABlockingCommitError(Exception):
     pass
 
 
+def find_frontier_blocks(block):
+    """Iterate over the frontier blocks for the specified block.
+
+    Use bisection to find the blocks. Iterate over the blocks starting
+    in the bottom left and ending at the top right. Record in block
+    any blockers that we find.
+
+    We make the following assumptions (using Python subscript
+    notation):
+
+    0. All of the merges in block[1:,0] and block[0,1:] are
+       already known.  (This is an invariant of the Block class.)
+
+    1. If a direct merge can be done between block[i1-1,0] and
+       block[0,i2-1], then all of the pairwise merges in
+       block[1:i1, 1:i2] can also be done.
+
+    2. If a direct merge fails between block[i1-1,0] and
+       block[0,i2-1], then all of the pairwise merges in
+       block[i1-1:,i2-1:] would also fail.
+
+    Under these assumptions, the merge frontier is a stepstair
+    pattern going from the bottom-left to the top-right, and
+    bisection can be used to find the transition between mergeable
+    and conflicting in any row or column.
+
+    Of course these assumptions are not rigorously true, so the
+    MergeFrontier returned by this function is only an
+    approximation of the real merge diagram.  We check for and
+    correct such inconsistencies later.
+
+    """
+
+    # Given that these diagrams typically have few blocks, check
+    # the end of a range first to see if the whole range can be
+    # determined, and fall back to bisection otherwise.  We
+    # determine the frontier block by block, starting in the lower
+    # left.
+
+    if block.len1 <= 1 or block.len2 <= 1 or block.is_blocked(1, 1):
+        return
+
+    if block.is_mergeable(block.len1 - 1, block.len2 - 1):
+        # The whole block is mergable!
+        yield block
+        return
+
+    if not block.is_mergeable(1, 1):
+        # There are no mergeable blocks in block; therefore,
+        # block[1,1] must itself be unmergeable.  Record that
+        # fact:
+        block[1, 1].record_blocked(True)
+        return
+
+    # At this point, we know that there is at least one mergeable
+    # commit in the first column.  Find the height of the success
+    # block in column 1:
+    i1 = 1
+    i2 = find_first_false(
+        lambda i: block.is_mergeable(i1, i),
+        2, block.len2,
+        )
+
+    # Now we know that (1,i2-1) is mergeable but (1,i2) is not;
+    # e.g., (i1, i2) is like 'A' (or maybe 'B') in the following
+    # diagram (where '*' means mergeable, 'x' means not mergeable,
+    # and '?' means indeterminate) and that the merge under 'A' is
+    # not mergeable:
+    #
+    #          i1
+    #
+    #        0123456
+    #      0 *******
+    #      1 **?????
+    #  i2  2 **?????
+    #      3 **?????
+    #      4 *Axxxxx
+    #      5 *xxxxxx
+    #         B
+
+    while True:
+        if i2 == 1:
+            break
+
+        # At this point in the loop, we know that any blocks to
+        # the left of 'A' have already been recorded, (i1, i2-1)
+        # is mergeable but (i1, i2) is not; e.g., we are at a
+        # place like 'A' in the following diagram:
+        #
+        #          i1
+        #
+        #        0123456
+        #      0 **|****
+        #      1 **|*???
+        #  i2  2 **|*???
+        #      3 **|Axxx
+        #      4 --+xxxx
+        #      5 *xxxxxx
+        #
+        # This implies that (i1, i2) is the first unmergeable
+        # commit in a blocker block (though blocker blocks are not
+        # recorded explicitly).  It also implies that a mergeable
+        # block has its last mergeable commit somewhere in row
+        # i2-1; find its width.
+        if (
+                i1 == block.len1 - 1
+                or block.is_mergeable(block.len1 - 1, i2 - 1)
+                ):
+            yield block[:block.len1, :i2]
+            break
+        else:
+            i1 = find_first_false(
+                lambda i: block.is_mergeable(i, i2 - 1),
+                i1 + 1, block.len1 - 1,
+                )
+            yield block[:i1, :i2]
+
+        # At this point in the loop, (i1-1, i2-1) is mergeable but
+        # (i1, i2-1) is not; e.g., 'A' in the following diagram:
+        #
+        #          i1
+        #
+        #        0123456
+        #      0 **|*|**
+        #      1 **|*|??
+        #  i2  2 --+-+xx
+        #      3 **|xxAx
+        #      4 --+xxxx
+        #      5 *xxxxxx
+        #
+        # The block ending at (i1-1,i2-1) has just been recorded.
+        # Now find the height of the conflict rectangle at column
+        # i1 and fill it in:
+        if i2 - 1 == 1 or not block.is_mergeable(i1, 1):
+            break
+        else:
+            i2 = find_first_false(
+                lambda i: block.is_mergeable(i1, i),
+                2, i2 - 1,
+                )
+
+
 class MergeFrontier(object):
     """Represents the merge frontier within a Block.
 
@@ -1027,140 +1169,12 @@ class MergeFrontier(object):
     def compute_by_bisection(block):
         """Return a MergeFrontier instance for block.
 
-        We make the following assumptions (using Python subscript
-        notation):
+        Compute the blocks making up the boundary using bisection. See
+        find_frontier_blocks() for more information.
 
-        0. All of the merges in block[1:,0] and block[0,1:] are
-           already known.  (This is an invariant of the Block class.)
+        """
 
-        1. If a direct merge can be done between block[i1-1,0] and
-           block[0,i2-1], then all of the pairwise merges in
-           block[1:i1, 1:i2] can also be done.
-
-        2. If a direct merge fails between block[i1-1,0] and
-           block[0,i2-1], then all of the pairwise merges in
-           block[i1-1:,i2-1:] would also fail.
-
-        Under these assumptions, the merge frontier is a stepstair
-        pattern going from the bottom-left to the top-right, and
-        bisection can be used to find the transition between mergeable
-        and conflicting in any row or column.
-
-        Of course these assumptions are not rigorously true, so the
-        MergeFrontier returned by this function is only an
-        approximation of the real merge diagram.  We check for and
-        correct such inconsistencies later."""
-
-        # Given that these diagrams typically have few blocks, check
-        # the end of a range first to see if the whole range can be
-        # determined, and fall back to bisection otherwise.  We
-        # determine the frontier block by block, starting in the lower
-        # left.
-
-        if block.len1 <= 1 or block.len2 <= 1 or block.is_blocked(1, 1):
-            return MergeFrontier(block, [])
-
-        if block.is_mergeable(block.len1 - 1, block.len2 - 1):
-            # The whole block is mergable!
-            return MergeFrontier(block, [block])
-
-        if not block.is_mergeable(1, 1):
-            # There are no mergeable blocks in block; therefore,
-            # block[1,1] must itself be unmergeable.  Record that
-            # fact:
-            block[1, 1].record_blocked(True)
-            return MergeFrontier(block, [])
-
-        blocks = []
-
-        # At this point, we know that there is at least one mergeable
-        # commit in the first column.  Find the height of the success
-        # block in column 1:
-        i1 = 1
-        i2 = find_first_false(
-            lambda i: block.is_mergeable(i1, i),
-            2, block.len2,
-            )
-
-        # Now we know that (1,i2-1) is mergeable but (1,i2) is not;
-        # e.g., (i1, i2) is like 'A' (or maybe 'B') in the following
-        # diagram (where '*' means mergeable, 'x' means not mergeable,
-        # and '?' means indeterminate) and that the merge under 'A' is
-        # not mergeable:
-        #
-        #          i1
-        #
-        #        0123456
-        #      0 *******
-        #      1 **?????
-        #  i2  2 **?????
-        #      3 **?????
-        #      4 *Axxxxx
-        #      5 *xxxxxx
-        #         B
-
-        while True:
-            if i2 == 1:
-                break
-
-            # At this point in the loop, we know that any blocks to
-            # the left of 'A' have already been recorded, (i1, i2-1)
-            # is mergeable but (i1, i2) is not; e.g., we are at a
-            # place like 'A' in the following diagram:
-            #
-            #          i1
-            #
-            #        0123456
-            #      0 **|****
-            #      1 **|*???
-            #  i2  2 **|*???
-            #      3 **|Axxx
-            #      4 --+xxxx
-            #      5 *xxxxxx
-            #
-            # This implies that (i1, i2) is the first unmergeable
-            # commit in a blocker block (though blocker blocks are not
-            # recorded explicitly).  It also implies that a mergeable
-            # block has its last mergeable commit somewhere in row
-            # i2-1; find its width.
-            if (
-                    i1 == block.len1 - 1
-                    or block.is_mergeable(block.len1 - 1, i2 - 1)
-                    ):
-                blocks.append(block[:block.len1, :i2])
-                break
-            else:
-                i1 = find_first_false(
-                    lambda i: block.is_mergeable(i, i2 - 1),
-                    i1 + 1, block.len1 - 1,
-                    )
-                blocks.append(block[:i1, :i2])
-
-            # At this point in the loop, (i1-1, i2-1) is mergeable but
-            # (i1, i2-1) is not; e.g., 'A' in the following diagram:
-            #
-            #          i1
-            #
-            #        0123456
-            #      0 **|*|**
-            #      1 **|*|??
-            #  i2  2 --+-+xx
-            #      3 **|xxAx
-            #      4 --+xxxx
-            #      5 *xxxxxx
-            #
-            # The block ending at (i1-1,i2-1) has just been recorded.
-            # Now find the height of the conflict rectangle at column
-            # i1 and fill it in:
-            if i2 - 1 == 1 or not block.is_mergeable(i1, 1):
-                break
-            else:
-                i2 = find_first_false(
-                    lambda i: block.is_mergeable(i1, i),
-                    2, i2 - 1,
-                    )
-
-        return MergeFrontier(block, blocks)
+        return MergeFrontier(block, list(find_frontier_blocks(block)))
 
     def __init__(self, block, blocks=None):
         self.block = block
