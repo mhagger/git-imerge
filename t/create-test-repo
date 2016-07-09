@@ -12,7 +12,7 @@ modify() {
 }
 
 BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
-TMP="$BASE/t/tmp"
+TMP="$BASE/t/tmp/main"
 
 if test -d "$TMP"
 then
@@ -81,4 +81,4 @@ done
 
 git checkout master --
 
-ln -s ../../imerge.css
+ln -s "$BASE/imerge.css" .
