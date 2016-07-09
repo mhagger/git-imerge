@@ -2139,7 +2139,8 @@ class MergeState(Block):
             name, merge_base,
             tip1, commits1,
             tip2, commits2,
-            goal=DEFAULT_GOAL, manual=False, branch=None,
+            goal=DEFAULT_GOAL, goalopts=None,
+            manual=False, branch=None,
             ):
         """Create and return a new MergeState object."""
 
@@ -2160,7 +2161,7 @@ class MergeState(Block):
             tip1, commits1,
             tip2, commits2,
             MergeRecord.NEW_MANUAL,
-            goal=goal,
+            goal=goal, goalopts=goalopts,
             manual=manual,
             branch=branch,
             )
@@ -2267,6 +2268,8 @@ class MergeState(Block):
         if goal not in ALLOWED_GOALS:
             raise Failure('Goal %r, read from state, is not recognized.' % (goal,))
 
+        goalopts = state['goalopts']
+
         manual = state['manual']
         branch = state.get('branch', name)
 
@@ -2275,7 +2278,7 @@ class MergeState(Block):
             tip1, commits1,
             tip2, commits2,
             MergeRecord.SAVED_MANUAL,
-            goal=goal,
+            goal=goal, goalopts=goalopts,
             manual=manual,
             branch=branch,
             )
@@ -2354,7 +2357,7 @@ class MergeState(Block):
             tip1, commits1,
             tip2, commits2,
             source,
-            goal=DEFAULT_GOAL,
+            goal=DEFAULT_GOAL, goalopts=None,
             manual=False,
             branch=None,
             ):
@@ -2362,6 +2365,7 @@ class MergeState(Block):
         self.tip1 = tip1
         self.tip2 = tip2
         self.goal = goal
+        self.goalopts = goalopts
         self.manual = bool(manual)
         self.branch = branch or name
 
