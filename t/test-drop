@@ -37,8 +37,15 @@ done
 
 ln -s "$BASE/imerge.css" .
 
-git checkout -b less
+git checkout -b dropped master
 "$GIT_IMERGE" drop HEAD~5..HEAD~3
-"$GIT_IMERGE" diagram --commits --frontier --html=imerge1.html
+"$GIT_IMERGE" diagram --commits --frontier --html=imerge-drop.html
 "$GIT_IMERGE" finish
+
+git checkout -b reverted master
+"$GIT_IMERGE" revert HEAD~5..HEAD~3
+"$GIT_IMERGE" diagram --commits --frontier --html=imerge-revert.html
+"$GIT_IMERGE" finish
+
+git diff dropped reverted
 
