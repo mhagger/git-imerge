@@ -123,21 +123,7 @@ class Failure(Exception):
     Failures are reported at top level via sys.exit(str(e)) rather
     than via a Python stack dump."""
 
-    @classmethod
-    def wrap(klass, f):
-        """Wrap a function inside a try...except that catches this error.
-
-        If the exception is thrown, call sys.exit().  This function
-        can be used as a decorator."""
-
-        @functools.wraps(f)
-        def wrapper(*args, **kw):
-            try:
-                return f(*args, **kw)
-            except klass as e:
-                sys.exit(str(e))
-
-        return wrapper
+    pass
 
 
 class AnsiColor:
@@ -2958,7 +2944,6 @@ def read_merge_state(name=None, default_to_unique=True):
     return MergeState.read(choose_merge_name(name, default_to_unique=default_to_unique))
 
 
-@Failure.wrap
 def main(args):
     NAME_INIT_HELP = 'name to use for this incremental merge'
 
@@ -3559,6 +3544,11 @@ def main(args):
         parser.error('Unrecognized subcommand')
 
 
-main(sys.argv[1:])
+if __name__ == '__main__':
+    try:
+        main(sys.argv[1:])
+    except Failure as e:
+        sys.exit(str(e))
+
 
 # vim: set expandtab ft=python:
