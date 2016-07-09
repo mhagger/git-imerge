@@ -1,0 +1,44 @@
+#! /bin/sh
+
+# This should be executed in a clean working copy of the test repo.
+
+set -e
+
+DESCRIPTION="git-imerge drop test repository"
+
+modify() {
+    filename="$1"
+    text="$2"
+    echo "$text" >"$filename" &&
+    git add "$filename"
+}
+
+BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
+TMP="$BASE/t/tmp/drop"
+GIT_IMERGE="$BASE/git-imerge"
+
+rm -rf "$TMP"
+mkdir -p "$TMP"
+cd "$TMP"
+
+git init
+echo "$DESCRIPTION" >.git/description
+git config user.name 'Loú User'
+git config user.email 'luser@example.com'
+
+modify a.txt 0
+git commit -m 'm⇒0'
+
+for i in $(seq 6)
+do
+    modify a$i.txt $i
+    git commit -m "a$i⇒$i"
+done
+
+ln -s "$BASE/imerge.css" .
+
+git checkout -b less
+"$GIT_IMERGE" drop HEAD~5..HEAD~3
+"$GIT_IMERGE" diagram --commits --frontier --html=imerge1.html
+"$GIT_IMERGE" finish
+

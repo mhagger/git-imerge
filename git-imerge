@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
 
 # Copyright 2012-2013 Michael Haggerty <mhagger@alum.mit.edu>
 #
@@ -38,9 +39,17 @@ Instructions:
 To start an incremental merge or rebase, use one of the following
 commands:
 
-    git-imerge merge BRANCH      # analogous to "git merge BRANCH"
-    git-imerge rebase BRANCH     # analogous to "git rebase BRANCH"
-    git-imerge start --name=NAME --goal=GOAL [--first-parent] BRANCH
+    git-imerge merge BRANCH
+        Analogous to "git merge BRANCH"
+
+    git-imerge rebase BRANCH
+        Analogous to "git rebase BRANCH"
+
+    git-imerge drop [commit | commit1..commit2]
+        Drop the specified commit(s) from the current branch
+
+    git-imerge start --name=NAME --goal=GOAL BRANCH
+        Start a general imerge
 
 Then the tool will present conflicts to you one at a time, similar to
 "git rebase --incremental".  Resolve each conflict, and then
@@ -113,6 +122,7 @@ ALLOWED_GOALS = [
     'rebase-with-history',
     'rebase',
     'merge',
+    'drop',
     ]
 DEFAULT_GOAL = 'merge'
 
@@ -2632,6 +2642,26 @@ class MergeState(Block):
                 % (e.i1, e.i2)
                 )
 
+    def simplify_to_drop(self, refname, force=False):
+        try:
+            base = self.goalopts['base']
+        except KeyError:
+            raise Failure('Goal "drop" was not initialized correctly')
+
+        i2 = self.len2 - 1
+        path = [
+            ((i1, i2), (i1, 0))
+            for i1 in range(1, self.len1)
+            ]
+
+        try:
+            self._simplify_to_path(refname, base, path, force=force)
+        except MissingMergeFailure as e:
+            raise Failure(
+                'Cannot simplify to rebase because merge %d-%d is not yet done'
+                % (e.i1, e.i2)
+                )
+
     def simplify_to_merge(self, refname, force=False):
         if not (-1, -1) in self:
             raise Failure(
@@ -2663,6 +2693,8 @@ class MergeState(Block):
             self.simplify_to_rebase_with_history(refname, force=force)
         elif self.goal == 'rebase':
             self.simplify_to_rebase(refname, force=force)
+        elif self.goal == 'drop':
+            self.simplify_to_drop(refname, force=force)
         elif self.goal == 'merge':
             self.simplify_to_merge(refname, force=force)
         else:
@@ -2685,6 +2717,7 @@ class MergeState(Block):
             blockers=blockers,
             tip1=self.tip1, tip2=self.tip2,
             goal=self.goal,
+            goalopts=self.goalopts,
             manual=self.manual,
             branch=self.branch,
             )
@@ -3177,6 +3210,128 @@ def cmd_rebase(parser, options):
         sys.stderr.write('Merge is complete!\n')
 
 
+def cmd_drop(parser, options):
+    require_clean_work_tree('proceed')
+
+    m = re.match(r'^(?P<start>.*[^\.])(?P<sep>\.{2,})(?P<end>[^\.].*)$', options.range)
+    if m:
+        if m.group('sep') != '..':
+            parser.error(
+                'Range must either be a single commit '
+                'or in the form "commit..commit"'
+                )
+        start = rev_parse(m.group('start'))
+        end = rev_parse(m.group('end'))
+    else:
+        end = rev_parse(options.range)
+        start = rev_parse('%s^' % (end,))
+
+    try:
+        to_drop = linear_ancestry(start, end, options.first_parent)
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+
+    # Suppose we want to drop commits 2 and 3 in the branch below.
+    # Then we set up an imerge as follows:
+    #
+    #     o - 0 - 1 - 2 - 3 - 4 - 5 - 6    ← tip1
+    #                     |
+    #                     3⁻¹
+    #                     |
+    #                     2⁻¹
+    #
+    #                     ↑
+    #                    tip2
+    #
+    # We first use imerge to rebase tip1 onto tip2, then we simplify
+    # by discarding the sequence (2, 3, 3⁻¹, 2⁻¹) (which together are
+    # a NOOP). In this case, goalopts would have the following
+    # contents:
+    #
+    #     goalopts['base'] = rev_parse(commit1)
+
+    try:
+        tip1 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+        if not options.branch:
+            # See if we can store the result to the current branch:
+            try:
+                check_branch_name_format(tip1)
+            except InvalidBranchNameError:
+                pass
+            else:
+                options.branch = tip1
+        if not options.name:
+            # By default, name the imerge after the branch being rebased:
+            options.name = tip1
+
+    except CalledProcessError:
+        tip1 = rev_parse('HEAD')
+
+    if not options.name:
+        parser.error(
+            'The checked-out branch could not be used as the imerge name.\n'
+            'Please use the --name option.'
+            )
+
+    if not options.branch:
+        if options.name:
+            options.branch = options.name
+        else:
+            parser.error(
+                'HEAD is not a simple branch.  '
+                'Please specify --branch for storing results.'
+                )
+
+    # Create a branch based on end that contains the inverse of the
+    # commits that we want to drop. This will be tip2:
+
+    checkout(end)
+    for commit in reversed(to_drop):
+        cmd = ['git', 'revert', '--no-edit']
+        if len(get_commit_parents(commit)) > 1:
+            cmd += ['-m', '1']
+        cmd += [commit]
+        check_call(cmd)
+
+    tip2 = rev_parse('HEAD')
+
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+    except NothingToDoError as e:
+        sys.stdout.write('Already up-to-date.\n')
+        sys.exit(0)
+
+    merge_state = MergeState.initialize(
+        options.name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal='drop', goalopts={'base' : start},
+        manual=options.manual,
+        branch=options.branch,
+        )
+    merge_state.save()
+    MergeState.set_default_name(options.name)
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
 def cmd_remove(parser, options):
     MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
 
@@ -3429,6 +3584,21 @@ def main(args):
         )
 
     subparser = subparsers.add_parser(
+        'drop',
+        help='drop one or more commits via incremental merge',
+        )
+    add_name_argument(subparser, help=NAME_INIT_HELP)
+    add_branch_argument(subparser)
+    add_manual_argument(subparser)
+    add_first_parent_argument(subparser, default=True)
+    subparser.add_argument(
+        'range', action='store', metavar='[commit | commit..commit]',
+        help=(
+            'the commit or range of commits that should be dropped'
+            ),
+        )
+
+    subparser = subparsers.add_parser(
         'continue',
         help=(
             'record the merge at branch imerge/NAME '
@@ -3585,6 +3755,8 @@ def main(args):
         cmd_merge(parser, options)
     elif options.subcommand == 'rebase':
         cmd_rebase(parser, options)
+    elif options.subcommand == 'drop':
+        cmd_drop(parser, options)
     elif options.subcommand == 'remove':
         cmd_remove(parser, options)
     elif options.subcommand == 'continue':
