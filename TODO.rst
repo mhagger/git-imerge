@@ -30,17 +30,11 @@ Convenience features
   manual merge conflicts into suggested log messages for the
   simplified commits.
 
-* Maybe remember the names of the two original branches for use in log
-  messages etc.  (Should they be stored locally in ``git config`` or
-  shareably in the state blob?)
-
 * Allow the user to specify which conflict he would like to resolve
   next, and set it up for him.
 
 * Allow the user to block certain merges, meaning that they should
   never be skipped over or merged automatically.
-
-* Think about where to leave HEAD in the various scenarios.
 
 * Add a ``git imerge pause`` that puts an imerge on hold and resets
   the working copy to a reasonable state.

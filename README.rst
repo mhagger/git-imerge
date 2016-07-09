@@ -86,15 +86,19 @@ commands that are similar to the corresponding ``git`` commands:
    :widths: 50 50
    :header-rows: 1
 
-   * - ``git`` command
-     - ``git-imerge`` equivalent
-   * - ``git merge BRANCH``
-     - ``git-imerge merge BRANCH``
-   * - ``git rebase BRANCH``
-     - ``git-imerge rebase BRANCH``
+   * - ``git-imerge`` command
+     - ``git`` analogue
+   * - ``git-imerge merge BRANCH``
+     - ``git merge BRANCH``
+   * - ``git-imerge rebase BRANCH``
+     - ``git rebase BRANCH``
+   * - ``git-imerge drop COMMIT``
+     - ``git rebase --interactive``
+   * - ``git-imerge revert COMMIT``
+     - ``git revert COMMIT``
 
-For more flexibility, you can start an incremental merge using ``git
-imerge start``::
+A few more options are available if you start the incremental merge
+using ``git imerge start``::
 
     git-imerge start --name=NAME --goal=GOAL [--first-parent] BRANCH
 
