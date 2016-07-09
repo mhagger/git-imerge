@@ -2944,6 +2944,359 @@ def read_merge_state(name=None, default_to_unique=True):
     return MergeState.read(choose_merge_name(name, default_to_unique=default_to_unique))
 
 
+def cmd_list(parser, options):
+    default_merge = MergeState.get_default_name()
+    for name in MergeState.iter_existing_names():
+        if name == default_merge:
+            sys.stdout.write('* %s\n' % (name,))
+        else:
+            sys.stdout.write('  %s\n' % (name,))
+
+
+def cmd_init(parser, options):
+    require_clean_work_tree('proceed')
+
+    if not options.name:
+        parser.error(
+            'Please specify the --name to be used for this incremental merge'
+            )
+    try:
+        tip1 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+    except CalledProcessError:
+        tip1 = 'HEAD'
+    tip2 = options.tip2
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+
+    merge_state = MergeState.initialize(
+        options.name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal=options.goal, manual=options.manual,
+        branch=(options.branch or options.name),
+        )
+    merge_state.save()
+    MergeState.set_default_name(options.name)
+
+
+def cmd_start(parser, options):
+    require_clean_work_tree('proceed')
+
+    if not options.name:
+        parser.error(
+            'Please specify the --name to be used for this incremental merge'
+            )
+    try:
+        tip1 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+    except CalledProcessError:
+        tip1 = 'HEAD'
+    tip2 = options.tip2
+
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+
+    merge_state = MergeState.initialize(
+        options.name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal=options.goal, manual=options.manual,
+        branch=(options.branch or options.name),
+        )
+    merge_state.save()
+    MergeState.set_default_name(options.name)
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_merge(parser, options):
+    require_clean_work_tree('proceed')
+
+    tip2 = options.tip2
+
+    if options.name:
+        name = options.name
+    else:
+        # By default, name the imerge after the branch being merged:
+        name = tip2
+        MergeState.check_name_format(name)
+
+    try:
+        tip1 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+        if not options.branch:
+            # See if we can store the result to the checked-out branch:
+            try:
+                check_branch_name_format(tip1)
+            except InvalidBranchNameError:
+                pass
+            else:
+                options.branch = tip1
+    except CalledProcessError:
+        tip1 = 'HEAD'
+
+    if not options.branch:
+        if options.name:
+            options.branch = options.name
+        else:
+            parser.error(
+                'HEAD is not a simple branch.  '
+                'Please specify --branch for storing results.'
+                )
+
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+    except NothingToDoError as e:
+        sys.stdout.write('Already up-to-date.\n')
+        sys.exit(0)
+
+    merge_state = MergeState.initialize(
+        name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal=options.goal, manual=options.manual,
+        branch=options.branch,
+        )
+    merge_state.save()
+    MergeState.set_default_name(name)
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_rebase(parser, options):
+    require_clean_work_tree('proceed')
+
+    tip1 = options.tip1
+
+    try:
+        tip2 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+        if not options.branch:
+            # See if we can store the result to the current branch:
+            try:
+                check_branch_name_format(tip2)
+            except InvalidBranchNameError:
+                pass
+            else:
+                options.branch = tip2
+        if not options.name:
+            # By default, name the imerge after the branch being rebased:
+            options.name = tip2
+
+    except CalledProcessError:
+        tip2 = rev_parse('HEAD')
+
+    if not options.name:
+        parser.error(
+            'The checked-out branch could not be used as the imerge name.\n'
+            'Please use the --name option.'
+            )
+
+    if not options.branch:
+        if options.name:
+            options.branch = options.name
+        else:
+            parser.error(
+                'HEAD is not a simple branch.  '
+                'Please specify --branch for storing results.'
+                )
+
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+    except NothingToDoError as e:
+        sys.stdout.write('Already up-to-date.\n')
+        sys.exit(0)
+
+    merge_state = MergeState.initialize(
+        options.name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal=options.goal, manual=options.manual,
+        branch=options.branch,
+        )
+    merge_state.save()
+    MergeState.set_default_name(options.name)
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_remove(parser, options):
+    MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
+
+
+def cmd_continue(parser, options):
+    merge_state = read_merge_state(options.name)
+    try:
+        incorporate_user_merge(merge_state, edit_log_msg=options.edit)
+    except NoManualMergeError:
+        pass
+    except NotABlockingCommitError as e:
+        raise Failure(str(e))
+    except ManualMergeUnusableError as e:
+        raise Failure(str(e))
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_record(parser, options):
+    merge_state = read_merge_state(options.name)
+    try:
+        incorporate_user_merge(merge_state, edit_log_msg=options.edit)
+    except NoManualMergeError as e:
+        raise Failure(str(e))
+    except NotABlockingCommitError:
+        raise Failure(str(e))
+    except ManualMergeUnusableError as e:
+        raise Failure(str(e))
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        pass
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_autofill(parser, options):
+    require_clean_work_tree('proceed')
+    merge_state = read_merge_state(options.name)
+    with TemporaryHead():
+        try:
+            merge_state.auto_complete_frontier()
+        except FrontierBlockedError as e:
+            raise Failure(str(e))
+
+
+def cmd_simplify(parser, options):
+    require_clean_work_tree('proceed')
+    merge_state = read_merge_state(options.name)
+    merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+    if not merge_frontier.is_complete():
+        raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
+    refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
+    if options.goal is not None:
+        merge_state.set_goal(options.goal)
+        merge_state.save()
+    merge_state.simplify(refname, force=options.force)
+
+
+def cmd_finish(parser, options):
+    require_clean_work_tree('proceed')
+    merge_state = read_merge_state(options.name, default_to_unique=False)
+    merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+    if not merge_frontier.is_complete():
+        raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
+    refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
+    if options.goal is not None:
+        merge_state.set_goal(options.goal)
+        merge_state.save()
+    merge_state.simplify(refname, force=options.force)
+    MergeState.remove(merge_state.name)
+
+
+def cmd_diagram(parser, options):
+    if not (options.commits or options.frontier):
+        options.frontier = True
+    if not (options.color or (options.color is None and sys.stdout.isatty())):
+        AnsiColor.disable()
+
+    merge_state = read_merge_state(options.name)
+    if options.commits:
+        merge_state.write(sys.stdout)
+        sys.stdout.write('\n')
+    if options.frontier:
+        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+        merge_frontier.write(sys.stdout)
+        sys.stdout.write('\n')
+    if options.html:
+        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+        html = open(options.html, 'w')
+        merge_frontier.write_html(html, merge_state.name)
+        html.close()
+    sys.stdout.write(
+        'Key:\n'
+        )
+    if options.frontier:
+        sys.stdout.write(
+            '  |,-,+ = rectangles forming current merge frontier\n'
+            )
+    sys.stdout.write(
+        '  * = merge done manually\n'
+        '  . = merge done automatically\n'
+        '  # = conflict that is currently blocking progress\n'
+        '  @ = merge was blocked but has been resolved\n'
+        '  ? = no merge recorded\n'
+        '\n'
+        )
+
+
+def cmd_reparent(parser, options):
+    try:
+        commit_sha1 = get_commit_sha1('HEAD')
+    except ValueError:
+        sys.exit('HEAD is not a valid commit')
+
+    try:
+        parent_sha1s = [get_commit_sha1(p) for p in options.parents]
+    except ValueError as e:
+        sys.exit(e.message)
+
+    sys.stdout.write('%s\n' % (reparent(commit_sha1, parent_sha1s),))
+
+
 def main(args):
     NAME_INIT_HELP = 'name to use for this incremental merge'
 
@@ -3214,332 +3567,31 @@ def main(args):
     os.environ[str('GIT_IMERGE')] = str('1')
 
     if options.subcommand == 'list':
-        default_merge = MergeState.get_default_name()
-        for name in MergeState.iter_existing_names():
-            if name == default_merge:
-                sys.stdout.write('* %s\n' % (name,))
-            else:
-                sys.stdout.write('  %s\n' % (name,))
+        cmd_list(parser, options)
     elif options.subcommand == 'init':
-        require_clean_work_tree('proceed')
-
-        if not options.name:
-            parser.error(
-                'Please specify the --name to be used for this incremental merge'
-                )
-        try:
-            tip1 = check_output(
-                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-                ).strip()
-        except CalledProcessError:
-            tip1 = 'HEAD'
-        tip2 = options.tip2
-        try:
-            (merge_base, commits1, commits2) = get_boundaries(
-                tip1, tip2, options.first_parent,
-                )
-        except NonlinearAncestryError as e:
-            if options.first_parent:
-                parser.error(str(e))
-            else:
-                parser.error('%s\nPerhaps use "--first-parent"?', e)
-
-        merge_state = MergeState.initialize(
-            options.name, merge_base,
-            tip1, commits1,
-            tip2, commits2,
-            goal=options.goal, manual=options.manual,
-            branch=(options.branch or options.name),
-            )
-        merge_state.save()
-        MergeState.set_default_name(options.name)
+        cmd_init(parser, options)
     elif options.subcommand == 'start':
-        require_clean_work_tree('proceed')
-
-        if not options.name:
-            parser.error(
-                'Please specify the --name to be used for this incremental merge'
-                )
-        try:
-            tip1 = check_output(
-                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-                ).strip()
-        except CalledProcessError:
-            tip1 = 'HEAD'
-        tip2 = options.tip2
-
-        try:
-            (merge_base, commits1, commits2) = get_boundaries(
-                tip1, tip2, options.first_parent,
-                )
-        except NonlinearAncestryError as e:
-            if options.first_parent:
-                parser.error(str(e))
-            else:
-                parser.error('%s\nPerhaps use "--first-parent"?', e)
-
-        merge_state = MergeState.initialize(
-            options.name, merge_base,
-            tip1, commits1,
-            tip2, commits2,
-            goal=options.goal, manual=options.manual,
-            branch=(options.branch or options.name),
-            )
-        merge_state.save()
-        MergeState.set_default_name(options.name)
-
-        try:
-            merge_state.auto_complete_frontier()
-        except FrontierBlockedError as e:
-            request_user_merge(merge_state, e.i1, e.i2)
-        else:
-            sys.stderr.write('Merge is complete!\n')
+        cmd_start(parser, options)
     elif options.subcommand == 'merge':
-        require_clean_work_tree('proceed')
-
-        tip2 = options.tip2
-
-        if options.name:
-            name = options.name
-        else:
-            # By default, name the imerge after the branch being merged:
-            name = tip2
-            MergeState.check_name_format(name)
-
-        try:
-            tip1 = check_output(
-                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-                ).strip()
-            if not options.branch:
-                # See if we can store the result to the checked-out branch:
-                try:
-                    check_branch_name_format(tip1)
-                except InvalidBranchNameError:
-                    pass
-                else:
-                    options.branch = tip1
-        except CalledProcessError:
-            tip1 = 'HEAD'
-
-        if not options.branch:
-            if options.name:
-                options.branch = options.name
-            else:
-                parser.error(
-                    'HEAD is not a simple branch.  '
-                    'Please specify --branch for storing results.'
-                    )
-
-        try:
-            (merge_base, commits1, commits2) = get_boundaries(
-                tip1, tip2, options.first_parent,
-                )
-        except NonlinearAncestryError as e:
-            if options.first_parent:
-                parser.error(str(e))
-            else:
-                parser.error('%s\nPerhaps use "--first-parent"?', e)
-        except NothingToDoError as e:
-            sys.stdout.write('Already up-to-date.\n')
-            sys.exit(0)
-
-        merge_state = MergeState.initialize(
-            name, merge_base,
-            tip1, commits1,
-            tip2, commits2,
-            goal=options.goal, manual=options.manual,
-            branch=options.branch,
-            )
-        merge_state.save()
-        MergeState.set_default_name(name)
-
-        try:
-            merge_state.auto_complete_frontier()
-        except FrontierBlockedError as e:
-            request_user_merge(merge_state, e.i1, e.i2)
-        else:
-            sys.stderr.write('Merge is complete!\n')
+        cmd_merge(parser, options)
     elif options.subcommand == 'rebase':
-        require_clean_work_tree('proceed')
-
-        tip1 = options.tip1
-
-        try:
-            tip2 = check_output(
-                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-                ).strip()
-            if not options.branch:
-                # See if we can store the result to the current branch:
-                try:
-                    check_branch_name_format(tip2)
-                except InvalidBranchNameError:
-                    pass
-                else:
-                    options.branch = tip2
-            if not options.name:
-                # By default, name the imerge after the branch being rebased:
-                options.name = tip2
-
-        except CalledProcessError:
-            tip2 = rev_parse('HEAD')
-
-        if not options.name:
-            parser.error(
-                'The checked-out branch could not be used as the imerge name.\n'
-                'Please use the --name option.'
-                )
-
-        if not options.branch:
-            if options.name:
-                options.branch = options.name
-            else:
-                parser.error(
-                    'HEAD is not a simple branch.  '
-                    'Please specify --branch for storing results.'
-                    )
-
-        try:
-            (merge_base, commits1, commits2) = get_boundaries(
-                tip1, tip2, options.first_parent,
-                )
-        except NonlinearAncestryError as e:
-            if options.first_parent:
-                parser.error(str(e))
-            else:
-                parser.error('%s\nPerhaps use "--first-parent"?', e)
-        except NothingToDoError as e:
-            sys.stdout.write('Already up-to-date.\n')
-            sys.exit(0)
-
-        merge_state = MergeState.initialize(
-            options.name, merge_base,
-            tip1, commits1,
-            tip2, commits2,
-            goal=options.goal, manual=options.manual,
-            branch=options.branch,
-            )
-        merge_state.save()
-        MergeState.set_default_name(options.name)
-
-        try:
-            merge_state.auto_complete_frontier()
-        except FrontierBlockedError as e:
-            request_user_merge(merge_state, e.i1, e.i2)
-        else:
-            sys.stderr.write('Merge is complete!\n')
+        cmd_rebase(parser, options)
     elif options.subcommand == 'remove':
-        MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
+        cmd_remove(parser, options)
     elif options.subcommand == 'continue':
-        merge_state = read_merge_state(options.name)
-        try:
-            incorporate_user_merge(merge_state, edit_log_msg=options.edit)
-        except NoManualMergeError:
-            pass
-        except NotABlockingCommitError as e:
-            raise Failure(str(e))
-        except ManualMergeUnusableError as e:
-            raise Failure(str(e))
-
-        try:
-            merge_state.auto_complete_frontier()
-        except FrontierBlockedError as e:
-            request_user_merge(merge_state, e.i1, e.i2)
-        else:
-            sys.stderr.write('Merge is complete!\n')
+        cmd_continue(parser, options)
     elif options.subcommand == 'record':
-        merge_state = read_merge_state(options.name)
-        try:
-            incorporate_user_merge(merge_state, edit_log_msg=options.edit)
-        except NoManualMergeError as e:
-            raise Failure(str(e))
-        except NotABlockingCommitError:
-            raise Failure(str(e))
-        except ManualMergeUnusableError as e:
-            raise Failure(str(e))
-
-        try:
-            merge_state.auto_complete_frontier()
-        except FrontierBlockedError as e:
-            pass
-        else:
-            sys.stderr.write('Merge is complete!\n')
+        cmd_record(parser, options)
     elif options.subcommand == 'autofill':
-        require_clean_work_tree('proceed')
-        merge_state = read_merge_state(options.name)
-        with TemporaryHead():
-            try:
-                merge_state.auto_complete_frontier()
-            except FrontierBlockedError as e:
-                raise Failure(str(e))
+        cmd_autofill(parser, options)
     elif options.subcommand == 'simplify':
-        require_clean_work_tree('proceed')
-        merge_state = read_merge_state(options.name)
-        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-        if not merge_frontier.is_complete():
-            raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
-        refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
-        if options.goal is not None:
-            merge_state.set_goal(options.goal)
-            merge_state.save()
-        merge_state.simplify(refname, force=options.force)
+        cmd_simplify(parser, options)
     elif options.subcommand == 'finish':
-        require_clean_work_tree('proceed')
-        merge_state = read_merge_state(options.name, default_to_unique=False)
-        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-        if not merge_frontier.is_complete():
-            raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
-        refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
-        if options.goal is not None:
-            merge_state.set_goal(options.goal)
-            merge_state.save()
-        merge_state.simplify(refname, force=options.force)
-        MergeState.remove(merge_state.name)
+        cmd_finish(parser, options)
     elif options.subcommand == 'diagram':
-        if not (options.commits or options.frontier):
-            options.frontier = True
-        if not (options.color or (options.color is None and sys.stdout.isatty())):
-            AnsiColor.disable()
-
-        merge_state = read_merge_state(options.name)
-        if options.commits:
-            merge_state.write(sys.stdout)
-            sys.stdout.write('\n')
-        if options.frontier:
-            merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-            merge_frontier.write(sys.stdout)
-            sys.stdout.write('\n')
-        if options.html:
-            merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-            html = open(options.html, 'w')
-            merge_frontier.write_html(html, merge_state.name)
-            html.close()
-        sys.stdout.write(
-            'Key:\n'
-            )
-        if options.frontier:
-            sys.stdout.write(
-                '  |,-,+ = rectangles forming current merge frontier\n'
-                )
-        sys.stdout.write(
-            '  * = merge done manually\n'
-            '  . = merge done automatically\n'
-            '  # = conflict that is currently blocking progress\n'
-            '  @ = merge was blocked but has been resolved\n'
-            '  ? = no merge recorded\n'
-            '\n'
-            )
+        cmd_diagram(parser, options)
     elif options.subcommand == 'reparent':
-        try:
-            commit_sha1 = get_commit_sha1('HEAD')
-        except ValueError:
-            sys.exit('HEAD is not a valid commit')
-
-        try:
-            parent_sha1s = [get_commit_sha1(p) for p in options.parents]
-        except ValueError as e:
-            sys.exit(e.message)
-
-        sys.stdout.write('%s\n' % (reparent(commit_sha1, parent_sha1s),))
+        cmd_reparent(parser, options)
     else:
         parser.error('Unrecognized subcommand')
 
