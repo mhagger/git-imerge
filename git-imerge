@@ -371,9 +371,10 @@ def rev_parse(arg):
 
 
 def rev_list(*args):
+    cmd = ['git', 'rev-list'] + list(args)
     return [
         l.strip()
-        for l in check_output(['git', 'rev-list'] + list(args),).splitlines()
+        for l in check_output(cmd).splitlines()
         ]
 
 
