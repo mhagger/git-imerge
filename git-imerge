@@ -2574,21 +2574,26 @@ class MergeState(Block):
         """Simplify based on path and set refname to the result.
 
         The base and path arguments are defined similarly to
-        create_commit_chain(), except that instead of SHA-1s they
-        represent commits via (i1, i2) tuples.
+        create_commit_chain(), except that instead of SHA-1s they may
+        optionally represent commits via (i1, i2) tuples.
 
         """
 
-        base_sha1 = self[base].sha1
+        def to_sha1(arg):
+            if type(arg) is tuple:
+                commit_record = self[arg]
+                if not commit_record.is_known():
+                    raise MissingMergeFailure(*arg)
+                return commit_record.sha1
+            else:
+                return arg
+
+        base_sha1 = to_sha1(base)
         path_sha1 = []
         for (commit, metadata) in path:
-            commit_record = self[commit]
-            if not commit_record.is_known():
-                raise MissingMergeFailure(*commit)
-            metadata_record = self[metadata]
-            if not metadata_record.is_known():
-                raise MissingMergeFailure(*metadata_record)
-            path_sha1.append((commit_record.sha1, metadata_record.sha1))
+            commit_sha1 = to_sha1(commit)
+            metadata_sha1 = to_sha1(metadata)
+            path_sha1.append((commit_sha1, metadata_sha1))
 
         # A path simplification is allowed to discard history, as long
         # as the *pre-simplification* apex commit is a descendant of
