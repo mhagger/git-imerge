@@ -29,7 +29,7 @@ GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=a-b-merge
 "$GIT_IMERGE" remove
 
 git checkout a
-"$GIT_IMERGE" start --goal=full --first-parent --name=a-b b
+"$GIT_IMERGE" start --goal=full --name=a-b b
 "$GIT_IMERGE" list
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge4.html
 "$GIT_IMERGE" finish --branch=a-b-full

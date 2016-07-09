@@ -40,7 +40,7 @@ commands:
 
     git-imerge merge BRANCH      # analogous to "git merge BRANCH"
     git-imerge rebase BRANCH     # analogous to "git rebase BRANCH"
-    git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH
+    git-imerge start --name=NAME --goal=GOAL [--first-parent] BRANCH
 
 Then the tool will present conflicts to you one at a time, similar to
 "git rebase --incremental".  Resolve each conflict, and then
@@ -378,6 +378,15 @@ def rev_list(*args):
         ]
 
 
+def rev_list_with_parents(*args):
+    """Iterate over (commit, [parent,...])."""
+
+    cmd = ['git', 'log', '--format=%H %P'] + list(args)
+    for line in check_output(cmd).splitlines():
+        commits = line.strip().split()
+        yield (commits[0], commits[1:])
+
+
 git_dir_cache = None
 
 def git_dir():
@@ -498,6 +507,24 @@ def commit_tree(tree, parents, msg, metadata=None):
     return out.strip()
 
 
+class NotFirstParentAncestorError(Failure):
+    def __init__(self, commit1, commit2):
+        Failure.__init__(
+            self,
+            'Commit "%s" is not a first-parent ancestor of "%s"'
+            % (commit1, commit2),
+            )
+
+
+class NonlinearAncestryError(Failure):
+    def __init__(self, commit1, commit2):
+        Failure.__init__(
+            self,
+            'The history "%s..%s" is not linear'
+            % (commit1, commit2),
+            )
+
+
 class NothingToDoError(Failure):
     def __init__(self, src_tip, dst_tip):
         Failure.__init__(
@@ -507,7 +534,7 @@ class NothingToDoError(Failure):
             )
 
 
-def linear_ancestry(commit1, commit2):
+def linear_ancestry(commit1, commit2, first_parent):
     """Compute the linear ancestry between commit1 and commit2.
 
     Compute what *should* be the output of
@@ -517,14 +544,36 @@ def linear_ancestry(commit1, commit2):
     if it worked correctly; i.e., the list of commits in the
     first-parent chain going backwards from commit2 that are also
     descendents of commit1. Return a list of SHA-1s in 'chronological'
-    order."""
+    order.
 
-    ancestry_path = set(rev_list('--ancestry-path', '%s..%s' % (commit1, commit2)))
-    commits = [
-        sha1
-        for sha1 in rev_list('--first-parent', '%s..%s' % (commit1, commit2))
-        if sha1 in ancestry_path
-        ]
+    Raise NotFirstParentAncestorError if commit1 is not a first-parent
+    ancestor of commit2.
+
+    If first_parent is *not* set, then compute the same thing, except
+    raise a NonlinearAncestryError if the history between commit1 and
+    commit2 is not linear.
+
+    """
+
+    commits = []
+
+    next_commit = rev_parse(commit2)
+    last_commit = rev_parse(commit1)
+
+    for (commit, parents) in rev_list_with_parents(
+            '--first-parent', '--topo-order', '%s..%s' % (commit1, commit2)
+            ):
+        if commit == next_commit:
+            commits.append(commit)
+            if not parents:
+                raise NotFirstParentAncestorError(commit1, commit2)
+            if not first_parent and len(parents) > 1:
+                raise NonlinearAncestryError(commit1, commit2)
+            next_commit = parents[0]
+
+    if next_commit != last_commit:
+        raise NotFirstParentAncestorError(commit1, commit2)
+
     commits.reverse()
     return commits
 
@@ -555,7 +604,7 @@ def compute_best_merge_base(tip1, tip2):
     return best_base
 
 
-def get_boundaries(tip1, tip2):
+def get_boundaries(tip1, tip2, first_parent):
     """Get the boundaries of an incremental merge.
 
     Given the tips of two branches that should be merged, return
@@ -564,11 +613,11 @@ def get_boundaries(tip1, tip2):
 
     merge_base = compute_best_merge_base(tip1, tip2)
 
-    commits1 = linear_ancestry(merge_base, tip1)
+    commits1 = linear_ancestry(merge_base, tip1, first_parent)
     if not commits1:
         raise NothingToDoError(tip1, tip2)
 
-    commits2 = linear_ancestry(merge_base, tip2)
+    commits2 = linear_ancestry(merge_base, tip2, first_parent)
     if not commits2:
         raise NothingToDoError(tip2, tip1)
 
@@ -2970,7 +3019,7 @@ def main(args):
         subcommand = subparser.prog.split()[1]
         help = (
             'handle only the first parent commits '
-            '(this option is currently required)'
+            '(this option is currently required if the history is nonlinear)'
             )
         if subcommand in ['merge', 'rebase']:
             help = argparse.SUPPRESS
@@ -3189,10 +3238,6 @@ def main(args):
     elif options.subcommand == 'init':
         require_clean_work_tree('proceed')
 
-        if not options.first_parent:
-            parser.error(
-                'The --first-parent option is currently required for the "init" command'
-                )
         if not options.name:
             parser.error(
                 'Please specify the --name to be used for this incremental merge'
@@ -3204,7 +3249,16 @@ def main(args):
         except CalledProcessError:
             tip1 = 'HEAD'
         tip2 = options.tip2
-        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+        try:
+            (merge_base, commits1, commits2) = get_boundaries(
+                tip1, tip2, options.first_parent,
+                )
+        except NonlinearAncestryError as e:
+            if options.first_parent:
+                parser.error(str(e))
+            else:
+                parser.error('%s\nPerhaps use "--first-parent"?', e)
+
         merge_state = MergeState.initialize(
             options.name, merge_base,
             tip1, commits1,
@@ -3217,10 +3271,6 @@ def main(args):
     elif options.subcommand == 'start':
         require_clean_work_tree('proceed')
 
-        if not options.first_parent:
-            parser.error(
-                'The --first-parent option is currently required for the "start" command'
-                )
         if not options.name:
             parser.error(
                 'Please specify the --name to be used for this incremental merge'
@@ -3232,7 +3282,17 @@ def main(args):
         except CalledProcessError:
             tip1 = 'HEAD'
         tip2 = options.tip2
-        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+
+        try:
+            (merge_base, commits1, commits2) = get_boundaries(
+                tip1, tip2, options.first_parent,
+                )
+        except NonlinearAncestryError as e:
+            if options.first_parent:
+                parser.error(str(e))
+            else:
+                parser.error('%s\nPerhaps use "--first-parent"?', e)
+
         merge_state = MergeState.initialize(
             options.name, merge_base,
             tip1, commits1,
@@ -3251,11 +3311,6 @@ def main(args):
             sys.stderr.write('Merge is complete!\n')
     elif options.subcommand == 'merge':
         require_clean_work_tree('proceed')
-
-        if not options.first_parent:
-            parser.error(
-                'The --first-parent option is currently required for the "merge" command'
-                )
 
         tip2 = options.tip2
 
@@ -3291,10 +3346,18 @@ def main(args):
                     )
 
         try:
-            (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+            (merge_base, commits1, commits2) = get_boundaries(
+                tip1, tip2, options.first_parent,
+                )
+        except NonlinearAncestryError as e:
+            if options.first_parent:
+                parser.error(str(e))
+            else:
+                parser.error('%s\nPerhaps use "--first-parent"?', e)
         except NothingToDoError as e:
             sys.stdout.write('Already up-to-date.\n')
             sys.exit(0)
+
         merge_state = MergeState.initialize(
             name, merge_base,
             tip1, commits1,
@@ -3313,11 +3376,6 @@ def main(args):
             sys.stderr.write('Merge is complete!\n')
     elif options.subcommand == 'rebase':
         require_clean_work_tree('proceed')
-
-        if not options.first_parent:
-            parser.error(
-                'The --first-parent option is currently required for the "rebase" command'
-                )
 
         tip1 = options.tip1
 
@@ -3356,7 +3414,14 @@ def main(args):
                     )
 
         try:
-            (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
+            (merge_base, commits1, commits2) = get_boundaries(
+                tip1, tip2, options.first_parent,
+                )
+        except NonlinearAncestryError as e:
+            if options.first_parent:
+                parser.error(str(e))
+            else:
+                parser.error('%s\nPerhaps use "--first-parent"?', e)
         except NothingToDoError as e:
             sys.stdout.write('Already up-to-date.\n')
             sys.exit(0)

@@ -96,7 +96,7 @@ commands that are similar to the corresponding ``git`` commands:
 For more flexibility, you can start an incremental merge using ``git
 imerge start``::
 
-    git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH
+    git-imerge start --name=NAME --goal=GOAL [--first-parent] BRANCH
 
 where
 
