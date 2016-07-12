@@ -112,6 +112,7 @@ ALLOWED_GOALS = [
     'full',
     'rebase-with-history',
     'rebase',
+    'rebase-reversed',
     'merge',
     ]
 DEFAULT_GOAL = 'merge'
@@ -2573,6 +2574,47 @@ class MergeState(Block):
                 % (e.i1, e.i2)
                 )
 
+    def simplify_to_rebase_reversed(self, refname, force=False):
+        i2 = self.len2 - 1
+        for i1 in range(1, self.len1):
+            if not (i1, i2) in self:
+                raise Failure(
+                    'Cannot simplify to rebase because merge %d-%d is not yet done'
+                    % (i1, i2)
+                    )
+
+        if not force:
+            # A rebase simplification is allowed to discard history,
+            # as long as the *pre-simplification* apex commit is a
+            # descendant of the branch to be moved.
+            try:
+                ref_oldval = get_commit_sha1(refname)
+            except ValueError:
+                # refname doesn't already exist; no problem.
+                pass
+            else:
+                commit = self[-1, -1].sha1
+                if not MergeState._is_ancestor(ref_oldval, commit):
+                    raise Failure(
+                        '%s is not an ancestor of %s; use --force if you are sure'
+                        % (commit, refname,)
+                        )
+
+        commit = self[0, i2].sha1
+        for i1 in range(1, self.len1):
+            orig = self[i1, 0].sha1
+            tree = get_tree(self[i1, i2].sha1)
+            authordata = get_author_info(orig)
+
+            # Create a commit, copying the old log message and author info:
+            commit = commit_tree(
+                tree, [commit], msg=get_log_message(orig), metadata=authordata,
+                )
+
+        # We checked above that the update is OK, so here we can set
+        # force=True:
+        self._set_refname(refname, commit, force=True)
+
     def simplify_to_merge(self, refname, force=False):
         if not (-1, -1) in self:
             raise Failure(
@@ -2604,6 +2646,8 @@ class MergeState(Block):
             self.simplify_to_rebase_with_history(refname, force=force)
         elif self.goal == 'rebase':
             self.simplify_to_rebase(refname, force=force)
+        elif self.goal == 'rebase-reversed':
+            self.simplify_to_rebase_reversed(refname, force=force)
         elif self.goal == 'merge':
             self.simplify_to_merge(refname, force=force)
         else:
