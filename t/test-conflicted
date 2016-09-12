@@ -6,7 +6,7 @@ set -e
 set -x
 
 BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
-TMP="$BASE/t/tmp"
+TMP="$BASE/t/tmp/main"
 GIT_IMERGE="$BASE/git-imerge"
 
 cd "$TMP"
@@ -20,7 +20,7 @@ do
 done
 
 git checkout c
-"$GIT_IMERGE" init --first-parent --name=c-d d
+"$GIT_IMERGE" init --name=c-d d
 "$GIT_IMERGE" list
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge0.html
 "$GIT_IMERGE" autofill || true

@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
 
 # Copyright 2012-2013 Michael Haggerty <mhagger@alum.mit.edu>
 #
@@ -38,9 +39,21 @@ Instructions:
 To start an incremental merge or rebase, use one of the following
 commands:
 
-    git-imerge merge BRANCH      # analogous to "git merge BRANCH"
-    git-imerge rebase BRANCH     # analogous to "git rebase BRANCH"
-    git-imerge start --name=NAME --goal=GOAL --first-parent BRANCH
+    git-imerge merge BRANCH
+        Analogous to "git merge BRANCH"
+
+    git-imerge rebase BRANCH
+        Analogous to "git rebase BRANCH"
+
+    git-imerge drop [commit | commit1..commit2]
+        Drop the specified commit(s) from the current branch
+
+    git-imerge revert [commit | commit1..commit2]
+        Revert the specified commits by adding new commits that
+        reverse their effects
+
+    git-imerge start --name=NAME --goal=GOAL BRANCH
+        Start a general imerge
 
 Then the tool will present conflicts to you one at a time, similar to
 "git rebase --incremental".  Resolve each conflict, and then
@@ -113,6 +126,8 @@ ALLOWED_GOALS = [
     'rebase-with-history',
     'rebase',
     'merge',
+    'drop',
+    'revert',
     ]
 DEFAULT_GOAL = 'merge'
 
@@ -123,21 +138,7 @@ class Failure(Exception):
     Failures are reported at top level via sys.exit(str(e)) rather
     than via a Python stack dump."""
 
-    @classmethod
-    def wrap(klass, f):
-        """Wrap a function inside a try...except that catches this error.
-
-        If the exception is thrown, call sys.exit().  This function
-        can be used as a decorator."""
-
-        @functools.wraps(f)
-        def wrapper(*args, **kw):
-            try:
-                return f(*args, **kw)
-            except klass as e:
-                sys.exit(str(e))
-
-        return wrapper
+    pass
 
 
 class AnsiColor:
@@ -371,10 +372,20 @@ def rev_parse(arg):
 
 
 def rev_list(*args):
+    cmd = ['git', 'rev-list'] + list(args)
     return [
         l.strip()
-        for l in check_output(['git', 'rev-list'] + list(args),).splitlines()
+        for l in check_output(cmd).splitlines()
         ]
+
+
+def rev_list_with_parents(*args):
+    """Iterate over (commit, [parent,...])."""
+
+    cmd = ['git', 'log', '--format=%H %P'] + list(args)
+    for line in check_output(cmd).splitlines():
+        commits = line.strip().split()
+        yield (commits[0], commits[1:])
 
 
 git_dir_cache = None
@@ -497,6 +508,24 @@ def commit_tree(tree, parents, msg, metadata=None):
     return out.strip()
 
 
+class NotFirstParentAncestorError(Failure):
+    def __init__(self, commit1, commit2):
+        Failure.__init__(
+            self,
+            'Commit "%s" is not a first-parent ancestor of "%s"'
+            % (commit1, commit2),
+            )
+
+
+class NonlinearAncestryError(Failure):
+    def __init__(self, commit1, commit2):
+        Failure.__init__(
+            self,
+            'The history "%s..%s" is not linear'
+            % (commit1, commit2),
+            )
+
+
 class NothingToDoError(Failure):
     def __init__(self, src_tip, dst_tip):
         Failure.__init__(
@@ -506,7 +535,7 @@ class NothingToDoError(Failure):
             )
 
 
-def linear_ancestry(commit1, commit2):
+def linear_ancestry(commit1, commit2, first_parent):
     """Compute the linear ancestry between commit1 and commit2.
 
     Compute what *should* be the output of
@@ -516,14 +545,36 @@ def linear_ancestry(commit1, commit2):
     if it worked correctly; i.e., the list of commits in the
     first-parent chain going backwards from commit2 that are also
     descendents of commit1. Return a list of SHA-1s in 'chronological'
-    order."""
+    order.
 
-    ancestry_path = set(rev_list('--ancestry-path', '%s..%s' % (commit1, commit2)))
-    commits = [
-        sha1
-        for sha1 in rev_list('--first-parent', '%s..%s' % (commit1, commit2))
-        if sha1 in ancestry_path
-        ]
+    Raise NotFirstParentAncestorError if commit1 is not a first-parent
+    ancestor of commit2.
+
+    If first_parent is *not* set, then compute the same thing, except
+    raise a NonlinearAncestryError if the history between commit1 and
+    commit2 is not linear.
+
+    """
+
+    commits = []
+
+    next_commit = rev_parse(commit2)
+    last_commit = rev_parse(commit1)
+
+    for (commit, parents) in rev_list_with_parents(
+            '--first-parent', '--topo-order', '%s..%s' % (commit1, commit2)
+            ):
+        if commit == next_commit:
+            commits.append(commit)
+            if not parents:
+                raise NotFirstParentAncestorError(commit1, commit2)
+            if not first_parent and len(parents) > 1:
+                raise NonlinearAncestryError(commit1, commit2)
+            next_commit = parents[0]
+
+    if next_commit != last_commit:
+        raise NotFirstParentAncestorError(commit1, commit2)
+
     commits.reverse()
     return commits
 
@@ -554,7 +605,7 @@ def compute_best_merge_base(tip1, tip2):
     return best_base
 
 
-def get_boundaries(tip1, tip2):
+def get_boundaries(tip1, tip2, first_parent):
     """Get the boundaries of an incremental merge.
 
     Given the tips of two branches that should be merged, return
@@ -563,11 +614,11 @@ def get_boundaries(tip1, tip2):
 
     merge_base = compute_best_merge_base(tip1, tip2)
 
-    commits1 = linear_ancestry(merge_base, tip1)
+    commits1 = linear_ancestry(merge_base, tip1, first_parent)
     if not commits1:
         raise NothingToDoError(tip1, tip2)
 
-    commits2 = linear_ancestry(merge_base, tip2)
+    commits2 = linear_ancestry(merge_base, tip2, first_parent)
     if not commits2:
         raise NothingToDoError(tip2, tip1)
 
@@ -918,6 +969,148 @@ class NotABlockingCommitError(Exception):
     pass
 
 
+def find_frontier_blocks(block):
+    """Iterate over the frontier blocks for the specified block.
+
+    Use bisection to find the blocks. Iterate over the blocks starting
+    in the bottom left and ending at the top right. Record in block
+    any blockers that we find.
+
+    We make the following assumptions (using Python subscript
+    notation):
+
+    0. All of the merges in block[1:,0] and block[0,1:] are
+       already known.  (This is an invariant of the Block class.)
+
+    1. If a direct merge can be done between block[i1-1,0] and
+       block[0,i2-1], then all of the pairwise merges in
+       block[1:i1, 1:i2] can also be done.
+
+    2. If a direct merge fails between block[i1-1,0] and
+       block[0,i2-1], then all of the pairwise merges in
+       block[i1-1:,i2-1:] would also fail.
+
+    Under these assumptions, the merge frontier is a stepstair
+    pattern going from the bottom-left to the top-right, and
+    bisection can be used to find the transition between mergeable
+    and conflicting in any row or column.
+
+    Of course these assumptions are not rigorously true, so the
+    MergeFrontier returned by this function is only an
+    approximation of the real merge diagram.  We check for and
+    correct such inconsistencies later.
+
+    """
+
+    # Given that these diagrams typically have few blocks, check
+    # the end of a range first to see if the whole range can be
+    # determined, and fall back to bisection otherwise.  We
+    # determine the frontier block by block, starting in the lower
+    # left.
+
+    if block.len1 <= 1 or block.len2 <= 1 or block.is_blocked(1, 1):
+        return
+
+    if block.is_mergeable(block.len1 - 1, block.len2 - 1):
+        # The whole block is mergable!
+        yield block
+        return
+
+    if not block.is_mergeable(1, 1):
+        # There are no mergeable blocks in block; therefore,
+        # block[1,1] must itself be unmergeable.  Record that
+        # fact:
+        block[1, 1].record_blocked(True)
+        return
+
+    # At this point, we know that there is at least one mergeable
+    # commit in the first column.  Find the height of the success
+    # block in column 1:
+    i1 = 1
+    i2 = find_first_false(
+        lambda i: block.is_mergeable(i1, i),
+        2, block.len2,
+        )
+
+    # Now we know that (1,i2-1) is mergeable but (1,i2) is not;
+    # e.g., (i1, i2) is like 'A' (or maybe 'B') in the following
+    # diagram (where '*' means mergeable, 'x' means not mergeable,
+    # and '?' means indeterminate) and that the merge under 'A' is
+    # not mergeable:
+    #
+    #          i1
+    #
+    #        0123456
+    #      0 *******
+    #      1 **?????
+    #  i2  2 **?????
+    #      3 **?????
+    #      4 *Axxxxx
+    #      5 *xxxxxx
+    #         B
+
+    while True:
+        if i2 == 1:
+            break
+
+        # At this point in the loop, we know that any blocks to
+        # the left of 'A' have already been recorded, (i1, i2-1)
+        # is mergeable but (i1, i2) is not; e.g., we are at a
+        # place like 'A' in the following diagram:
+        #
+        #          i1
+        #
+        #        0123456
+        #      0 **|****
+        #      1 **|*???
+        #  i2  2 **|*???
+        #      3 **|Axxx
+        #      4 --+xxxx
+        #      5 *xxxxxx
+        #
+        # This implies that (i1, i2) is the first unmergeable
+        # commit in a blocker block (though blocker blocks are not
+        # recorded explicitly).  It also implies that a mergeable
+        # block has its last mergeable commit somewhere in row
+        # i2-1; find its width.
+        if (
+                i1 == block.len1 - 1
+                or block.is_mergeable(block.len1 - 1, i2 - 1)
+                ):
+            yield block[:block.len1, :i2]
+            break
+        else:
+            i1 = find_first_false(
+                lambda i: block.is_mergeable(i, i2 - 1),
+                i1 + 1, block.len1 - 1,
+                )
+            yield block[:i1, :i2]
+
+        # At this point in the loop, (i1-1, i2-1) is mergeable but
+        # (i1, i2-1) is not; e.g., 'A' in the following diagram:
+        #
+        #          i1
+        #
+        #        0123456
+        #      0 **|*|**
+        #      1 **|*|??
+        #  i2  2 --+-+xx
+        #      3 **|xxAx
+        #      4 --+xxxx
+        #      5 *xxxxxx
+        #
+        # The block ending at (i1-1,i2-1) has just been recorded.
+        # Now find the height of the conflict rectangle at column
+        # i1 and fill it in:
+        if i2 - 1 == 1 or not block.is_mergeable(i1, 1):
+            break
+        else:
+            i2 = find_first_false(
+                lambda i: block.is_mergeable(i1, i),
+                2, i2 - 1,
+                )
+
+
 class MergeFrontier(object):
     """Represents the merge frontier within a Block.
 
@@ -1027,140 +1220,12 @@ class MergeFrontier(object):
     def compute_by_bisection(block):
         """Return a MergeFrontier instance for block.
 
-        We make the following assumptions (using Python subscript
-        notation):
+        Compute the blocks making up the boundary using bisection. See
+        find_frontier_blocks() for more information.
 
-        0. All of the merges in block[1:,0] and block[0,1:] are
-           already known.  (This is an invariant of the Block class.)
+        """
 
-        1. If a direct merge can be done between block[i1-1,0] and
-           block[0,i2-1], then all of the pairwise merges in
-           block[1:i1, 1:i2] can also be done.
-
-        2. If a direct merge fails between block[i1-1,0] and
-           block[0,i2-1], then all of the pairwise merges in
-           block[i1-1:,i2-1:] would also fail.
-
-        Under these assumptions, the merge frontier is a stepstair
-        pattern going from the bottom-left to the top-right, and
-        bisection can be used to find the transition between mergeable
-        and conflicting in any row or column.
-
-        Of course these assumptions are not rigorously true, so the
-        MergeFrontier returned by this function is only an
-        approximation of the real merge diagram.  We check for and
-        correct such inconsistencies later."""
-
-        # Given that these diagrams typically have few blocks, check
-        # the end of a range first to see if the whole range can be
-        # determined, and fall back to bisection otherwise.  We
-        # determine the frontier block by block, starting in the lower
-        # left.
-
-        if block.len1 <= 1 or block.len2 <= 1 or block.is_blocked(1, 1):
-            return MergeFrontier(block, [])
-
-        if block.is_mergeable(block.len1 - 1, block.len2 - 1):
-            # The whole block is mergable!
-            return MergeFrontier(block, [block])
-
-        if not block.is_mergeable(1, 1):
-            # There are no mergeable blocks in block; therefore,
-            # block[1,1] must itself be unmergeable.  Record that
-            # fact:
-            block[1, 1].record_blocked(True)
-            return MergeFrontier(block, [])
-
-        blocks = []
-
-        # At this point, we know that there is at least one mergeable
-        # commit in the first column.  Find the height of the success
-        # block in column 1:
-        i1 = 1
-        i2 = find_first_false(
-            lambda i: block.is_mergeable(i1, i),
-            2, block.len2,
-            )
-
-        # Now we know that (1,i2-1) is mergeable but (1,i2) is not;
-        # e.g., (i1, i2) is like 'A' (or maybe 'B') in the following
-        # diagram (where '*' means mergeable, 'x' means not mergeable,
-        # and '?' means indeterminate) and that the merge under 'A' is
-        # not mergeable:
-        #
-        #          i1
-        #
-        #        0123456
-        #      0 *******
-        #      1 **?????
-        #  i2  2 **?????
-        #      3 **?????
-        #      4 *Axxxxx
-        #      5 *xxxxxx
-        #         B
-
-        while True:
-            if i2 == 1:
-                break
-
-            # At this point in the loop, we know that any blocks to
-            # the left of 'A' have already been recorded, (i1, i2-1)
-            # is mergeable but (i1, i2) is not; e.g., we are at a
-            # place like 'A' in the following diagram:
-            #
-            #          i1
-            #
-            #        0123456
-            #      0 **|****
-            #      1 **|*???
-            #  i2  2 **|*???
-            #      3 **|Axxx
-            #      4 --+xxxx
-            #      5 *xxxxxx
-            #
-            # This implies that (i1, i2) is the first unmergeable
-            # commit in a blocker block (though blocker blocks are not
-            # recorded explicitly).  It also implies that a mergeable
-            # block has its last mergeable commit somewhere in row
-            # i2-1; find its width.
-            if (
-                    i1 == block.len1 - 1
-                    or block.is_mergeable(block.len1 - 1, i2 - 1)
-                    ):
-                blocks.append(block[:block.len1, :i2])
-                break
-            else:
-                i1 = find_first_false(
-                    lambda i: block.is_mergeable(i, i2 - 1),
-                    i1 + 1, block.len1 - 1,
-                    )
-                blocks.append(block[:i1, :i2])
-
-            # At this point in the loop, (i1-1, i2-1) is mergeable but
-            # (i1, i2-1) is not; e.g., 'A' in the following diagram:
-            #
-            #          i1
-            #
-            #        0123456
-            #      0 **|*|**
-            #      1 **|*|??
-            #  i2  2 --+-+xx
-            #      3 **|xxAx
-            #      4 --+xxxx
-            #      5 *xxxxxx
-            #
-            # The block ending at (i1-1,i2-1) has just been recorded.
-            # Now find the height of the conflict rectangle at column
-            # i1 and fill it in:
-            if i2 - 1 == 1 or not block.is_mergeable(i1, 1):
-                break
-            else:
-                i2 = find_first_false(
-                    lambda i: block.is_mergeable(i1, i),
-                    2, i2 - 1,
-                    )
-
-        return MergeFrontier(block, blocks)
+        return MergeFrontier(block, list(find_frontier_blocks(block)))
 
     def __init__(self, block, blocks=None):
         self.block = block
@@ -2089,7 +2154,8 @@ class MergeState(Block):
             name, merge_base,
             tip1, commits1,
             tip2, commits2,
-            goal=DEFAULT_GOAL, manual=False, branch=None,
+            goal=DEFAULT_GOAL, goalopts=None,
+            manual=False, branch=None,
             ):
         """Create and return a new MergeState object."""
 
@@ -2110,7 +2176,7 @@ class MergeState(Block):
             tip1, commits1,
             tip2, commits2,
             MergeRecord.NEW_MANUAL,
-            goal=goal,
+            goal=goal, goalopts=goalopts,
             manual=manual,
             branch=branch,
             )
@@ -2217,6 +2283,8 @@ class MergeState(Block):
         if goal not in ALLOWED_GOALS:
             raise Failure('Goal %r, read from state, is not recognized.' % (goal,))
 
+        goalopts = state['goalopts']
+
         manual = state['manual']
         branch = state.get('branch', name)
 
@@ -2225,7 +2293,7 @@ class MergeState(Block):
             tip1, commits1,
             tip2, commits2,
             MergeRecord.SAVED_MANUAL,
-            goal=goal,
+            goal=goal, goalopts=goalopts,
             manual=manual,
             branch=branch,
             )
@@ -2304,7 +2372,7 @@ class MergeState(Block):
             tip1, commits1,
             tip2, commits2,
             source,
-            goal=DEFAULT_GOAL,
+            goal=DEFAULT_GOAL, goalopts=None,
             manual=False,
             branch=None,
             ):
@@ -2312,6 +2380,7 @@ class MergeState(Block):
         self.tip1 = tip1
         self.tip2 = tip2
         self.goal = goal
+        self.goalopts = goalopts
         self.manual = bool(manual)
         self.branch = branch or name
 
@@ -2520,21 +2589,26 @@ class MergeState(Block):
         """Simplify based on path and set refname to the result.
 
         The base and path arguments are defined similarly to
-        create_commit_chain(), except that instead of SHA-1s they
-        represent commits via (i1, i2) tuples.
+        create_commit_chain(), except that instead of SHA-1s they may
+        optionally represent commits via (i1, i2) tuples.
 
         """
 
-        base_sha1 = self[base].sha1
+        def to_sha1(arg):
+            if type(arg) is tuple:
+                commit_record = self[arg]
+                if not commit_record.is_known():
+                    raise MissingMergeFailure(*arg)
+                return commit_record.sha1
+            else:
+                return arg
+
+        base_sha1 = to_sha1(base)
         path_sha1 = []
         for (commit, metadata) in path:
-            commit_record = self[commit]
-            if not commit_record.is_known():
-                raise MissingMergeFailure(*commit)
-            metadata_record = self[metadata]
-            if not metadata_record.is_known():
-                raise MissingMergeFailure(*metadata_record)
-            path_sha1.append((commit_record.sha1, metadata_record.sha1))
+            commit_sha1 = to_sha1(commit)
+            metadata_sha1 = to_sha1(metadata)
+            path_sha1.append((commit_sha1, metadata_sha1))
 
         # A path simplification is allowed to discard history, as long
         # as the *pre-simplification* apex commit is a descendant of
@@ -2569,9 +2643,32 @@ class MergeState(Block):
             self._simplify_to_path(refname, (i1, 0), path, force=force)
         except MissingMergeFailure as e:
             raise Failure(
+                'Cannot simplify to %s because merge %d-%d is not yet done'
+                % (self.goal, e.i1, e.i2)
+                )
+
+    def simplify_to_drop(self, refname, force=False):
+        try:
+            base = self.goalopts['base']
+        except KeyError:
+            raise Failure('Goal "drop" was not initialized correctly')
+
+        i2 = self.len2 - 1
+        path = [
+            ((i1, i2), (i1, 0))
+            for i1 in range(1, self.len1)
+            ]
+
+        try:
+            self._simplify_to_path(refname, base, path, force=force)
+        except MissingMergeFailure as e:
+            raise Failure(
                 'Cannot simplify to rebase because merge %d-%d is not yet done'
                 % (e.i1, e.i2)
                 )
+
+    def simplify_to_revert(self, refname, force=False):
+        self.simplify_to_rebase(refname, force=force)
 
     def simplify_to_merge(self, refname, force=False):
         if not (-1, -1) in self:
@@ -2604,6 +2701,10 @@ class MergeState(Block):
             self.simplify_to_rebase_with_history(refname, force=force)
         elif self.goal == 'rebase':
             self.simplify_to_rebase(refname, force=force)
+        elif self.goal == 'drop':
+            self.simplify_to_drop(refname, force=force)
+        elif self.goal == 'revert':
+            self.simplify_to_revert(refname, force=force)
         elif self.goal == 'merge':
             self.simplify_to_merge(refname, force=force)
         else:
@@ -2626,6 +2727,7 @@ class MergeState(Block):
             blockers=blockers,
             tip1=self.tip1, tip2=self.tip2,
             goal=self.goal,
+            goalopts=self.goalopts,
             manual=self.manual,
             branch=self.branch,
             )
@@ -2894,7 +2996,598 @@ def read_merge_state(name=None, default_to_unique=True):
     return MergeState.read(choose_merge_name(name, default_to_unique=default_to_unique))
 
 
-@Failure.wrap
+def cmd_list(parser, options):
+    default_merge = MergeState.get_default_name()
+    for name in MergeState.iter_existing_names():
+        if name == default_merge:
+            sys.stdout.write('* %s\n' % (name,))
+        else:
+            sys.stdout.write('  %s\n' % (name,))
+
+
+def cmd_init(parser, options):
+    require_clean_work_tree('proceed')
+
+    if not options.name:
+        parser.error(
+            'Please specify the --name to be used for this incremental merge'
+            )
+    try:
+        tip1 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+    except CalledProcessError:
+        tip1 = 'HEAD'
+    tip2 = options.tip2
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+
+    merge_state = MergeState.initialize(
+        options.name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal=options.goal, manual=options.manual,
+        branch=(options.branch or options.name),
+        )
+    merge_state.save()
+    MergeState.set_default_name(options.name)
+
+
+def cmd_start(parser, options):
+    require_clean_work_tree('proceed')
+
+    if not options.name:
+        parser.error(
+            'Please specify the --name to be used for this incremental merge'
+            )
+    try:
+        tip1 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+    except CalledProcessError:
+        tip1 = 'HEAD'
+    tip2 = options.tip2
+
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+
+    merge_state = MergeState.initialize(
+        options.name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal=options.goal, manual=options.manual,
+        branch=(options.branch or options.name),
+        )
+    merge_state.save()
+    MergeState.set_default_name(options.name)
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_merge(parser, options):
+    require_clean_work_tree('proceed')
+
+    tip2 = options.tip2
+
+    if options.name:
+        name = options.name
+    else:
+        # By default, name the imerge after the branch being merged:
+        name = tip2
+        MergeState.check_name_format(name)
+
+    try:
+        tip1 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+        if not options.branch:
+            # See if we can store the result to the checked-out branch:
+            try:
+                check_branch_name_format(tip1)
+            except InvalidBranchNameError:
+                pass
+            else:
+                options.branch = tip1
+    except CalledProcessError:
+        tip1 = 'HEAD'
+
+    if not options.branch:
+        if options.name:
+            options.branch = options.name
+        else:
+            parser.error(
+                'HEAD is not a simple branch.  '
+                'Please specify --branch for storing results.'
+                )
+
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+    except NothingToDoError as e:
+        sys.stdout.write('Already up-to-date.\n')
+        sys.exit(0)
+
+    merge_state = MergeState.initialize(
+        name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal=options.goal, manual=options.manual,
+        branch=options.branch,
+        )
+    merge_state.save()
+    MergeState.set_default_name(name)
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_rebase(parser, options):
+    require_clean_work_tree('proceed')
+
+    tip1 = options.tip1
+
+    try:
+        tip2 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+        if not options.branch:
+            # See if we can store the result to the current branch:
+            try:
+                check_branch_name_format(tip2)
+            except InvalidBranchNameError:
+                pass
+            else:
+                options.branch = tip2
+        if not options.name:
+            # By default, name the imerge after the branch being rebased:
+            options.name = tip2
+
+    except CalledProcessError:
+        tip2 = rev_parse('HEAD')
+
+    if not options.name:
+        parser.error(
+            'The checked-out branch could not be used as the imerge name.\n'
+            'Please use the --name option.'
+            )
+
+    if not options.branch:
+        if options.name:
+            options.branch = options.name
+        else:
+            parser.error(
+                'HEAD is not a simple branch.  '
+                'Please specify --branch for storing results.'
+                )
+
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+    except NothingToDoError as e:
+        sys.stdout.write('Already up-to-date.\n')
+        sys.exit(0)
+
+    merge_state = MergeState.initialize(
+        options.name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal=options.goal, manual=options.manual,
+        branch=options.branch,
+        )
+    merge_state.save()
+    MergeState.set_default_name(options.name)
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_drop(parser, options):
+    require_clean_work_tree('proceed')
+
+    m = re.match(r'^(?P<start>.*[^\.])(?P<sep>\.{2,})(?P<end>[^\.].*)$', options.range)
+    if m:
+        if m.group('sep') != '..':
+            parser.error(
+                'Range must either be a single commit '
+                'or in the form "commit..commit"'
+                )
+        start = rev_parse(m.group('start'))
+        end = rev_parse(m.group('end'))
+    else:
+        end = rev_parse(options.range)
+        start = rev_parse('%s^' % (end,))
+
+    try:
+        to_drop = linear_ancestry(start, end, options.first_parent)
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+
+    # Suppose we want to drop commits 2 and 3 in the branch below.
+    # Then we set up an imerge as follows:
+    #
+    #     o - 0 - 1 - 2 - 3 - 4 - 5 - 6    ← tip1
+    #                     |
+    #                     3⁻¹
+    #                     |
+    #                     2⁻¹
+    #
+    #                     ↑
+    #                    tip2
+    #
+    # We first use imerge to rebase tip1 onto tip2, then we simplify
+    # by discarding the sequence (2, 3, 3⁻¹, 2⁻¹) (which together are
+    # a NOOP). In this case, goalopts would have the following
+    # contents:
+    #
+    #     goalopts['base'] = rev_parse(commit1)
+
+    try:
+        tip1 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+        if not options.branch:
+            # See if we can store the result to the current branch:
+            try:
+                check_branch_name_format(tip1)
+            except InvalidBranchNameError:
+                pass
+            else:
+                options.branch = tip1
+        if not options.name:
+            # By default, name the imerge after the branch being rebased:
+            options.name = tip1
+
+    except CalledProcessError:
+        tip1 = rev_parse('HEAD')
+
+    if not options.name:
+        parser.error(
+            'The checked-out branch could not be used as the imerge name.\n'
+            'Please use the --name option.'
+            )
+
+    if not options.branch:
+        if options.name:
+            options.branch = options.name
+        else:
+            parser.error(
+                'HEAD is not a simple branch.  '
+                'Please specify --branch for storing results.'
+                )
+
+    # Create a branch based on end that contains the inverse of the
+    # commits that we want to drop. This will be tip2:
+
+    checkout(end)
+    for commit in reversed(to_drop):
+        cmd = ['git', 'revert', '--no-edit']
+        if len(get_commit_parents(commit)) > 1:
+            cmd += ['-m', '1']
+        cmd += [commit]
+        check_call(cmd)
+
+    tip2 = rev_parse('HEAD')
+
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+    except NothingToDoError as e:
+        sys.stdout.write('Already up-to-date.\n')
+        sys.exit(0)
+
+    merge_state = MergeState.initialize(
+        options.name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal='drop', goalopts={'base' : start},
+        manual=options.manual,
+        branch=options.branch,
+        )
+    merge_state.save()
+    MergeState.set_default_name(options.name)
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_revert(parser, options):
+    require_clean_work_tree('proceed')
+
+    m = re.match(r'^(?P<start>.*[^\.])(?P<sep>\.{2,})(?P<end>[^\.].*)$', options.range)
+    if m:
+        if m.group('sep') != '..':
+            parser.error(
+                'Range must either be a single commit '
+                'or in the form "commit..commit"'
+                )
+        start = rev_parse(m.group('start'))
+        end = rev_parse(m.group('end'))
+    else:
+        end = rev_parse(options.range)
+        start = rev_parse('%s^' % (end,))
+
+    try:
+        to_revert = linear_ancestry(start, end, options.first_parent)
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+
+    # Suppose we want to revert commits 2 and 3 in the branch below.
+    # Then we set up an imerge as follows:
+    #
+    #     o - 0 - 1 - 2 - 3 - 4 - 5 - 6    ← tip1
+    #                     |
+    #                     3⁻¹
+    #                     |
+    #                     2⁻¹
+    #
+    #                     ↑
+    #                    tip2
+    #
+    # Then we use imerge to rebase tip2 onto tip1.
+
+    try:
+        tip1 = check_output(
+            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+            ).strip()
+        if not options.branch:
+            # See if we can store the result to the current branch:
+            try:
+                check_branch_name_format(tip1)
+            except InvalidBranchNameError:
+                pass
+            else:
+                options.branch = tip1
+        if not options.name:
+            # By default, name the imerge after the branch being rebased:
+            options.name = tip1
+
+    except CalledProcessError:
+        tip1 = rev_parse('HEAD')
+
+    if not options.name:
+        parser.error(
+            'The checked-out branch could not be used as the imerge name.\n'
+            'Please use the --name option.'
+            )
+
+    if not options.branch:
+        if options.name:
+            options.branch = options.name
+        else:
+            parser.error(
+                'HEAD is not a simple branch.  '
+                'Please specify --branch for storing results.'
+                )
+
+    # Create a branch based on end that contains the inverse of the
+    # commits that we want to drop. This will be tip2:
+
+    checkout(end)
+    for commit in reversed(to_revert):
+        cmd = ['git', 'revert', '--no-edit']
+        if len(get_commit_parents(commit)) > 1:
+            cmd += ['-m', '1']
+        cmd += [commit]
+        check_call(cmd)
+
+    tip2 = rev_parse('HEAD')
+
+    try:
+        (merge_base, commits1, commits2) = get_boundaries(
+            tip1, tip2, options.first_parent,
+            )
+    except NonlinearAncestryError as e:
+        if options.first_parent:
+            parser.error(str(e))
+        else:
+            parser.error('%s\nPerhaps use "--first-parent"?', e)
+    except NothingToDoError as e:
+        sys.stdout.write('Already up-to-date.\n')
+        sys.exit(0)
+
+    merge_state = MergeState.initialize(
+        options.name, merge_base,
+        tip1, commits1,
+        tip2, commits2,
+        goal='revert',
+        manual=options.manual,
+        branch=options.branch,
+        )
+    merge_state.save()
+    MergeState.set_default_name(options.name)
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_remove(parser, options):
+    MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
+
+
+def cmd_continue(parser, options):
+    merge_state = read_merge_state(options.name)
+    try:
+        incorporate_user_merge(merge_state, edit_log_msg=options.edit)
+    except NoManualMergeError:
+        pass
+    except NotABlockingCommitError as e:
+        raise Failure(str(e))
+    except ManualMergeUnusableError as e:
+        raise Failure(str(e))
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        request_user_merge(merge_state, e.i1, e.i2)
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_record(parser, options):
+    merge_state = read_merge_state(options.name)
+    try:
+        incorporate_user_merge(merge_state, edit_log_msg=options.edit)
+    except NoManualMergeError as e:
+        raise Failure(str(e))
+    except NotABlockingCommitError:
+        raise Failure(str(e))
+    except ManualMergeUnusableError as e:
+        raise Failure(str(e))
+
+    try:
+        merge_state.auto_complete_frontier()
+    except FrontierBlockedError as e:
+        pass
+    else:
+        sys.stderr.write('Merge is complete!\n')
+
+
+def cmd_autofill(parser, options):
+    require_clean_work_tree('proceed')
+    merge_state = read_merge_state(options.name)
+    with TemporaryHead():
+        try:
+            merge_state.auto_complete_frontier()
+        except FrontierBlockedError as e:
+            raise Failure(str(e))
+
+
+def cmd_simplify(parser, options):
+    require_clean_work_tree('proceed')
+    merge_state = read_merge_state(options.name)
+    merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+    if not merge_frontier.is_complete():
+        raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
+    refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
+    if options.goal is not None:
+        merge_state.set_goal(options.goal)
+        merge_state.save()
+    merge_state.simplify(refname, force=options.force)
+
+
+def cmd_finish(parser, options):
+    require_clean_work_tree('proceed')
+    merge_state = read_merge_state(options.name, default_to_unique=False)
+    merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+    if not merge_frontier.is_complete():
+        raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
+    refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
+    if options.goal is not None:
+        merge_state.set_goal(options.goal)
+        merge_state.save()
+    merge_state.simplify(refname, force=options.force)
+    MergeState.remove(merge_state.name)
+
+
+def cmd_diagram(parser, options):
+    if not (options.commits or options.frontier):
+        options.frontier = True
+    if not (options.color or (options.color is None and sys.stdout.isatty())):
+        AnsiColor.disable()
+
+    merge_state = read_merge_state(options.name)
+    if options.commits:
+        merge_state.write(sys.stdout)
+        sys.stdout.write('\n')
+    if options.frontier:
+        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+        merge_frontier.write(sys.stdout)
+        sys.stdout.write('\n')
+    if options.html:
+        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+        html = open(options.html, 'w')
+        merge_frontier.write_html(html, merge_state.name)
+        html.close()
+    sys.stdout.write(
+        'Key:\n'
+        )
+    if options.frontier:
+        sys.stdout.write(
+            '  |,-,+ = rectangles forming current merge frontier\n'
+            )
+    sys.stdout.write(
+        '  * = merge done manually\n'
+        '  . = merge done automatically\n'
+        '  # = conflict that is currently blocking progress\n'
+        '  @ = merge was blocked but has been resolved\n'
+        '  ? = no merge recorded\n'
+        '\n'
+        )
+
+
+def cmd_reparent(parser, options):
+    try:
+        commit_sha1 = get_commit_sha1('HEAD')
+    except ValueError:
+        sys.exit('HEAD is not a valid commit')
+
+    try:
+        parent_sha1s = [get_commit_sha1(p) for p in options.parents]
+    except ValueError as e:
+        sys.exit(e.message)
+
+    sys.stdout.write('%s\n' % (reparent(commit_sha1, parent_sha1s),))
+
+
 def main(args):
     NAME_INIT_HELP = 'name to use for this incremental merge'
 
@@ -2955,7 +3648,7 @@ def main(args):
         subcommand = subparser.prog.split()[1]
         help = (
             'handle only the first parent commits '
-            '(this option is currently required)'
+            '(this option is currently required if the history is nonlinear)'
             )
         if subcommand in ['merge', 'rebase']:
             help = argparse.SUPPRESS
@@ -3014,6 +3707,36 @@ def main(args):
         help=(
             'the tip of the branch onto which the current branch should '
             'be rebased'
+            ),
+        )
+
+    subparser = subparsers.add_parser(
+        'drop',
+        help='drop one or more commits via incremental merge',
+        )
+    add_name_argument(subparser, help=NAME_INIT_HELP)
+    add_branch_argument(subparser)
+    add_manual_argument(subparser)
+    add_first_parent_argument(subparser, default=True)
+    subparser.add_argument(
+        'range', action='store', metavar='[commit | commit..commit]',
+        help=(
+            'the commit or range of commits that should be dropped'
+            ),
+        )
+
+    subparser = subparsers.add_parser(
+        'revert',
+        help='revert one or more commits via incremental merge',
+        )
+    add_name_argument(subparser, help=NAME_INIT_HELP)
+    add_branch_argument(subparser)
+    add_manual_argument(subparser)
+    add_first_parent_argument(subparser, default=True)
+    subparser.add_argument(
+        'range', action='store', metavar='[commit | commit..commit]',
+        help=(
+            'the commit or range of commits that should be reverted'
             ),
         )
 
@@ -3165,320 +3888,44 @@ def main(args):
     os.environ[str('GIT_IMERGE')] = str('1')
 
     if options.subcommand == 'list':
-        default_merge = MergeState.get_default_name()
-        for name in MergeState.iter_existing_names():
-            if name == default_merge:
-                sys.stdout.write('* %s\n' % (name,))
-            else:
-                sys.stdout.write('  %s\n' % (name,))
+        cmd_list(parser, options)
     elif options.subcommand == 'init':
-        require_clean_work_tree('proceed')
-
-        if not options.first_parent:
-            parser.error(
-                'The --first-parent option is currently required for the "init" command'
-                )
-        if not options.name:
-            parser.error(
-                'Please specify the --name to be used for this incremental merge'
-                )
-        try:
-            tip1 = check_output(
-                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-                ).strip()
-        except CalledProcessError:
-            tip1 = 'HEAD'
-        tip2 = options.tip2
-        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
-        merge_state = MergeState.initialize(
-            options.name, merge_base,
-            tip1, commits1,
-            tip2, commits2,
-            goal=options.goal, manual=options.manual,
-            branch=(options.branch or options.name),
-            )
-        merge_state.save()
-        MergeState.set_default_name(options.name)
+        cmd_init(parser, options)
     elif options.subcommand == 'start':
-        require_clean_work_tree('proceed')
-
-        if not options.first_parent:
-            parser.error(
-                'The --first-parent option is currently required for the "start" command'
-                )
-        if not options.name:
-            parser.error(
-                'Please specify the --name to be used for this incremental merge'
-                )
-        try:
-            tip1 = check_output(
-                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-                ).strip()
-        except CalledProcessError:
-            tip1 = 'HEAD'
-        tip2 = options.tip2
-        (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
-        merge_state = MergeState.initialize(
-            options.name, merge_base,
-            tip1, commits1,
-            tip2, commits2,
-            goal=options.goal, manual=options.manual,
-            branch=(options.branch or options.name),
-            )
-        merge_state.save()
-        MergeState.set_default_name(options.name)
-
-        try:
-            merge_state.auto_complete_frontier()
-        except FrontierBlockedError as e:
-            request_user_merge(merge_state, e.i1, e.i2)
-        else:
-            sys.stderr.write('Merge is complete!\n')
+        cmd_start(parser, options)
     elif options.subcommand == 'merge':
-        require_clean_work_tree('proceed')
-
-        if not options.first_parent:
-            parser.error(
-                'The --first-parent option is currently required for the "merge" command'
-                )
-
-        tip2 = options.tip2
-
-        if options.name:
-            name = options.name
-        else:
-            # By default, name the imerge after the branch being merged:
-            name = tip2
-            MergeState.check_name_format(name)
-
-        try:
-            tip1 = check_output(
-                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-                ).strip()
-            if not options.branch:
-                # See if we can store the result to the checked-out branch:
-                try:
-                    check_branch_name_format(tip1)
-                except InvalidBranchNameError:
-                    pass
-                else:
-                    options.branch = tip1
-        except CalledProcessError:
-            tip1 = 'HEAD'
-
-        if not options.branch:
-            if options.name:
-                options.branch = options.name
-            else:
-                parser.error(
-                    'HEAD is not a simple branch.  '
-                    'Please specify --branch for storing results.'
-                    )
-
-        try:
-            (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
-        except NothingToDoError as e:
-            sys.stdout.write('Already up-to-date.\n')
-            sys.exit(0)
-        merge_state = MergeState.initialize(
-            name, merge_base,
-            tip1, commits1,
-            tip2, commits2,
-            goal=options.goal, manual=options.manual,
-            branch=options.branch,
-            )
-        merge_state.save()
-        MergeState.set_default_name(name)
-
-        try:
-            merge_state.auto_complete_frontier()
-        except FrontierBlockedError as e:
-            request_user_merge(merge_state, e.i1, e.i2)
-        else:
-            sys.stderr.write('Merge is complete!\n')
+        cmd_merge(parser, options)
     elif options.subcommand == 'rebase':
-        require_clean_work_tree('proceed')
-
-        if not options.first_parent:
-            parser.error(
-                'The --first-parent option is currently required for the "rebase" command'
-                )
-
-        tip1 = options.tip1
-
-        try:
-            tip2 = check_output(
-                ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-                ).strip()
-            if not options.branch:
-                # See if we can store the result to the current branch:
-                try:
-                    check_branch_name_format(tip2)
-                except InvalidBranchNameError:
-                    pass
-                else:
-                    options.branch = tip2
-            if not options.name:
-                # By default, name the imerge after the branch being rebased:
-                options.name = tip2
-
-        except CalledProcessError:
-            tip2 = rev_parse('HEAD')
-
-        if not options.name:
-            parser.error(
-                'The checked-out branch could not be used as the imerge name.\n'
-                'Please use the --name option.'
-                )
-
-        if not options.branch:
-            if options.name:
-                options.branch = options.name
-            else:
-                parser.error(
-                    'HEAD is not a simple branch.  '
-                    'Please specify --branch for storing results.'
-                    )
-
-        try:
-            (merge_base, commits1, commits2) = get_boundaries(tip1, tip2)
-        except NothingToDoError as e:
-            sys.stdout.write('Already up-to-date.\n')
-            sys.exit(0)
-
-        merge_state = MergeState.initialize(
-            options.name, merge_base,
-            tip1, commits1,
-            tip2, commits2,
-            goal=options.goal, manual=options.manual,
-            branch=options.branch,
-            )
-        merge_state.save()
-        MergeState.set_default_name(options.name)
-
-        try:
-            merge_state.auto_complete_frontier()
-        except FrontierBlockedError as e:
-            request_user_merge(merge_state, e.i1, e.i2)
-        else:
-            sys.stderr.write('Merge is complete!\n')
+        cmd_rebase(parser, options)
+    elif options.subcommand == 'drop':
+        cmd_drop(parser, options)
+    elif options.subcommand == 'revert':
+        cmd_revert(parser, options)
     elif options.subcommand == 'remove':
-        MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
+        cmd_remove(parser, options)
     elif options.subcommand == 'continue':
-        merge_state = read_merge_state(options.name)
-        try:
-            incorporate_user_merge(merge_state, edit_log_msg=options.edit)
-        except NoManualMergeError:
-            pass
-        except NotABlockingCommitError as e:
-            raise Failure(str(e))
-        except ManualMergeUnusableError as e:
-            raise Failure(str(e))
-
-        try:
-            merge_state.auto_complete_frontier()
-        except FrontierBlockedError as e:
-            request_user_merge(merge_state, e.i1, e.i2)
-        else:
-            sys.stderr.write('Merge is complete!\n')
+        cmd_continue(parser, options)
     elif options.subcommand == 'record':
-        merge_state = read_merge_state(options.name)
-        try:
-            incorporate_user_merge(merge_state, edit_log_msg=options.edit)
-        except NoManualMergeError as e:
-            raise Failure(str(e))
-        except NotABlockingCommitError:
-            raise Failure(str(e))
-        except ManualMergeUnusableError as e:
-            raise Failure(str(e))
-
-        try:
-            merge_state.auto_complete_frontier()
-        except FrontierBlockedError as e:
-            pass
-        else:
-            sys.stderr.write('Merge is complete!\n')
+        cmd_record(parser, options)
     elif options.subcommand == 'autofill':
-        require_clean_work_tree('proceed')
-        merge_state = read_merge_state(options.name)
-        with TemporaryHead():
-            try:
-                merge_state.auto_complete_frontier()
-            except FrontierBlockedError as e:
-                raise Failure(str(e))
+        cmd_autofill(parser, options)
     elif options.subcommand == 'simplify':
-        require_clean_work_tree('proceed')
-        merge_state = read_merge_state(options.name)
-        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-        if not merge_frontier.is_complete():
-            raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
-        refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
-        if options.goal is not None:
-            merge_state.set_goal(options.goal)
-            merge_state.save()
-        merge_state.simplify(refname, force=options.force)
+        cmd_simplify(parser, options)
     elif options.subcommand == 'finish':
-        require_clean_work_tree('proceed')
-        merge_state = read_merge_state(options.name, default_to_unique=False)
-        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-        if not merge_frontier.is_complete():
-            raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
-        refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
-        if options.goal is not None:
-            merge_state.set_goal(options.goal)
-            merge_state.save()
-        merge_state.simplify(refname, force=options.force)
-        MergeState.remove(merge_state.name)
+        cmd_finish(parser, options)
     elif options.subcommand == 'diagram':
-        if not (options.commits or options.frontier):
-            options.frontier = True
-        if not (options.color or (options.color is None and sys.stdout.isatty())):
-            AnsiColor.disable()
-
-        merge_state = read_merge_state(options.name)
-        if options.commits:
-            merge_state.write(sys.stdout)
-            sys.stdout.write('\n')
-        if options.frontier:
-            merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-            merge_frontier.write(sys.stdout)
-            sys.stdout.write('\n')
-        if options.html:
-            merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-            html = open(options.html, 'w')
-            merge_frontier.write_html(html, merge_state.name)
-            html.close()
-        sys.stdout.write(
-            'Key:\n'
-            )
-        if options.frontier:
-            sys.stdout.write(
-                '  |,-,+ = rectangles forming current merge frontier\n'
-                )
-        sys.stdout.write(
-            '  * = merge done manually\n'
-            '  . = merge done automatically\n'
-            '  # = conflict that is currently blocking progress\n'
-            '  @ = merge was blocked but has been resolved\n'
-            '  ? = no merge recorded\n'
-            '\n'
-            )
+        cmd_diagram(parser, options)
     elif options.subcommand == 'reparent':
-        try:
-            commit_sha1 = get_commit_sha1('HEAD')
-        except ValueError:
-            sys.exit('HEAD is not a valid commit')
-
-        try:
-            parent_sha1s = [get_commit_sha1(p) for p in options.parents]
-        except ValueError as e:
-            sys.exit(e.message)
-
-        sys.stdout.write('%s\n' % (reparent(commit_sha1, parent_sha1s),))
+        cmd_reparent(parser, options)
     else:
         parser.error('Unrecognized subcommand')
 
 
-main(sys.argv[1:])
+if __name__ == '__main__':
+    try:
+        main(sys.argv[1:])
+    except Failure as e:
+        sys.exit(str(e))
+
 
 # vim: set expandtab ft=python:
