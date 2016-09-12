@@ -83,23 +83,31 @@ To start a merge or rebase operation using ``git-imerge``, you use
 commands that are similar to the corresponding ``git`` commands:
 
 .. list-table:: Starting an incremental merge or rebase
-   :widths: 50 50
    :header-rows: 1
 
    * - ``git-imerge`` command
      - ``git`` analogue
+     - Effect
    * - ``git-imerge merge BRANCH``
      - ``git merge BRANCH``
+     - Merge ``BRANCH`` into the current branch.
    * - ``git-imerge rebase BRANCH``
      - ``git rebase BRANCH``
+     - Rebase the current branch on top of ``BRANCH``
    * - ``git-imerge revert COMMIT``
      - ``git revert COMMIT``
+     - Add a new commit that undoes the effect of ``COMMIT``
    * - ``git-imerge revert COMMIT1..COMMIT2``
      - ``git revert COMMIT1..COMMIT2``
+     - Add new commits that undo the effects of ``COMMIT1..COMMIT2``
    * - ``git-imerge drop COMMIT``
      - ``git rebase --onto COMMIT^ COMMIT``
+     - Entirely delete commit ``COMMIT`` from the history of the
+       current branch
    * - ``git-imerge drop COMMIT1..COMMIT2``
      - ``git rebase --onto COMMIT1 COMMIT2``
+     - Entirely delete commits ``COMMIT1..COMMIT2`` from the history
+       of the current branch
 
 (``git-imerge drop`` is also analogous to running ``git rebase
 --interactive``, then deleting the specified commit(s) from the
