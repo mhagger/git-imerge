@@ -92,10 +92,18 @@ commands that are similar to the corresponding ``git`` commands:
      - ``git merge BRANCH``
    * - ``git-imerge rebase BRANCH``
      - ``git rebase BRANCH``
-   * - ``git-imerge drop COMMIT``
-     - ``git rebase --interactive``
    * - ``git-imerge revert COMMIT``
      - ``git revert COMMIT``
+   * - ``git-imerge revert COMMIT1..COMMIT2``
+     - ``git revert COMMIT1..COMMIT2``
+   * - ``git-imerge drop COMMIT``
+     - ``git rebase --onto COMMIT^ COMMIT``
+   * - ``git-imerge drop COMMIT1..COMMIT2``
+     - ``git rebase --onto COMMIT1 COMMIT2``
+
+(``git-imerge drop`` is also analogous to running ``git rebase
+--interactive``, then deleting the specified commit(s) from the
+history.)
 
 A few more options are available if you start the incremental merge
 using ``git imerge start``::
