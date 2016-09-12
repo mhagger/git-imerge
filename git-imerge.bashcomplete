@@ -19,6 +19,8 @@ __git_imerge_commands="\
 start
 merge
 rebase
+drop
+revert
 continue
 finish
 diagram
@@ -67,6 +69,13 @@ __git_imerge_merge_options="\
 --manual
 "
 
+__git_imerge_drop_options="\
+--help
+--name
+--branch
+--manual
+"
+
 __git_imerge_list_options="\
 --help
 "
@@ -98,6 +107,8 @@ __git_imerge_diagram_options="\
 __git_imerge_remove_options=$__git_imerge_autofill_options
 
 __git_imerge_rebase_options=$__git_imerge_merge_options
+
+__git_imerge_revert_options=$__git_imerge_drop_options
 
 __git-imerge_start_completion() {
 	case "$1_$cur" in
@@ -177,6 +188,23 @@ __git-imerge_merge_completion() {
 
 __git-imerge_rebase_completion() {
 	__git-imerge_merge_completion $1
+}
+
+__git-imerge_drop_completion() {
+	case "$1_$cur" in
+	--help_|--branch_|_--branch=|--name_|_--name=)
+		return
+		;;
+	*-|*_-*?)
+		__gitcomp "$__git_imerge_merge_options"
+		return
+		;;
+	esac
+	__gitcomp "$(__git_imerge_branches)"
+}
+
+__git-imerge_revert_completion() {
+	__git-imerge_drop_completion $1
 }
 
 __git-imerge_list_completion() {
