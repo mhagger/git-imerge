@@ -3027,7 +3027,7 @@ def cmd_init(parser, options):
         if options.first_parent:
             parser.error(str(e))
         else:
-            parser.error('%s\nPerhaps use "--first-parent"?', e)
+            parser.error('%s\nPerhaps use "--first-parent"?' % (e,))
 
     merge_state = MergeState.initialize(
         options.name, merge_base,
