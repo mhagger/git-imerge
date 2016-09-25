@@ -3063,7 +3063,7 @@ def cmd_start(parser, options):
         if options.first_parent:
             parser.error(str(e))
         else:
-            parser.error('%s\nPerhaps use "--first-parent"?', e)
+            parser.error('%s\nPerhaps use "--first-parent"?' % (e,))
 
     merge_state = MergeState.initialize(
         options.name, merge_base,
@@ -3127,7 +3127,7 @@ def cmd_merge(parser, options):
         if options.first_parent:
             parser.error(str(e))
         else:
-            parser.error('%s\nPerhaps use "--first-parent"?', e)
+            parser.error('%s\nPerhaps use "--first-parent"?' % (e,))
     except NothingToDoError as e:
         sys.stdout.write('Already up-to-date.\n')
         sys.exit(0)
@@ -3197,7 +3197,7 @@ def cmd_rebase(parser, options):
         if options.first_parent:
             parser.error(str(e))
         else:
-            parser.error('%s\nPerhaps use "--first-parent"?', e)
+            parser.error('%s\nPerhaps use "--first-parent"?' % (e,))
     except NothingToDoError as e:
         sys.stdout.write('Already up-to-date.\n')
         sys.exit(0)
@@ -3242,7 +3242,7 @@ def cmd_drop(parser, options):
         if options.first_parent:
             parser.error(str(e))
         else:
-            parser.error('%s\nPerhaps use "--first-parent"?', e)
+            parser.error('%s\nPerhaps use "--first-parent"?' % (e,))
 
     # Suppose we want to drop commits 2 and 3 in the branch below.
     # Then we set up an imerge as follows:
@@ -3318,7 +3318,7 @@ def cmd_drop(parser, options):
         if options.first_parent:
             parser.error(str(e))
         else:
-            parser.error('%s\nPerhaps use "--first-parent"?', e)
+            parser.error('%s\nPerhaps use "--first-parent"?' % (e,))
     except NothingToDoError as e:
         sys.stdout.write('Already up-to-date.\n')
         sys.exit(0)
@@ -3364,7 +3364,7 @@ def cmd_revert(parser, options):
         if options.first_parent:
             parser.error(str(e))
         else:
-            parser.error('%s\nPerhaps use "--first-parent"?', e)
+            parser.error('%s\nPerhaps use "--first-parent"?' % (e,))
 
     # Suppose we want to revert commits 2 and 3 in the branch below.
     # Then we set up an imerge as follows:
@@ -3435,7 +3435,7 @@ def cmd_revert(parser, options):
         if options.first_parent:
             parser.error(str(e))
         else:
-            parser.error('%s\nPerhaps use "--first-parent"?', e)
+            parser.error('%s\nPerhaps use "--first-parent"?' % (e,))
     except NothingToDoError as e:
         sys.stdout.write('Already up-to-date.\n')
         sys.exit(0)
