@@ -536,46 +536,67 @@ class NothingToDoError(Failure):
 
 
 def linear_ancestry(commit1, commit2, first_parent):
-    """Compute the linear ancestry between commit1 and commit2.
+    """Compute a linear ancestry between commit1 and commit2.
 
-    Compute what *should* be the output of
+    Our goal is to find a linear series of commits connecting
+    `commit1` and `commit2`. We do so as follows:
 
-        git --first-parent --ancestry-path commit1..commit2
+    * If all of the commits in
 
-    if it worked correctly; i.e., the list of commits in the
-    first-parent chain going backwards from commit2 that are also
-    descendents of commit1. Return a list of SHA-1s in 'chronological'
-    order.
+          git rev-list --ancestry-path commit1..commit2
 
-    Raise NotFirstParentAncestorError if commit1 is not a first-parent
-    ancestor of commit2.
+      are on a linear chain, return that.
 
-    If first_parent is *not* set, then compute the same thing, except
-    raise a NonlinearAncestryError if the history between commit1 and
-    commit2 is not linear.
+    * If there are multiple paths between `commit1` and `commit2` in
+      that list of commits, then
+
+      * If `first_parent` is not set, then raise an
+        `NonlinearAncestryError` exception.
+
+      * If `first_parent` is set, then, at each merge commit, follow
+        the first parent that is in that list of commits.
+
+    Return a list of SHA-1s in 'chronological' order.
+
+    Raise NotFirstParentAncestorError if commit1 is not an ancestor of
+    commit2.
 
     """
 
+    oid1 = rev_parse(commit1)
+    oid2 = rev_parse(commit2)
+
+    parentage = {oid1 : []}
+    for (commit, parents) in rev_list_with_parents(
+            '--ancestry-path', '--topo-order', '%s..%s' % (oid1, oid2)
+            ):
+        parentage[commit] = parents
+
     commits = []
 
-    next_commit = rev_parse(commit2)
-    last_commit = rev_parse(commit1)
+    commit = oid2
+    while commit != oid1:
+        parents = parentage.get(commit, [])
 
-    for (commit, parents) in rev_list_with_parents(
-            '--first-parent', '--topo-order', '%s..%s' % (commit1, commit2)
-            ):
-        if commit == next_commit:
-            commits.append(commit)
-            if not parents:
-                raise NotFirstParentAncestorError(commit1, commit2)
-            if not first_parent and len(parents) > 1:
-                raise NonlinearAncestryError(commit1, commit2)
-            next_commit = parents[0]
+        # Only consider parents that are in the ancestry path:
+        included_parents = [
+            parent
+            for parent in parents
+            if parent in parentage
+        ]
 
-    if next_commit != last_commit:
-        raise NotFirstParentAncestorError(commit1, commit2)
+        if not included_parents:
+            raise NotFirstParentAncestorError(commit1, commit2)
+        elif len(included_parents) == 1 or first_parent:
+            parent = included_parents[0]
+        else:
+            raise NonlinearAncestryError(commit1, commit2)
+
+        commits.append(commit)
+        commit = parent
 
     commits.reverse()
+
     return commits
 
 
