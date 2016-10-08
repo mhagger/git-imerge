@@ -2333,7 +2333,7 @@ class MergeState(Block):
         return state
 
     @staticmethod
-    def remove(name):
+    def remove(git, name):
         # If HEAD is the scratch refname, abort any in-progress
         # commits and detach HEAD:
         scratch_refname = MergeState.get_scratch_refname(name)
@@ -3483,7 +3483,7 @@ def cmd_revert(parser, options):
 
 def cmd_remove(parser, options):
     git = GitRepository()
-    MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
+    MergeState.remove(git, choose_merge_name(options.name, default_to_unique=False))
 
 
 def cmd_continue(parser, options):
@@ -3563,7 +3563,7 @@ def cmd_finish(parser, options):
         merge_state.set_goal(options.goal)
         merge_state.save()
     merge_state.simplify(refname, force=options.force)
-    MergeState.remove(merge_state.name)
+    MergeState.remove(git, merge_state.name)
 
 
 def cmd_diagram(parser, options):
