@@ -755,6 +755,22 @@ class GitRepository(object):
     def get_tree(self, arg):
         return self.rev_parse('%s^{tree}' % (arg,))
 
+    def update_ref(self, refname, value, msg, deref=True):
+        if deref:
+            opt = []
+        else:
+            opt = ['--no-deref']
+
+        check_call(['git', 'update-ref'] + opt + ['-m', msg, refname, value])
+
+    def delete_ref(self, refname, msg, deref=True):
+        if deref:
+            opt = []
+        else:
+            opt = ['--no-deref']
+
+        check_call(['git', 'update-ref'] + opt + ['-m', msg, '-d', refname])
+
     def compute_best_merge_base(self, tip1, tip2):
         try:
             merge_bases = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
@@ -1061,19 +1077,17 @@ class MergeRecord(object):
         """If this record has changed, save it."""
 
         def set_ref(source):
-            check_call([
-                'git', 'update-ref',
-                '-m', 'imerge %r: Record %s merge' % (name, source,),
+            git.update_ref(
                 'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
                 self.sha1,
-                ])
+                'imerge %r: Record %s merge' % (name, source,),
+                )
 
         def clear_ref(source):
-            check_call([
-                'git', 'update-ref',
-                '-m', 'imerge %r: Remove obsolete %s merge' % (name, source,),
-                '-d', 'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
-                ])
+            git.delete_ref(
+                'refs/imerge/%s/%s/%d-%d' % (name, source, i1, i2),
+                'imerge %r: Remove obsolete %s merge' % (name, source,),
+                )
 
         if self.flags & self.MANUAL:
             if self.flags & self.AUTO:
@@ -2408,18 +2422,16 @@ class MergeState(Block):
             except CalledProcessError:
                 pass
             # Detach head so that we can delete scratch_refname:
-            check_call([
-                'git', 'update-ref', '--no-deref',
-                '-m', 'Detach HEAD from %s' % (scratch_refname,),
-                'HEAD', git.get_commit_sha1('HEAD'),
-                ])
+            git.update_ref(
+                'HEAD', 'HEAD^0',
+                'Detach HEAD from %s' % (scratch_refname,),
+                deref=False,
+                )
 
         # Delete the scratch refname:
-        check_call([
-            'git', 'update-ref',
-            '-m', 'imerge %s: remove scratch reference' % (name,),
-            '-d', scratch_refname,
-            ])
+        git.delete_ref(
+            scratch_refname, 'imerge %s: remove scratch reference' % (name,),
+            )
 
         # Remove any references referring to intermediate merges:
         for line in check_output([
@@ -2427,11 +2439,7 @@ class MergeState(Block):
                 ]).splitlines():
             (sha1, type, refname) = line.split()
             try:
-                check_call([
-                    'git', 'update-ref',
-                    '-m', 'imerge: remove merge %r' % (name,),
-                    '-d', refname,
-                    ])
+                git.delete_ref(refname, 'imerge: remove merge %r' % (name,))
             except CalledProcessError as e:
                 sys.stderr.write(
                     'Warning: error removing reference %r: %s' % (refname, e)
@@ -2551,11 +2559,10 @@ class MergeState(Block):
         if not above.is_known() or not left.is_known():
             raise RuntimeError('The parents of merge %d-%d are not ready' % (i1, i2))
         refname = MergeState.get_scratch_refname(self.name)
-        check_call([
-            'git', 'update-ref',
-            '-m', 'imerge %r: Prepare merge %d-%d' % (self.name, i1, i2,),
+        self.git.update_ref(
             refname, above.sha1,
-            ])
+            'imerge %r: Prepare merge %d-%d' % (self.name, i1, i2,),
+            )
         self.git.checkout(refname)
         logmsg = 'imerge \'%s\': manual merge %d-%d' % (self.name, i1, i2)
         try:
@@ -2678,13 +2685,10 @@ class MergeState(Block):
             else:
                 # It points to a commit that is already recorded.  We can
                 # delete it without losing any information.
-                check_call([
-                    'git', 'update-ref',
-                    '-m',
-                    'imerge %r: Remove obsolete scratch reference'
-                    % (self.name,),
-                    '-d', refname,
-                    ])
+                self.git.delete_ref(
+                    refname,
+                    'imerge %r: Remove obsolete scratch reference' % (self.name,),
+                    )
                 sys.stderr.write(
                     '%s did not point to a new merge; it has been deleted.\n'
                     % (refname,)
@@ -2707,17 +2711,13 @@ class MergeState(Block):
         (i1, i2) = self.incorporate_manual_merge(commit)
 
         # Now detach head so that we can delete refname.
-        check_call([
-            'git', 'update-ref', '--no-deref',
-            '-m', 'Detach HEAD from %s' % (refname,),
-            'HEAD', commit,
-            ])
+        self.git.update_ref(
+            'HEAD', commit, 'Detach HEAD from %s' % (refname,), deref=False,
+            )
 
-        check_call([
-            'git', 'update-ref',
-            '-m', 'imerge %s: remove scratch reference' % (self.name,),
-            '-d', refname,
-            ])
+        self.git.delete_ref(
+            refname, 'imerge %s: remove scratch reference' % (self.name,),
+            )
 
         try:
             # This might throw NotABlockingCommitError:
@@ -2737,7 +2737,7 @@ class MergeState(Block):
             ref_oldval = self.git.get_commit_sha1(refname)
         except ValueError:
             # refname doesn't already exist; simply point it at commit:
-            check_call(['git', 'update-ref', refname, commit])
+            self.git.update_ref(refname, commit, 'imerge: recording final merge')
             self.git.checkout(refname, quiet=True)
         else:
             # refname already exists.  This has two ramifications:
@@ -2757,11 +2757,9 @@ class MergeState(Block):
             if head_refname == refname:
                 check_call(['git', 'reset', '--hard', commit])
             else:
-                check_call([
-                    'git', 'update-ref',
-                    '-m', 'imerge: recording final merge',
-                    refname, commit,
-                    ])
+                self.git.update_ref(
+                    refname, commit, 'imerge: recording final merge',
+                    )
                 self.git.checkout(refname, quiet=True)
 
     def simplify_to_full(self, refname, force=False):
