@@ -2523,6 +2523,115 @@ class MergeState(Block):
         self[i1, i2].record_merge(commit, MergeRecord.NEW_MANUAL)
         return (i1, i2)
 
+    def incorporate_user_merge(self, edit_log_msg=None):
+        """If the user has done a merge for us, incorporate the results.
+
+        If the scratch reference refs/heads/imerge/NAME exists and is
+        checked out, first check if there are staged changes that can
+        be committed. Then try to incorporate the current commit into
+        this MergeState, delete the reference, and return (i1,i2)
+        corresponding to the merge. If the scratch reference does not
+        exist, raise NoManualMergeError(). If the scratch reference
+        exists but cannot be used, raise a ManualMergeUnusableError.
+        If there are unstaged changes in the working tree, emit an
+        error message and raise UncleanWorkTreeError.
+
+        """
+
+        refname = MergeState.get_scratch_refname(self.name)
+
+        try:
+            commit = get_commit_sha1(refname)
+        except ValueError:
+            raise NoManualMergeError('Reference %s does not exist.' % (refname,))
+
+        try:
+            head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
+        except CalledProcessError:
+            raise NoManualMergeError('HEAD is currently detached.')
+
+        if head_name != refname:
+            # This should not usually happen.  The scratch reference
+            # exists, but it is not current.  Perhaps the user gave up on
+            # an attempted merge then switched to another branch.  We want
+            # to delete refname, but only if it doesn't contain any
+            # content that we don't already know.
+            try:
+                self.find_index(commit)
+            except CommitNotFoundError:
+                # It points to a commit that we don't have in our records.
+                raise Failure(
+                    'The scratch reference, %(refname)s, already exists but is not\n'
+                    'checked out.  If it points to a merge commit that you would like\n'
+                    'to use, please check it out using\n'
+                    '\n'
+                    '    git checkout %(refname)s\n'
+                    '\n'
+                    'and then try to continue again.  If it points to a commit that is\n'
+                    'unneeded, then please delete the reference using\n'
+                    '\n'
+                    '    git update-ref -d %(refname)s\n'
+                    '\n'
+                    'and then continue.'
+                    % dict(refname=refname)
+                    )
+            else:
+                # It points to a commit that is already recorded.  We can
+                # delete it without losing any information.
+                check_call([
+                    'git', 'update-ref',
+                    '-m',
+                    'imerge %r: Remove obsolete scratch reference'
+                    % (self.name,),
+                    '-d', refname,
+                    ])
+                sys.stderr.write(
+                    '%s did not point to a new merge; it has been deleted.\n'
+                    % (refname,)
+                    )
+                raise NoManualMergeError(
+                    'Reference %s was not checked out.' % (refname,)
+                    )
+
+        # If we reach this point, then the scratch reference exists and is
+        # checked out.  Now check whether there is staged content that
+        # can be committed:
+        if commit_user_merge(edit_log_msg=edit_log_msg):
+            commit = get_commit_sha1('HEAD')
+
+        require_clean_work_tree('proceed')
+
+        merge_frontier = MergeFrontier.map_known_frontier(self)
+
+        # This might throw ManualMergeUnusableError:
+        (i1, i2) = self.incorporate_manual_merge(commit)
+
+        # Now detach head so that we can delete refname.
+        check_call([
+            'git', 'update-ref', '--no-deref',
+            '-m', 'Detach HEAD from %s' % (refname,),
+            'HEAD', commit,
+            ])
+
+        check_call([
+            'git', 'update-ref',
+            '-m', 'imerge %s: remove scratch reference' % (self.name,),
+            '-d', refname,
+            ])
+
+        try:
+            # This might throw NotABlockingCommitError:
+            unblocked_block = merge_frontier.get_affected_blocker_block(i1, i2)
+            unblocked_block[1, 1].record_blocked(False)
+            sys.stderr.write(
+                'Merge has been recorded for merge %d-%d.\n'
+                % unblocked_block.get_original_indexes(1, 1)
+                )
+        except NotABlockingCommitError:
+            raise
+        finally:
+            self.save()
+
     def _set_refname(self, refname, commit, force=False):
         try:
             ref_oldval = get_commit_sha1(refname)
@@ -2855,114 +2964,6 @@ def commit_user_merge(edit_log_msg=None):
         raise Failure('Could not commit staged changes.')
 
     return True
-
-
-def incorporate_user_merge(merge_state, edit_log_msg=None):
-    """If the user has done a merge for us, incorporate the results.
-
-    If the scratch reference refs/heads/imerge/NAME exists and is
-    checked out, first check if there are staged changes that can be
-    committed.  Then try to incorporate the current commit into
-    merge_state, delete the reference, and return (i1,i2)
-    corresponding to the merge.  If the scratch reference does not
-    exist, raise NoManualMergeError().  If the scratch reference
-    exists but cannot be used, raise a ManualMergeUnusableError.  If
-    there are unstaged changes in the working tree, emit an error
-    message and raise UncleanWorkTreeError."""
-
-    refname = MergeState.get_scratch_refname(merge_state.name)
-
-    try:
-        commit = get_commit_sha1(refname)
-    except ValueError:
-        raise NoManualMergeError('Reference %s does not exist.' % (refname,))
-
-    try:
-        head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
-    except CalledProcessError:
-        raise NoManualMergeError('HEAD is currently detached.')
-
-    if head_name != refname:
-        # This should not usually happen.  The scratch reference
-        # exists, but it is not current.  Perhaps the user gave up on
-        # an attempted merge then switched to another branch.  We want
-        # to delete refname, but only if it doesn't contain any
-        # content that we don't already know.
-        try:
-            merge_state.find_index(commit)
-        except CommitNotFoundError:
-            # It points to a commit that we don't have in our records.
-            raise Failure(
-                'The scratch reference, %(refname)s, already exists but is not\n'
-                'checked out.  If it points to a merge commit that you would like\n'
-                'to use, please check it out using\n'
-                '\n'
-                '    git checkout %(refname)s\n'
-                '\n'
-                'and then try to continue again.  If it points to a commit that is\n'
-                'unneeded, then please delete the reference using\n'
-                '\n'
-                '    git update-ref -d %(refname)s\n'
-                '\n'
-                'and then continue.'
-                % dict(refname=refname)
-                )
-        else:
-            # It points to a commit that is already recorded.  We can
-            # delete it without losing any information.
-            check_call([
-                'git', 'update-ref',
-                '-m',
-                'imerge %r: Remove obsolete scratch reference'
-                % (merge_state.name,),
-                '-d', refname,
-                ])
-            sys.stderr.write(
-                '%s did not point to a new merge; it has been deleted.\n'
-                % (refname,)
-                )
-            raise NoManualMergeError(
-                'Reference %s was not checked out.' % (refname,)
-                )
-
-    # If we reach this point, then the scratch reference exists and is
-    # checked out.  Now check whether there is staged content that
-    # can be committed:
-    if commit_user_merge(edit_log_msg=edit_log_msg):
-        commit = get_commit_sha1('HEAD')
-
-    require_clean_work_tree('proceed')
-
-    merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-
-    # This might throw ManualMergeUnusableError:
-    (i1, i2) = merge_state.incorporate_manual_merge(commit)
-
-    # Now detach head so that we can delete refname.
-    check_call([
-        'git', 'update-ref', '--no-deref',
-        '-m', 'Detach HEAD from %s' % (refname,),
-        'HEAD', commit,
-        ])
-
-    check_call([
-        'git', 'update-ref',
-        '-m', 'imerge %s: remove scratch reference' % (merge_state.name,),
-        '-d', refname,
-        ])
-
-    try:
-        # This might throw NotABlockingCommitError:
-        unblocked_block = merge_frontier.get_affected_blocker_block(i1, i2)
-        unblocked_block[1, 1].record_blocked(False)
-        sys.stderr.write(
-            'Merge has been recorded for merge %d-%d.\n'
-            % unblocked_block.get_original_indexes(1, 1)
-            )
-    except NotABlockingCommitError:
-        raise
-    finally:
-        merge_state.save()
 
 
 def choose_merge_name(git, name, default_to_unique=True):
@@ -3486,7 +3487,7 @@ def cmd_continue(parser, options):
     git = GitRepository()
     merge_state = read_merge_state(git, options.name)
     try:
-        incorporate_user_merge(merge_state, edit_log_msg=options.edit)
+        merge_state.incorporate_user_merge(edit_log_msg=options.edit)
     except NoManualMergeError:
         pass
     except NotABlockingCommitError as e:
@@ -3506,7 +3507,7 @@ def cmd_record(parser, options):
     git = GitRepository()
     merge_state = read_merge_state(git, options.name)
     try:
-        incorporate_user_merge(merge_state, edit_log_msg=options.edit)
+        merge_state.incorporate_user_merge(edit_log_msg=options.edit)
     except NoManualMergeError as e:
         raise Failure(str(e))
     except NotABlockingCommitError:
