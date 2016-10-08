@@ -676,6 +676,14 @@ class GitRepository(object):
             for l in check_output(cmd).splitlines()
             ]
 
+    def rev_list_with_parents(self, *args):
+        """Iterate over (commit, [parent,...])."""
+
+        cmd = ['git', 'log', '--format=%H %P'] + list(args)
+        for line in check_output(cmd).splitlines():
+            commits = line.strip().split()
+            yield (commits[0], commits[1:])
+
     def get_author_info(self, commit):
         """Return environment settings to set author metadata.
 
@@ -747,7 +755,7 @@ class GitRepository(object):
         oid2 = rev_parse(commit2)
 
         parentage = {oid1 : []}
-        for (commit, parents) in rev_list_with_parents(
+        for (commit, parents) in self.rev_list_with_parents(
                 '--ancestry-path', '--topo-order', '%s..%s' % (oid1, oid2)
                 ):
             parentage[commit] = parents
@@ -843,15 +851,6 @@ class GitRepository(object):
 
 def rev_parse(arg):
     return check_output(['git', 'rev-parse', '--verify', '--quiet', arg]).strip()
-
-
-def rev_list_with_parents(*args):
-    """Iterate over (commit, [parent,...])."""
-
-    cmd = ['git', 'log', '--format=%H %P'] + list(args)
-    for line in check_output(cmd).splitlines():
-        commits = line.strip().split()
-        yield (commits[0], commits[1:])
 
 
 BRANCH_PREFIX = 'refs/heads/'
