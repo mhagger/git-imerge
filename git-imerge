@@ -2974,7 +2974,7 @@ def incorporate_user_merge(merge_state, edit_log_msg=None):
         merge_state.save()
 
 
-def choose_merge_name(name, default_to_unique=True):
+def choose_merge_name(git, name, default_to_unique=True):
     # If a name was specified, try to use it and fail if not possible:
     if name is not None:
         if not MergeState.check_exists(name):
@@ -3008,7 +3008,9 @@ def choose_merge_name(name, default_to_unique=True):
 
 
 def read_merge_state(git, name=None, default_to_unique=True):
-    return MergeState.read(choose_merge_name(name, default_to_unique=default_to_unique))
+    return MergeState.read(
+        choose_merge_name(git, name, default_to_unique=default_to_unique),
+        )
 
 
 def cmd_list(parser, options):
@@ -3483,7 +3485,9 @@ def cmd_revert(parser, options):
 
 def cmd_remove(parser, options):
     git = GitRepository()
-    MergeState.remove(git, choose_merge_name(options.name, default_to_unique=False))
+    MergeState.remove(
+        git, choose_merge_name(git, options.name, default_to_unique=False),
+        )
 
 
 def cmd_continue(parser, options):
