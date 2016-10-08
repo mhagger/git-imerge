@@ -661,6 +661,25 @@ class GitRepository(object):
         [commit] = parents
         return commit
 
+    def get_boundaries(self, tip1, tip2, first_parent):
+        """Get the boundaries of an incremental merge.
+
+        Given the tips of two branches that should be merged, return
+        (merge_base, commits1, commits2) describing the edges of the
+        imerge.  Raise Failure if there are any problems."""
+
+        merge_base = compute_best_merge_base(tip1, tip2)
+
+        commits1 = linear_ancestry(merge_base, tip1, first_parent)
+        if not commits1:
+            raise NothingToDoError(tip1, tip2)
+
+        commits2 = linear_ancestry(merge_base, tip2, first_parent)
+        if not commits2:
+            raise NothingToDoError(tip2, tip1)
+
+        return (merge_base, commits1, commits2)
+
     def temporary_head(self, message):
         """Return a context manager to manage a temporary HEAD.
 
@@ -912,26 +931,6 @@ def compute_best_merge_base(tip1, tip2):
             best_count = count
 
     return best_base
-
-
-def get_boundaries(tip1, tip2, first_parent):
-    """Get the boundaries of an incremental merge.
-
-    Given the tips of two branches that should be merged, return
-    (merge_base, commits1, commits2) describing the edges of the
-    imerge.  Raise Failure if there are any problems."""
-
-    merge_base = compute_best_merge_base(tip1, tip2)
-
-    commits1 = linear_ancestry(merge_base, tip1, first_parent)
-    if not commits1:
-        raise NothingToDoError(tip1, tip2)
-
-    commits2 = linear_ancestry(merge_base, tip2, first_parent)
-    if not commits2:
-        raise NothingToDoError(tip2, tip1)
-
-    return (merge_base, commits1, commits2)
 
 
 def reparent(commit, parent_sha1s, msg=None):
@@ -3036,7 +3035,7 @@ def cmd_init(parser, options):
         tip1 = 'HEAD'
     tip2 = options.tip2
     try:
-        (merge_base, commits1, commits2) = get_boundaries(
+        (merge_base, commits1, commits2) = git.get_boundaries(
             tip1, tip2, options.first_parent,
             )
     except NonlinearAncestryError as e:
@@ -3073,7 +3072,7 @@ def cmd_start(parser, options):
     tip2 = options.tip2
 
     try:
-        (merge_base, commits1, commits2) = get_boundaries(
+        (merge_base, commits1, commits2) = git.get_boundaries(
             tip1, tip2, options.first_parent,
             )
     except NonlinearAncestryError as e:
@@ -3138,7 +3137,7 @@ def cmd_merge(parser, options):
                 )
 
     try:
-        (merge_base, commits1, commits2) = get_boundaries(
+        (merge_base, commits1, commits2) = git.get_boundaries(
             tip1, tip2, options.first_parent,
             )
     except NonlinearAncestryError as e:
@@ -3209,7 +3208,7 @@ def cmd_rebase(parser, options):
                 )
 
     try:
-        (merge_base, commits1, commits2) = get_boundaries(
+        (merge_base, commits1, commits2) = git.get_boundaries(
             tip1, tip2, options.first_parent,
             )
     except NonlinearAncestryError as e:
@@ -3331,7 +3330,7 @@ def cmd_drop(parser, options):
     tip2 = rev_parse('HEAD')
 
     try:
-        (merge_base, commits1, commits2) = get_boundaries(
+        (merge_base, commits1, commits2) = git.get_boundaries(
             tip1, tip2, options.first_parent,
             )
     except NonlinearAncestryError as e:
@@ -3449,7 +3448,7 @@ def cmd_revert(parser, options):
     tip2 = rev_parse('HEAD')
 
     try:
-        (merge_base, commits1, commits2) = get_boundaries(
+        (merge_base, commits1, commits2) = git.get_boundaries(
             tip1, tip2, options.first_parent,
             )
     except NonlinearAncestryError as e:
