@@ -330,6 +330,29 @@ class GitRepository(object):
         except CalledProcessError:
             return None
 
+    def get_default_edit(self):
+        """Should '--edit' be used when committing intermediate user merges?
+
+        When 'git imerge continue' or 'git imerge record' finds a user
+        merge that can be committed, should it (by default) ask the user
+        to edit the commit message? This behavior can be configured via
+        'imerge.editmergemessages'. If it is not configured, return False.
+
+        Please note that this function is only used to choose the default
+        value. It can be overridden on the command line using '--edit' or
+        '--no-edit'.
+
+        """
+
+        try:
+            return {'true' : True, 'false' : False}[
+                check_output(
+                    ['git', 'config', '--bool', 'imerge.editmergemessages']
+                    ).rstrip()
+                ]
+        except CalledProcessError:
+            return False
+
     def check_imerge_exists(self, name):
         """Verify that a MergeState with the given name exists.
 
@@ -442,7 +465,7 @@ class GitRepository(object):
         cmd = ['git', 'commit', '--no-verify']
 
         if edit_log_msg is None:
-            edit_log_msg = get_default_edit()
+            edit_log_msg = self.get_default_edit()
 
         if edit_log_msg:
             cmd += ['--edit']
@@ -455,30 +478,6 @@ class GitRepository(object):
             raise Failure('Could not commit staged changes.')
 
         return True
-
-
-def get_default_edit():
-    """Should '--edit' be used when committing intermediate user merges?
-
-    When 'git imerge continue' or 'git imerge record' finds a user
-    merge that can be committed, should it (by default) ask the user
-    to edit the commit message? This behavior can be configured via
-    'imerge.editmergemessages'. If it is not configured, return False.
-
-    Please note that this function is only used to choose the default
-    value. It can be overridden on the command line using '--edit' or
-    '--no-edit'.
-
-    """
-
-    try:
-        return {'true' : True, 'false' : False}[
-            check_output(
-                ['git', 'config', '--bool', 'imerge.editmergemessages']
-                ).rstrip()
-            ]
-    except CalledProcessError:
-        return False
 
 
 def refresh_index():
