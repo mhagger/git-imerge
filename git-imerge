@@ -479,6 +479,11 @@ class GitRepository(object):
         if retcode:
             raise UncleanWorkTreeError(err.rstrip() or out.rstrip())
 
+    def verify_imerge_name_available(self, name):
+        self.check_imerge_name_format(name)
+        if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
+            raise Failure('Name %r is already in use!' % (name,))
+
     def check_imerge_exists(self, name):
         """Verify that a MergeState with the given name exists.
 
@@ -2247,14 +2252,11 @@ class MergeState(Block):
             ):
         """Create and return a new MergeState object."""
 
-        git.check_imerge_name_format(name)
+        git.verify_imerge_name_available(name)
         if branch:
             git.check_branch_name_format(branch)
         else:
             branch = name
-
-        if check_output(['git', 'for-each-ref', 'refs/imerge/%s' % (name,)]):
-            raise Failure('Name %r is already in use!' % (name,))
 
         if goal == 'rebase':
             MergeState._check_no_merges(git, commits2)
