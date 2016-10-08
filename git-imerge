@@ -258,6 +258,15 @@ else:
         return s
 
 
+class UncleanWorkTreeError(Failure):
+    pass
+
+
+class GitRepository(object):
+    def __init__(self):
+        pass
+
+
 def get_default_edit():
     """Should '--edit' be used when committing intermediate user merges?
 
@@ -280,10 +289,6 @@ def get_default_edit():
             ]
     except CalledProcessError:
         return False
-
-
-class UncleanWorkTreeError(Failure):
-    pass
 
 
 def refresh_index():
