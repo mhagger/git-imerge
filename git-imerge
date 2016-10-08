@@ -353,6 +353,16 @@ class GitRepository(object):
         except CalledProcessError:
             return False
 
+    def refresh_index(self):
+        process = subprocess.Popen(
+            ['git', 'update-index', '-q', '--ignore-submodules', '--refresh'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+        out, err = communicate(process)
+        retcode = process.poll()
+        if retcode:
+            raise UncleanWorkTreeError(err.rstrip() or out.rstrip())
+
     def check_imerge_exists(self, name):
         """Verify that a MergeState with the given name exists.
 
@@ -461,7 +471,7 @@ class GitRepository(object):
         if retcode:
             raise UncleanWorkTreeError(err.rstrip())
 
-        refresh_index()
+        self.refresh_index()
 
         error = []
         if unstaged_changes():
@@ -501,7 +511,7 @@ class GitRepository(object):
 
         # Check if all conflicts are resolved and everything in the
         # working tree is staged:
-        refresh_index()
+        self.refresh_index()
         if unstaged_changes():
             raise UncleanWorkTreeError(
                 'Cannot proceed: You have unstaged changes.'
@@ -571,17 +581,6 @@ class GitRepository(object):
 
         [commit] = parents
         return commit
-
-
-def refresh_index():
-    process = subprocess.Popen(
-        ['git', 'update-index', '-q', '--ignore-submodules', '--refresh'],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-    out, err = communicate(process)
-    retcode = process.poll()
-    if retcode:
-        raise UncleanWorkTreeError(err.rstrip() or out.rstrip())
 
 
 def unstaged_changes():
