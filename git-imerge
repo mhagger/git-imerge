@@ -347,6 +347,19 @@ class GitRepository(object):
             )
         return json.loads(state_string)
 
+    def is_ancestor(self, commit1, commit2):
+        """Return True iff commit1 is an ancestor (or equal to) commit2."""
+
+        if commit1 == commit2:
+            return True
+        else:
+            return int(
+                check_output([
+                    'git', 'rev-list', '--count', '--ancestry-path',
+                    '%s..%s' % (commit1, commit2,),
+                    ]).strip()
+                ) != 0
+
     def is_ff(self, refname, commit):
         """Would updating refname to commit be a fast-forward update?
 
@@ -361,7 +374,7 @@ class GitRepository(object):
             # refname doesn't already exist; no problem.
             return True
         else:
-            return MergeState._is_ancestor(ref_oldval, commit)
+            return self.is_ancestor(ref_oldval, commit)
 
 
 def get_default_edit():
@@ -2511,20 +2524,6 @@ class MergeState(Block):
         self[i1, i2].record_merge(commit, MergeRecord.NEW_MANUAL)
         return (i1, i2)
 
-    @staticmethod
-    def _is_ancestor(commit1, commit2):
-        """Return True iff commit1 is an ancestor (or equal to) commit2."""
-
-        if commit1 == commit2:
-            return True
-        else:
-            return int(
-                check_output([
-                    'git', 'rev-list', '--count', '--ancestry-path',
-                    '%s..%s' % (commit1, commit2,),
-                    ]).strip()
-                ) != 0
-
     def _set_refname(self, refname, commit, force=False):
         try:
             ref_oldval = get_commit_sha1(refname)
@@ -2542,7 +2541,7 @@ class MergeState(Block):
                 head_refname = None
 
             if not force:
-                if not MergeState._is_ancestor(ref_oldval, commit):
+                if not self.git.is_ancestor(ref_oldval, commit):
                     raise Failure(
                         '%s cannot be fast-forwarded to %s!' % (refname, commit)
                         )
