@@ -2486,6 +2486,52 @@ class MergeState(Block):
                         return (i1, i2)
         raise CommitNotFoundError(commit)
 
+    def request_user_merge(self, i1, i2):
+        """Prepare the working tree for the user to do a manual merge.
+
+        It is assumed that the merges above and to the left of (i1, i2)
+        are already done."""
+
+        above = self[i1, i2 - 1]
+        left = self[i1 - 1, i2]
+        if not above.is_known() or not left.is_known():
+            raise RuntimeError('The parents of merge %d-%d are not ready' % (i1, i2))
+        refname = MergeState.get_scratch_refname(self.name)
+        check_call([
+            'git', 'update-ref',
+            '-m', 'imerge %r: Prepare merge %d-%d' % (self.name, i1, i2,),
+            refname, above.sha1,
+            ])
+        checkout(refname)
+        logmsg = 'imerge \'%s\': manual merge %d-%d' % (self.name, i1, i2)
+        try:
+            check_call([
+                'git', 'merge', '--no-commit',
+                '-m', logmsg,
+                left.sha1,
+                ])
+        except CalledProcessError:
+            # We expect an error (otherwise we would have automerged!)
+            pass
+        sys.stderr.write(
+            '\n'
+            'Original first commit:\n'
+            )
+        check_call(['git', '--no-pager', 'log', '--no-walk', self[i1, 0].sha1])
+        sys.stderr.write(
+            '\n'
+            'Original second commit:\n'
+            )
+        check_call(['git', '--no-pager', 'log', '--no-walk', self[0, i2].sha1])
+        sys.stderr.write(
+            '\n'
+            'There was a conflict merging commit %d-%d, shown above.\n'
+            'Please resolve the conflict, commit the result, then type\n'
+            '\n'
+            '    git-imerge continue\n'
+            % (i1, i2)
+            )
+
     def incorporate_manual_merge(self, commit):
         """Record commit as a manual merge of its parents.
 
@@ -2868,53 +2914,6 @@ class MergeState(Block):
             )
 
 
-def request_user_merge(merge_state, i1, i2):
-    """Prepare the working tree for the user to do a manual merge.
-
-    It is assumed that the merges above and to the left of (i1, i2)
-    are already done."""
-
-    above = merge_state[i1, i2 - 1]
-    left = merge_state[i1 - 1, i2]
-    if not above.is_known() or not left.is_known():
-        raise RuntimeError('The parents of merge %d-%d are not ready' % (i1, i2))
-    refname = MergeState.get_scratch_refname(merge_state.name)
-    check_call([
-        'git', 'update-ref',
-        '-m', 'imerge %r: Prepare merge %d-%d' % (merge_state.name, i1, i2,),
-        refname, above.sha1,
-        ])
-    checkout(refname)
-    logmsg = 'imerge \'%s\': manual merge %d-%d' % (merge_state.name, i1, i2)
-    try:
-        check_call([
-            'git', 'merge', '--no-commit',
-            '-m', logmsg,
-            left.sha1,
-            ])
-    except CalledProcessError:
-        # We expect an error (otherwise we would have automerged!)
-        pass
-    sys.stderr.write(
-        '\n'
-        'Original first commit:\n'
-        )
-    check_call(['git', '--no-pager', 'log', '--no-walk', merge_state[i1, 0].sha1])
-    sys.stderr.write(
-        '\n'
-        'Original second commit:\n'
-        )
-    check_call(['git', '--no-pager', 'log', '--no-walk', merge_state[0, i2].sha1])
-    sys.stderr.write(
-        '\n'
-        'There was a conflict merging commit %d-%d, shown above.\n'
-        'Please resolve the conflict, commit the result, then type\n'
-        '\n'
-        '    git-imerge continue\n'
-        % (i1, i2)
-        )
-
-
 def simple_merge_in_progress():
     # Check if a merge (of a single branch) is in progress:
     try:
@@ -3091,7 +3090,7 @@ def cmd_start(parser, options):
     try:
         merge_state.auto_complete_frontier()
     except FrontierBlockedError as e:
-        request_user_merge(merge_state, e.i1, e.i2)
+        merge_state.request_user_merge(e.i1, e.i2)
     else:
         sys.stderr.write('Merge is complete!\n')
 
@@ -3159,7 +3158,7 @@ def cmd_merge(parser, options):
     try:
         merge_state.auto_complete_frontier()
     except FrontierBlockedError as e:
-        request_user_merge(merge_state, e.i1, e.i2)
+        merge_state.request_user_merge(e.i1, e.i2)
     else:
         sys.stderr.write('Merge is complete!\n')
 
@@ -3230,7 +3229,7 @@ def cmd_rebase(parser, options):
     try:
         merge_state.auto_complete_frontier()
     except FrontierBlockedError as e:
-        request_user_merge(merge_state, e.i1, e.i2)
+        merge_state.request_user_merge(e.i1, e.i2)
     else:
         sys.stderr.write('Merge is complete!\n')
 
@@ -3353,7 +3352,7 @@ def cmd_drop(parser, options):
     try:
         merge_state.auto_complete_frontier()
     except FrontierBlockedError as e:
-        request_user_merge(merge_state, e.i1, e.i2)
+        merge_state.request_user_merge(e.i1, e.i2)
     else:
         sys.stderr.write('Merge is complete!\n')
 
@@ -3471,7 +3470,7 @@ def cmd_revert(parser, options):
     try:
         merge_state.auto_complete_frontier()
     except FrontierBlockedError as e:
-        request_user_merge(merge_state, e.i1, e.i2)
+        merge_state.request_user_merge(e.i1, e.i2)
     else:
         sys.stderr.write('Merge is complete!\n')
 
@@ -3498,7 +3497,7 @@ def cmd_continue(parser, options):
     try:
         merge_state.auto_complete_frontier()
     except FrontierBlockedError as e:
-        request_user_merge(merge_state, e.i1, e.i2)
+        merge_state.request_user_merge(e.i1, e.i2)
     else:
         sys.stderr.write('Merge is complete!\n')
 
