@@ -2181,7 +2181,7 @@ class MergeState(Block):
             MergeState._check_no_merges(commits2)
 
         return MergeState(
-            name, merge_base,
+            git, name, merge_base,
             tip1, commits1,
             tip2, commits2,
             MergeRecord.NEW_MANUAL,
@@ -2298,7 +2298,7 @@ class MergeState(Block):
         branch = state.get('branch', name)
 
         state = MergeState(
-            name, merge_base,
+            git, name, merge_base,
             tip1, commits1,
             tip2, commits2,
             MergeRecord.SAVED_MANUAL,
@@ -2377,7 +2377,7 @@ class MergeState(Block):
             git.set_default_imerge_name(None)
 
     def __init__(
-            self, name, merge_base,
+            self, git, name, merge_base,
             tip1, commits1,
             tip2, commits2,
             source,
