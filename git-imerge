@@ -321,7 +321,15 @@ class GitRepository(object):
         )
 
     def __init__(self):
-        pass
+        self.git_dir_cache = None
+
+    def git_dir(self):
+        if self.git_dir_cache is None:
+            self.git_dir_cache = check_output(
+                ['git', 'rev-parse', '--git-dir']
+                ).rstrip('\n')
+
+        return self.git_dir_cache
 
     def check_imerge_name_format(self, name):
         """Check that name is a valid imerge name."""
@@ -569,7 +577,7 @@ class GitRepository(object):
         """Return True iff a merge (of a single branch) is in progress."""
 
         try:
-            with open(os.path.join(git_dir(), 'MERGE_HEAD')) as f:
+            with open(os.path.join(self.git_dir(), 'MERGE_HEAD')) as f:
                 heads = [line.rstrip() for line in f]
         except IOError:
             return False
@@ -781,18 +789,6 @@ def rev_list_with_parents(*args):
     for line in check_output(cmd).splitlines():
         commits = line.strip().split()
         yield (commits[0], commits[1:])
-
-
-git_dir_cache = None
-
-def git_dir():
-    global git_dir_cache
-
-    if git_dir_cache is None:
-        git_dir_cache = check_output(
-            ['git', 'rev-parse', '--git-dir']
-            ).rstrip('\n')
-    return git_dir_cache
 
 
 BRANCH_PREFIX = 'refs/heads/'
