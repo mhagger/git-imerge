@@ -274,6 +274,40 @@ class InvalidBranchNameError(Failure):
     pass
 
 
+class GitTemporaryHead(object):
+    """A context manager that records the current HEAD state then restores it.
+
+    This should only be used when the working copy is clean. message
+    is used for the reflog.
+
+    """
+
+    def __enter__(self, git, message):
+        self.message = message
+        try:
+            self.head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
+        except CalledProcessError:
+            self.head_name = None
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.head_name:
+            try:
+                check_call([
+                    'git', 'symbolic-ref',
+                    '-m', self.message, 'HEAD',
+                    self.head_name,
+                    ])
+                check_call(['git', 'reset', '--hard'])
+            except CalledProcessError as e:
+                raise Failure(
+                    'Could not restore HEAD to %r!:    %s\n'
+                    % (self.head_name, e.message,)
+                    )
+
+        return False
+
+
 class GitRepository(object):
     MERGE_STATE_REFNAME_RE = re.compile(
         r"""
@@ -617,6 +651,16 @@ class GitRepository(object):
         [commit] = parents
         return commit
 
+    def temporary_head(self, message):
+        """Return a context manager to manage a temporary HEAD.
+
+        On entry, record the current HEAD state. On exit, restore it.
+        message is used for the reflog.
+
+        """
+
+        return GitTemporaryHead(self, message)
+
 
 def rev_parse(arg):
     return check_output(['git', 'rev-parse', '--verify', '--quiet', arg]).strip()
@@ -889,40 +933,6 @@ def get_boundaries(tip1, tip2, first_parent):
         raise NothingToDoError(tip2, tip1)
 
     return (merge_base, commits1, commits2)
-
-
-class TemporaryHead(object):
-    """A context manager that records the current HEAD state then restores it.
-
-    This should only be used when the working copy is clean. message
-    is used for the reflog.
-
-    """
-
-    def __enter__(self, message='imerge: restoring'):
-        self.message = message
-        try:
-            self.head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
-        except CalledProcessError:
-            self.head_name = None
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.head_name:
-            try:
-                check_call([
-                    'git', 'symbolic-ref',
-                    '-m', self.message, 'HEAD',
-                    self.head_name,
-                    ])
-                check_call(['git', 'reset', '--hard'])
-            except CalledProcessError as e:
-                raise Failure(
-                    'Could not restore HEAD to %r!:    %s\n'
-                    % (self.head_name, e.message,)
-                    )
-
-        return False
 
 
 def reparent(commit, parent_sha1s, msg=None):
@@ -3522,7 +3532,7 @@ def cmd_autofill(parser, options):
     git = GitRepository()
     git.require_clean_work_tree('proceed')
     merge_state = read_merge_state(git, options.name)
-    with TemporaryHead():
+    with git.temporary_head(message='imerge: restoring'):
         try:
             merge_state.auto_complete_frontier()
         except FrontierBlockedError as e:
