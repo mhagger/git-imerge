@@ -2849,7 +2849,7 @@ def commit_user_merge(merge_state, edit_log_msg=None):
     refresh_index()
     if unstaged_changes():
         raise UncleanWorkTreeError(
-            'Cannot proceed: You have unstaged changes.' % (action,)
+            'Cannot proceed: You have unstaged changes.'
             )
 
     # A merge is in progress, and either all changes have been staged
