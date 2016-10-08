@@ -708,6 +708,70 @@ class GitRepository(object):
     def get_tree(self, arg):
         return rev_parse('%s^{tree}' % (arg,))
 
+    def linear_ancestry(self, commit1, commit2, first_parent):
+        """Compute a linear ancestry between commit1 and commit2.
+
+        Our goal is to find a linear series of commits connecting
+        `commit1` and `commit2`. We do so as follows:
+
+        * If all of the commits in
+
+              git rev-list --ancestry-path commit1..commit2
+
+          are on a linear chain, return that.
+
+        * If there are multiple paths between `commit1` and `commit2` in
+          that list of commits, then
+
+          * If `first_parent` is not set, then raise an
+            `NonlinearAncestryError` exception.
+
+          * If `first_parent` is set, then, at each merge commit, follow
+            the first parent that is in that list of commits.
+
+        Return a list of SHA-1s in 'chronological' order.
+
+        Raise NotFirstParentAncestorError if commit1 is not an ancestor of
+        commit2.
+
+        """
+
+        oid1 = rev_parse(commit1)
+        oid2 = rev_parse(commit2)
+
+        parentage = {oid1 : []}
+        for (commit, parents) in rev_list_with_parents(
+                '--ancestry-path', '--topo-order', '%s..%s' % (oid1, oid2)
+                ):
+            parentage[commit] = parents
+
+        commits = []
+
+        commit = oid2
+        while commit != oid1:
+            parents = parentage.get(commit, [])
+
+            # Only consider parents that are in the ancestry path:
+            included_parents = [
+                parent
+                for parent in parents
+                if parent in parentage
+            ]
+
+            if not included_parents:
+                raise NotFirstParentAncestorError(commit1, commit2)
+            elif len(included_parents) == 1 or first_parent:
+                parent = included_parents[0]
+            else:
+                raise NonlinearAncestryError(commit1, commit2)
+
+            commits.append(commit)
+            commit = parent
+
+        commits.reverse()
+
+        return commits
+
     def get_boundaries(self, tip1, tip2, first_parent):
         """Get the boundaries of an incremental merge.
 
@@ -717,11 +781,11 @@ class GitRepository(object):
 
         merge_base = compute_best_merge_base(tip1, tip2)
 
-        commits1 = linear_ancestry(merge_base, tip1, first_parent)
+        commits1 = self.linear_ancestry(merge_base, tip1, first_parent)
         if not commits1:
             raise NothingToDoError(tip1, tip2)
 
-        commits2 = linear_ancestry(merge_base, tip2, first_parent)
+        commits2 = self.linear_ancestry(merge_base, tip2, first_parent)
         if not commits2:
             raise NothingToDoError(tip2, tip1)
 
@@ -831,71 +895,6 @@ class NothingToDoError(Failure):
             'There are no commits on "%s" that are not already in "%s"'
             % (src_tip, dst_tip),
             )
-
-
-def linear_ancestry(commit1, commit2, first_parent):
-    """Compute a linear ancestry between commit1 and commit2.
-
-    Our goal is to find a linear series of commits connecting
-    `commit1` and `commit2`. We do so as follows:
-
-    * If all of the commits in
-
-          git rev-list --ancestry-path commit1..commit2
-
-      are on a linear chain, return that.
-
-    * If there are multiple paths between `commit1` and `commit2` in
-      that list of commits, then
-
-      * If `first_parent` is not set, then raise an
-        `NonlinearAncestryError` exception.
-
-      * If `first_parent` is set, then, at each merge commit, follow
-        the first parent that is in that list of commits.
-
-    Return a list of SHA-1s in 'chronological' order.
-
-    Raise NotFirstParentAncestorError if commit1 is not an ancestor of
-    commit2.
-
-    """
-
-    oid1 = rev_parse(commit1)
-    oid2 = rev_parse(commit2)
-
-    parentage = {oid1 : []}
-    for (commit, parents) in rev_list_with_parents(
-            '--ancestry-path', '--topo-order', '%s..%s' % (oid1, oid2)
-            ):
-        parentage[commit] = parents
-
-    commits = []
-
-    commit = oid2
-    while commit != oid1:
-        parents = parentage.get(commit, [])
-
-        # Only consider parents that are in the ancestry path:
-        included_parents = [
-            parent
-            for parent in parents
-            if parent in parentage
-        ]
-
-        if not included_parents:
-            raise NotFirstParentAncestorError(commit1, commit2)
-        elif len(included_parents) == 1 or first_parent:
-            parent = included_parents[0]
-        else:
-            raise NonlinearAncestryError(commit1, commit2)
-
-        commits.append(commit)
-        commit = parent
-
-    commits.reverse()
-
-    return commits
 
 
 def compute_best_merge_base(tip1, tip2):
@@ -3247,7 +3246,7 @@ def cmd_drop(parser, options):
         start = rev_parse('%s^' % (end,))
 
     try:
-        to_drop = linear_ancestry(start, end, options.first_parent)
+        to_drop = git.linear_ancestry(start, end, options.first_parent)
     except NonlinearAncestryError as e:
         if options.first_parent:
             parser.error(str(e))
@@ -3370,7 +3369,7 @@ def cmd_revert(parser, options):
         start = rev_parse('%s^' % (end,))
 
     try:
-        to_revert = linear_ancestry(start, end, options.first_parent)
+        to_revert = git.linear_ancestry(start, end, options.first_parent)
     except NonlinearAncestryError as e:
         if options.first_parent:
             parser.error(str(e))
