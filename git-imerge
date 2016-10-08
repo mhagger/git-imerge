@@ -335,7 +335,7 @@ class GitRepository(object):
         for line in check_output(['git', 'for-each-ref', state_refname]).splitlines():
             (sha1, type, refname) = line.split()
             if refname == state_refname and type == 'blob':
-                MergeState._read_state(name, sha1)
+                MergeState._read_state(name)
                 # If that didn't throw an exception:
                 return True
         else:
@@ -2125,8 +2125,10 @@ class MergeState(Block):
         return 'refs/heads/imerge/%s' % (name,)
 
     @staticmethod
-    def _read_state(name, sha1):
-        state_string = check_output(['git', 'cat-file', 'blob', sha1])
+    def _read_state(name):
+        state_string = check_output(
+            ['git', 'cat-file', 'blob', 'refs/imerge/%s/state' % (name,)],
+            )
         state = json.loads(state_string)
 
         version = tuple(int(i) for i in state['version'].split('.'))
@@ -2237,7 +2239,7 @@ class MergeState(Block):
             if m:
                 if type != 'blob':
                     raise Failure('Reference %r is not a blob!' % (refname,))
-                state = MergeState._read_state(name, sha1)
+                state = MergeState._read_state(name)
                 continue
 
             unexpected.append(refname)
