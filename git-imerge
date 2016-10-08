@@ -641,7 +641,7 @@ class GitRepository(object):
 
         for (commit, metadata) in path:
             if reusing:
-                if commit == metadata and get_commit_parents(commit) == parents:
+                if commit == metadata and self.get_commit_parents(commit) == parents:
                     # We can reuse this commit, too.
                     parents = [commit]
                     continue
@@ -660,6 +660,13 @@ class GitRepository(object):
 
         [commit] = parents
         return commit
+
+    def get_commit_parents(self, commit):
+        """Return a list containing the parents of commit."""
+
+        return check_output(
+            ['git', '--no-pager', 'log', '--no-walk', '--pretty=format:%P', commit]
+            ).strip().split()
 
     def get_boundaries(self, tip1, tip2, first_parent):
         """Get the boundaries of an incremental merge.
@@ -741,14 +748,6 @@ def checkout(refname, quiet=False):
         target = '%s^0' % (refname,)
     cmd += [target]
     check_call(cmd)
-
-
-def get_commit_parents(commit):
-    """Return a list containing the parents of commit."""
-
-    return check_output(
-        ['git', '--no-pager', 'log', '--no-walk', '--pretty=format:%P', commit]
-        ).strip().split()
 
 
 def get_log_message(commit):
@@ -2228,7 +2227,7 @@ class MergeState(Block):
         multiparent_commits = [
             commit
             for commit in commits
-            if len(get_commit_parents(commit)) > 1
+            if len(git.get_commit_parents(commit)) > 1
             ]
         if multiparent_commits:
             raise Failure(
@@ -2608,7 +2607,7 @@ class MergeState(Block):
         commit is not usable for some reason, raise
         ManualMergeUnusableError."""
 
-        parents = get_commit_parents(commit)
+        parents = self.git.get_commit_parents(commit)
         if len(parents) < 2:
             raise ManualMergeUnusableError('it is not a merge', commit)
         if len(parents) > 2:
@@ -3322,7 +3321,7 @@ def cmd_drop(parser, options):
     checkout(end)
     for commit in reversed(to_drop):
         cmd = ['git', 'revert', '--no-edit']
-        if len(get_commit_parents(commit)) > 1:
+        if len(git.get_commit_parents(commit)) > 1:
             cmd += ['-m', '1']
         cmd += [commit]
         check_call(cmd)
@@ -3440,7 +3439,7 @@ def cmd_revert(parser, options):
     checkout(end)
     for commit in reversed(to_revert):
         cmd = ['git', 'revert', '--no-edit']
-        if len(get_commit_parents(commit)) > 1:
+        if len(git.get_commit_parents(commit)) > 1:
             cmd += ['-m', '1']
         cmd += [commit]
         check_call(cmd)
