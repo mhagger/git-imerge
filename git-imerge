@@ -341,6 +341,12 @@ class GitRepository(object):
         else:
             return False
 
+    def read_imerge_state_dict(self, name):
+        state_string = check_output(
+            ['git', 'cat-file', 'blob', 'refs/imerge/%s/state' % (name,)],
+            )
+        return json.loads(state_string)
+
 
 def get_default_edit():
     """Should '--edit' be used when committing intermediate user merges?
@@ -2126,10 +2132,7 @@ class MergeState(Block):
 
     @staticmethod
     def _read_state(git, name):
-        state_string = check_output(
-            ['git', 'cat-file', 'blob', 'refs/imerge/%s/state' % (name,)],
-            )
-        state = json.loads(state_string)
+        state = git.read_imerge_state_dict(name)
 
         version = tuple(int(i) for i in state['version'].split('.'))
         if version[0] != STATE_VERSION[0] or version[1] > STATE_VERSION[1]:
