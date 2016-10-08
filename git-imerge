@@ -1722,7 +1722,8 @@ class Block(object):
 
     """
 
-    def __init__(self, name, len1, len2):
+    def __init__(self, git, name, len1, len2):
+        self.git = git
         self.name = name
         self.len1 = len1
         self.len2 = len2
@@ -2062,7 +2063,7 @@ class SubBlock(Block):
     def __init__(self, block, slice1, slice2):
         (start1, len1) = self._convert_to_slice(slice1, block.len1)
         (start2, len2) = self._convert_to_slice(slice2, block.len2)
-        Block.__init__(self, block.name, len1, len2)
+        Block.__init__(self, block.git, block.name, len1, len2)
         if isinstance(block, SubBlock):
             # Peel away one level of indirection:
             self._merge_state = block._merge_state
@@ -2385,7 +2386,7 @@ class MergeState(Block):
             manual=False,
             branch=None,
             ):
-        Block.__init__(self, name, len(commits1) + 1, len(commits2) + 1)
+        Block.__init__(self, git, name, len(commits1) + 1, len(commits2) + 1)
         self.tip1 = tip1
         self.tip2 = tip2
         self.goal = goal
