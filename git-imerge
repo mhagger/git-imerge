@@ -653,13 +653,22 @@ class GitRepository(object):
             tree = get_tree(commit)
             new_commit = commit_tree(
                 tree, parents,
-                msg=get_log_message(metadata),
+                msg=self.get_log_message(metadata),
                 metadata=get_author_info(metadata),
                 )
             parents = [new_commit]
 
         [commit] = parents
         return commit
+
+    def get_log_message(self, commit):
+        contents = check_output([
+            'git', 'cat-file', 'commit', commit,
+            ]).splitlines(True)
+        contents = contents[contents.index('\n') + 1:]
+        if contents and contents[-1][-1:] != '\n':
+            contents.append('\n')
+        return ''.join(contents)
 
     def get_commit_parents(self, commit):
         """Return a list containing the parents of commit."""
@@ -748,16 +757,6 @@ def checkout(refname, quiet=False):
         target = '%s^0' % (refname,)
     cmd += [target]
     check_call(cmd)
-
-
-def get_log_message(commit):
-    contents = check_output([
-        'git', 'cat-file', 'commit', commit,
-        ]).splitlines(True)
-    contents = contents[contents.index('\n') + 1:]
-    if contents and contents[-1][-1:] != '\n':
-        contents.append('\n')
-    return ''.join(contents)
 
 
 def get_author_info(commit):
@@ -2807,7 +2806,7 @@ class MergeState(Block):
 
             # Create a commit, copying the old log message:
             msg = (
-                get_log_message(orig).rstrip('\n')
+                self.git.get_log_message(orig).rstrip('\n')
                 + '\n\n(rebased-with-history from commit %s)\n' % orig
                 )
             commit = commit_tree(tree, [commit, orig], msg=msg)
