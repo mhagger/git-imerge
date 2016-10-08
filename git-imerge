@@ -2188,7 +2188,7 @@ class MergeState(Block):
             )
 
     @staticmethod
-    def read(name):
+    def read(git, name):
         merge_ref_re = re.compile(
             r"""
             ^
@@ -3000,6 +3000,7 @@ def choose_merge_name(git, name, default_to_unique=True):
 
 def read_merge_state(git, name=None, default_to_unique=True):
     return MergeState.read(
+        git,
         choose_merge_name(git, name, default_to_unique=default_to_unique),
         )
 
