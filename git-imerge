@@ -309,6 +309,8 @@ class GitTemporaryHead(object):
 
 
 class GitRepository(object):
+    BRANCH_PREFIX = 'refs/heads/'
+
     MERGE_STATE_REFNAME_RE = re.compile(
         r"""
         ^
@@ -809,6 +811,17 @@ class GitRepository(object):
 
         return (merge_base, commits1, commits2)
 
+    def checkout(self, refname, quiet=False):
+        cmd = ['git', 'checkout']
+        if quiet:
+            cmd += ['--quiet']
+        if refname.startswith(GitRepository.BRANCH_PREFIX):
+            target = refname[len(GitRepository.BRANCH_PREFIX):]
+        else:
+            target = '%s^0' % (refname,)
+        cmd += [target]
+        check_call(cmd)
+
     def commit_tree(self, tree, parents, msg, metadata=None):
         """Create a commit containing the specified tree.
 
@@ -850,21 +863,6 @@ class GitRepository(object):
         """
 
         return GitTemporaryHead(self, message)
-
-
-BRANCH_PREFIX = 'refs/heads/'
-
-
-def checkout(refname, quiet=False):
-    cmd = ['git', 'checkout']
-    if quiet:
-        cmd += ['--quiet']
-    if refname.startswith(BRANCH_PREFIX):
-        target = refname[len(BRANCH_PREFIX):]
-    else:
-        target = '%s^0' % (refname,)
-    cmd += [target]
-    check_call(cmd)
 
 
 class NotFirstParentAncestorError(Failure):
@@ -2558,7 +2556,7 @@ class MergeState(Block):
             '-m', 'imerge %r: Prepare merge %d-%d' % (self.name, i1, i2,),
             refname, above.sha1,
             ])
-        checkout(refname)
+        self.git.checkout(refname)
         logmsg = 'imerge \'%s\': manual merge %d-%d' % (self.name, i1, i2)
         try:
             check_call([
@@ -2740,7 +2738,7 @@ class MergeState(Block):
         except ValueError:
             # refname doesn't already exist; simply point it at commit:
             check_call(['git', 'update-ref', refname, commit])
-            checkout(refname, quiet=True)
+            self.git.checkout(refname, quiet=True)
         else:
             # refname already exists.  This has two ramifications:
             # 1. HEAD might point at it
@@ -2764,7 +2762,7 @@ class MergeState(Block):
                     '-m', 'imerge: recording final merge',
                     refname, commit,
                     ])
-                checkout(refname, quiet=True)
+                self.git.checkout(refname, quiet=True)
 
     def simplify_to_full(self, refname, force=False):
         for i1 in range(1, self.len1):
@@ -3306,7 +3304,7 @@ def cmd_drop(parser, options):
     # Create a branch based on end that contains the inverse of the
     # commits that we want to drop. This will be tip2:
 
-    checkout(end)
+    git.checkout(end)
     for commit in reversed(to_drop):
         cmd = ['git', 'revert', '--no-edit']
         if len(git.get_commit_parents(commit)) > 1:
@@ -3424,7 +3422,7 @@ def cmd_revert(parser, options):
     # Create a branch based on end that contains the inverse of the
     # commits that we want to drop. This will be tip2:
 
-    checkout(end)
+    git.checkout(end)
     for commit in reversed(to_revert):
         cmd = ['git', 'revert', '--no-edit']
         if len(git.get_commit_parents(commit)) > 1:
