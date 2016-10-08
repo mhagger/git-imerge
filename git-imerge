@@ -347,6 +347,22 @@ class GitRepository(object):
             )
         return json.loads(state_string)
 
+    def is_ff(self, refname, commit):
+        """Would updating refname to commit be a fast-forward update?
+
+        Return True iff refname is not currently set or it points to an
+        ancestor of commit.
+
+        """
+
+        try:
+            ref_oldval = get_commit_sha1(refname)
+        except ValueError:
+            # refname doesn't already exist; no problem.
+            return True
+        else:
+            return MergeState._is_ancestor(ref_oldval, commit)
+
 
 def get_default_edit():
     """Should '--edit' be used when committing intermediate user merges?
@@ -757,23 +773,6 @@ class TemporaryHead(object):
                     )
 
         return False
-
-
-def is_ff(refname, commit):
-    """Would updating refname to commit be a fast-forward update?
-
-    Return True iff refname is not currently set or it points to an
-    ancestor of commit.
-
-    """
-
-    try:
-        ref_oldval = get_commit_sha1(refname)
-    except ValueError:
-        # refname doesn't already exist; no problem.
-        return True
-    else:
-        return MergeState._is_ancestor(ref_oldval, commit)
 
 
 def reparent(commit, parent_sha1s, msg=None):
@@ -2627,7 +2626,7 @@ class MergeState(Block):
         else:
             apex = base_sha1
 
-        if not force and not is_ff(refname, apex):
+        if not force and not self.git.is_ff(refname, apex):
             raise Failure(
                 '%s cannot be updated to %s without discarding history.\n'
                 'Use --force if you are sure, or choose a different reference'
