@@ -2220,7 +2220,7 @@ class MergeState(Block):
         return state
 
     @staticmethod
-    def _check_no_merges(commits):
+    def _check_no_merges(git, commits):
         multiparent_commits = [
             commit
             for commit in commits
@@ -2254,7 +2254,7 @@ class MergeState(Block):
             raise Failure('Name %r is already in use!' % (name,))
 
         if goal == 'rebase':
-            MergeState._check_no_merges(commits2)
+            MergeState._check_no_merges(git, commits2)
 
         return MergeState(
             git, name, merge_base,
@@ -2487,7 +2487,8 @@ class MergeState(Block):
 
         if goal == 'rebase':
             self._check_no_merges(
-                [self[0, i2].sha1 for i2 in range(1, self.len2)]
+                self.git,
+                [self[0, i2].sha1 for i2 in range(1, self.len2)],
                 )
 
         self.goal = goal
