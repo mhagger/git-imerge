@@ -399,12 +399,6 @@ def git_dir():
     return git_dir_cache
 
 
-def get_type(arg):
-    """Return the type of a git object ('commit', 'tree', 'blob', or 'tag')."""
-
-    return check_output(['git', 'cat-file', '-t', arg]).strip()
-
-
 def get_tree(arg):
     return rev_parse('%s^{tree}' % (arg,))
 
