@@ -406,6 +406,45 @@ class GitRepository(object):
         else:
             return get_commit_sha1('HEAD')
 
+    def commit_user_merge(self, edit_log_msg=None):
+        """If a merge is in progress and ready to be committed, commit it.
+
+        If a simple merge is in progress and any changes in the working
+        tree are staged, commit the merge commit and return True.
+        Otherwise, return False.
+
+        """
+
+        if not simple_merge_in_progress():
+            return False
+
+        # Check if all conflicts are resolved and everything in the
+        # working tree is staged:
+        refresh_index()
+        if unstaged_changes():
+            raise UncleanWorkTreeError(
+                'Cannot proceed: You have unstaged changes.'
+                )
+
+        # A merge is in progress, and either all changes have been staged
+        # or no changes are necessary. Create a merge commit.
+        cmd = ['git', 'commit', '--no-verify']
+
+        if edit_log_msg is None:
+            edit_log_msg = get_default_edit()
+
+        if edit_log_msg:
+            cmd += ['--edit']
+        else:
+            cmd += ['--no-edit']
+
+        try:
+            check_call(cmd)
+        except CalledProcessError:
+            raise Failure('Could not commit staged changes.')
+
+        return True
+
 
 def get_default_edit():
     """Should '--edit' be used when committing intermediate user merges?
@@ -2642,7 +2681,7 @@ class MergeState(Block):
         # If we reach this point, then the scratch reference exists and is
         # checked out.  Now check whether there is staged content that
         # can be committed:
-        if commit_user_merge(edit_log_msg=edit_log_msg):
+        if self.git.commit_user_merge(edit_log_msg=edit_log_msg):
             commit = get_commit_sha1('HEAD')
 
         require_clean_work_tree('proceed')
@@ -2923,46 +2962,6 @@ def simple_merge_in_progress():
         return False
 
     return len(heads) == 1
-
-
-def commit_user_merge(edit_log_msg=None):
-    """If a merge is in progress and ready to be committed, commit it.
-
-    If a simple merge is in progress and any changes in the working
-    tree are staged, commit the merge commit and return True.
-    Otherwise, return False.
-
-    """
-
-    if not simple_merge_in_progress():
-        return False
-
-    # Check if all conflicts are resolved and everything in the
-    # working tree is staged:
-    refresh_index()
-    if unstaged_changes():
-        raise UncleanWorkTreeError(
-            'Cannot proceed: You have unstaged changes.'
-            )
-
-    # A merge is in progress, and either all changes have been staged
-    # or no changes are necessary. Create a merge commit.
-    cmd = ['git', 'commit', '--no-verify']
-
-    if edit_log_msg is None:
-        edit_log_msg = get_default_edit()
-
-    if edit_log_msg:
-        cmd += ['--edit']
-    else:
-        cmd += ['--no-edit']
-
-    try:
-        check_call(cmd)
-    except CalledProcessError:
-        raise Failure('Could not commit staged changes.')
-
-    return True
 
 
 def choose_merge_name(git, name, default_to_unique=True):
