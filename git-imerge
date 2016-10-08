@@ -406,6 +406,17 @@ class GitRepository(object):
         else:
             return get_commit_sha1('HEAD')
 
+    def simple_merge_in_progress(self):
+        """Return True iff a merge (of a single branch) is in progress."""
+
+        try:
+            with open(os.path.join(git_dir(), 'MERGE_HEAD')) as f:
+                heads = [line.rstrip() for line in f]
+        except IOError:
+            return False
+
+        return len(heads) == 1
+
     def commit_user_merge(self, edit_log_msg=None):
         """If a merge is in progress and ready to be committed, commit it.
 
@@ -415,7 +426,7 @@ class GitRepository(object):
 
         """
 
-        if not simple_merge_in_progress():
+        if not self.simple_merge_in_progress():
             return False
 
         # Check if all conflicts are resolved and everything in the
@@ -2951,17 +2962,6 @@ class MergeState(Block):
         return 'MergeState(\'%s\', tip1=\'%s\', tip2=\'%s\', goal=\'%s\')' % (
             self.name, self.tip1, self.tip2, self.goal,
             )
-
-
-def simple_merge_in_progress():
-    # Check if a merge (of a single branch) is in progress:
-    try:
-        with open(os.path.join(git_dir(), 'MERGE_HEAD')) as f:
-            heads = [line.rstrip() for line in f]
-    except IOError:
-        return False
-
-    return len(heads) == 1
 
 
 def choose_merge_name(git, name, default_to_unique=True):
