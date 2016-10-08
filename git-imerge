@@ -651,7 +651,7 @@ class GitRepository(object):
             # Create a commit, copying the old log message and author info
             # from the metadata commit:
             tree = get_tree(commit)
-            new_commit = commit_tree(
+            new_commit = self.commit_tree(
                 tree, parents,
                 msg=self.get_log_message(metadata),
                 metadata=self.get_author_info(metadata),
@@ -716,6 +716,38 @@ class GitRepository(object):
 
         return (merge_base, commits1, commits2)
 
+    def commit_tree(self, tree, parents, msg, metadata=None):
+        """Create a commit containing the specified tree.
+
+        metadata can be author or committer information to be added to the
+        environment, as str objects; e.g., {'GIT_AUTHOR_NAME' : 'me'}.
+
+        Return the SHA-1 of the new commit object."""
+
+        cmd = ['git', 'commit-tree', tree]
+        for parent in parents:
+            cmd += ['-p', parent]
+
+        if metadata is not None:
+            env = os.environ.copy()
+            env.update(metadata)
+        else:
+            env = os.environ
+
+        process = subprocess.Popen(
+            cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            )
+        out = communicate(process, input=msg)[0]
+        retcode = process.poll()
+
+        if retcode:
+            # We don't store the output in the CalledProcessError because
+            # the "output" keyword parameter was not supported in Python
+            # 2.6:
+            raise CalledProcessError(retcode, cmd)
+
+        return out.strip()
+
     def temporary_head(self, message):
         """Return a context manager to manage a temporary HEAD.
 
@@ -777,39 +809,6 @@ def checkout(refname, quiet=False):
         target = '%s^0' % (refname,)
     cmd += [target]
     check_call(cmd)
-
-
-def commit_tree(tree, parents, msg, metadata=None):
-    """Create a commit containing the specified tree.
-
-    metadata can be author or committer information to be added to the
-    environment, as str objects; e.g., {'GIT_AUTHOR_NAME' : 'me'}.
-
-    Return the SHA-1 of the new commit object."""
-
-    cmd = ['git', 'commit-tree', tree]
-    for parent in parents:
-        cmd += ['-p', parent]
-
-    if metadata is not None:
-        env = os.environ.copy()
-        env.update(metadata)
-    else:
-        env = os.environ
-
-    process = subprocess.Popen(
-        cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        )
-    out = communicate(process, input=msg)[0]
-    retcode = process.poll()
-
-    if retcode:
-        # We don't store the output in the CalledProcessError because
-        # the "output" keyword parameter was not supported in Python
-        # 2.6:
-        raise CalledProcessError(retcode, cmd)
-
-    return out.strip()
 
 
 class NotFirstParentAncestorError(Failure):
@@ -2808,7 +2807,7 @@ class MergeState(Block):
                 self.git.get_log_message(orig).rstrip('\n')
                 + '\n\n(rebased-with-history from commit %s)\n' % orig
                 )
-            commit = commit_tree(tree, [commit, orig], msg=msg)
+            commit = self.git.commit_tree(tree, [commit, orig], msg=msg)
 
         self._set_refname(refname, commit, force=force)
 
@@ -2907,7 +2906,7 @@ class MergeState(Block):
         parents = [self[-1, 0].sha1, self[0, -1].sha1]
 
         # Create a preliminary commit with a generic commit message:
-        sha1 = commit_tree(
+        sha1 = self.git.commit_tree(
             tree, parents,
             msg='Merge %s into %s (using imerge)' % (self.tip2, self.tip1),
             )
