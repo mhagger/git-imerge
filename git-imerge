@@ -422,6 +422,16 @@ class GitRepository(object):
         except CalledProcessError:
             raise InvalidBranchNameError('Name %r is not a valid branch name!' % (name,))
 
+    def get_commit_sha1(self, arg):
+        """Convert arg into a SHA1 and verify that it refers to a commit.
+
+        If not, raise ValueError."""
+
+        try:
+            return rev_parse('%s^{commit}' % (arg,))
+        except CalledProcessError:
+            raise ValueError('%r does not refer to a valid git commit' % (arg,))
+
     def refresh_index(self):
         process = subprocess.Popen(
             ['git', 'update-index', '-q', '--ignore-submodules', '--refresh'],
@@ -496,7 +506,7 @@ class GitRepository(object):
         """
 
         try:
-            ref_oldval = get_commit_sha1(refname)
+            ref_oldval = self.get_commit_sha1(refname)
         except ValueError:
             # refname doesn't already exist; no problem.
             return True
@@ -523,7 +533,7 @@ class GitRepository(object):
             call_silently(['git', 'reset', '--merge'])
             raise AutomaticMergeFailed(commit1, commit2)
         else:
-            return get_commit_sha1('HEAD')
+            return self.get_commit_sha1('HEAD')
 
     def require_clean_work_tree(self, action):
         """Verify that the current tree is clean.
@@ -712,17 +722,6 @@ def checkout(refname, quiet=False):
         target = '%s^0' % (refname,)
     cmd += [target]
     check_call(cmd)
-
-
-def get_commit_sha1(arg):
-    """Convert arg into a SHA1 and verify that it refers to a commit.
-
-    If not, raise ValueError."""
-
-    try:
-        return rev_parse('%s^{commit}' % (arg,))
-    except CalledProcessError:
-        raise ValueError('%r does not refer to a valid git commit' % (arg,))
 
 
 def get_commit_parents(commit):
@@ -2428,7 +2427,7 @@ class MergeState(Block):
             check_call([
                 'git', 'update-ref', '--no-deref',
                 '-m', 'Detach HEAD from %s' % (scratch_refname,),
-                'HEAD', get_commit_sha1('HEAD'),
+                'HEAD', git.get_commit_sha1('HEAD'),
                 ])
 
         # Delete the scratch refname:
@@ -2658,7 +2657,7 @@ class MergeState(Block):
         refname = MergeState.get_scratch_refname(self.name)
 
         try:
-            commit = get_commit_sha1(refname)
+            commit = self.git.get_commit_sha1(refname)
         except ValueError:
             raise NoManualMergeError('Reference %s does not exist.' % (refname,))
 
@@ -2714,7 +2713,7 @@ class MergeState(Block):
         # checked out.  Now check whether there is staged content that
         # can be committed:
         if self.git.commit_user_merge(edit_log_msg=edit_log_msg):
-            commit = get_commit_sha1('HEAD')
+            commit = self.git.get_commit_sha1('HEAD')
 
         self.git.require_clean_work_tree('proceed')
 
@@ -2751,7 +2750,7 @@ class MergeState(Block):
 
     def _set_refname(self, refname, commit, force=False):
         try:
-            ref_oldval = get_commit_sha1(refname)
+            ref_oldval = self.git.get_commit_sha1(refname)
         except ValueError:
             # refname doesn't already exist; simply point it at commit:
             check_call(['git', 'update-ref', refname, commit])
@@ -3608,12 +3607,12 @@ def cmd_diagram(parser, options):
 def cmd_reparent(parser, options):
     git = GitRepository()
     try:
-        commit_sha1 = get_commit_sha1('HEAD')
+        commit_sha1 = git.get_commit_sha1('HEAD')
     except ValueError:
         sys.exit('HEAD is not a valid commit')
 
     try:
-        parent_sha1s = [get_commit_sha1(p) for p in options.parents]
+        parent_sha1s = [git.get_commit_sha1(p) for p in options.parents]
     except ValueError as e:
         sys.exit(e.message)
 
