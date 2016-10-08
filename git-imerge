@@ -755,6 +755,31 @@ class GitRepository(object):
     def get_tree(self, arg):
         return self.rev_parse('%s^{tree}' % (arg,))
 
+    def compute_best_merge_base(self, tip1, tip2):
+        try:
+            merge_bases = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
+        except CalledProcessError:
+            raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
+        if not merge_bases:
+            raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
+        if len(merge_bases) == 1:
+            return merge_bases[0]
+
+        # There are multiple merge bases. The "best" one is the one that
+        # is the "closest" to the tips, which we define to be the one with
+        # the fewest non-merge commits in "merge_base..tip". (It can be
+        # shown that the result is independent of which tip is used in the
+        # computation.)
+        best_base = best_count = None
+        for merge_base in merge_bases:
+            cmd = ['git', 'rev-list', '--no-merges', '--count', '%s..%s' % (merge_base, tip1)]
+            count = int(check_output(cmd).strip())
+            if best_base is None or count < best_count:
+                best_base = merge_base
+                best_count = count
+
+        return best_base
+
     def linear_ancestry(self, commit1, commit2, first_parent):
         """Compute a linear ancestry between commit1 and commit2.
 
@@ -826,7 +851,7 @@ class GitRepository(object):
         (merge_base, commits1, commits2) describing the edges of the
         imerge.  Raise Failure if there are any problems."""
 
-        merge_base = compute_best_merge_base(tip1, tip2)
+        merge_base = self.compute_best_merge_base(tip1, tip2)
 
         commits1 = self.linear_ancestry(merge_base, tip1, first_parent)
         if not commits1:
@@ -890,32 +915,6 @@ class GitRepository(object):
         """
 
         return GitTemporaryHead(self, message)
-
-
-def compute_best_merge_base(tip1, tip2):
-    try:
-        merge_bases = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
-    except CalledProcessError:
-        raise Failure('Cannot compute merge base for %r and %r' % (tip1, tip2))
-    if not merge_bases:
-        raise Failure('%r and %r do not have a common merge base' % (tip1, tip2))
-    if len(merge_bases) == 1:
-        return merge_bases[0]
-
-    # There are multiple merge bases. The "best" one is the one that
-    # is the "closest" to the tips, which we define to be the one with
-    # the fewest non-merge commits in "merge_base..tip". (It can be
-    # shown that the result is independent of which tip is used in the
-    # computation.)
-    best_base = best_count = None
-    for merge_base in merge_bases:
-        cmd = ['git', 'rev-list', '--no-merges', '--count', '%s..%s' % (merge_base, tip1)]
-        count = int(check_output(cmd).strip())
-        if best_base is None or count < best_count:
-            best_base = merge_base
-            best_count = count
-
-    return best_base
 
 
 def reparent(commit, parent_sha1s, msg=None):
