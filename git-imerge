@@ -263,6 +263,17 @@ class UncleanWorkTreeError(Failure):
 
 
 class GitRepository(object):
+    MERGE_STATE_REFNAME_RE = re.compile(
+        r"""
+        ^
+        refs\/imerge\/
+        (?P<name>.+)
+        \/state
+        $
+        """,
+        re.VERBOSE,
+        )
+
     def __init__(self):
         pass
 
@@ -272,7 +283,7 @@ class GitRepository(object):
         for line in check_output(['git', 'for-each-ref', 'refs/imerge']).splitlines():
             (sha1, type, refname) = line.split()
             if type == 'blob':
-                m = MergeState.MERGE_STATE_RE.match(refname)
+                m = GitRepository.MERGE_STATE_REFNAME_RE.match(refname)
                 if m:
                     yield m.group('name')
 
@@ -2104,17 +2115,6 @@ class MergeState(Block):
         'auto': MergeRecord.SAVED_AUTO,
         'manual': MergeRecord.SAVED_MANUAL,
         }
-
-    MERGE_STATE_RE = re.compile(
-        r"""
-        ^
-        refs\/imerge\/
-        (?P<name>.+)
-        \/state
-        $
-        """,
-        re.VERBOSE,
-        )
 
     @staticmethod
     def get_scratch_refname(name):
