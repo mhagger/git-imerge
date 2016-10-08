@@ -3012,6 +3012,7 @@ def read_merge_state(name=None, default_to_unique=True):
 
 
 def cmd_list(parser, options):
+    git = GitRepository()
     default_merge = MergeState.get_default_name()
     for name in MergeState.iter_existing_names():
         if name == default_merge:
@@ -3021,6 +3022,7 @@ def cmd_list(parser, options):
 
 
 def cmd_init(parser, options):
+    git = GitRepository()
     require_clean_work_tree('proceed')
 
     if not options.name:
@@ -3056,6 +3058,7 @@ def cmd_init(parser, options):
 
 
 def cmd_start(parser, options):
+    git = GitRepository()
     require_clean_work_tree('proceed')
 
     if not options.name:
@@ -3099,6 +3102,7 @@ def cmd_start(parser, options):
 
 
 def cmd_merge(parser, options):
+    git = GitRepository()
     require_clean_work_tree('proceed')
 
     tip2 = options.tip2
@@ -3166,6 +3170,7 @@ def cmd_merge(parser, options):
 
 
 def cmd_rebase(parser, options):
+    git = GitRepository()
     require_clean_work_tree('proceed')
 
     tip1 = options.tip1
@@ -3236,6 +3241,7 @@ def cmd_rebase(parser, options):
 
 
 def cmd_drop(parser, options):
+    git = GitRepository()
     require_clean_work_tree('proceed')
 
     m = re.match(r'^(?P<start>.*[^\.])(?P<sep>\.{2,})(?P<end>[^\.].*)$', options.range)
@@ -3358,6 +3364,7 @@ def cmd_drop(parser, options):
 
 
 def cmd_revert(parser, options):
+    git = GitRepository()
     require_clean_work_tree('proceed')
 
     m = re.match(r'^(?P<start>.*[^\.])(?P<sep>\.{2,})(?P<end>[^\.].*)$', options.range)
@@ -3475,10 +3482,12 @@ def cmd_revert(parser, options):
 
 
 def cmd_remove(parser, options):
+    git = GitRepository()
     MergeState.remove(choose_merge_name(options.name, default_to_unique=False))
 
 
 def cmd_continue(parser, options):
+    git = GitRepository()
     merge_state = read_merge_state(options.name)
     try:
         incorporate_user_merge(merge_state, edit_log_msg=options.edit)
@@ -3498,6 +3507,7 @@ def cmd_continue(parser, options):
 
 
 def cmd_record(parser, options):
+    git = GitRepository()
     merge_state = read_merge_state(options.name)
     try:
         incorporate_user_merge(merge_state, edit_log_msg=options.edit)
@@ -3517,6 +3527,7 @@ def cmd_record(parser, options):
 
 
 def cmd_autofill(parser, options):
+    git = GitRepository()
     require_clean_work_tree('proceed')
     merge_state = read_merge_state(options.name)
     with TemporaryHead():
@@ -3527,6 +3538,7 @@ def cmd_autofill(parser, options):
 
 
 def cmd_simplify(parser, options):
+    git = GitRepository()
     require_clean_work_tree('proceed')
     merge_state = read_merge_state(options.name)
     merge_frontier = MergeFrontier.map_known_frontier(merge_state)
@@ -3540,6 +3552,7 @@ def cmd_simplify(parser, options):
 
 
 def cmd_finish(parser, options):
+    git = GitRepository()
     require_clean_work_tree('proceed')
     merge_state = read_merge_state(options.name, default_to_unique=False)
     merge_frontier = MergeFrontier.map_known_frontier(merge_state)
@@ -3554,6 +3567,7 @@ def cmd_finish(parser, options):
 
 
 def cmd_diagram(parser, options):
+    git = GitRepository()
     if not (options.commits or options.frontier):
         options.frontier = True
     if not (options.color or (options.color is None and sys.stdout.isatty())):
@@ -3590,6 +3604,7 @@ def cmd_diagram(parser, options):
 
 
 def cmd_reparent(parser, options):
+    git = GitRepository()
     try:
         commit_sha1 = get_commit_sha1('HEAD')
     except ValueError:
