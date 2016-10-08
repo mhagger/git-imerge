@@ -1057,7 +1057,7 @@ class MergeRecord(object):
     def is_manual(self):
         return self.flags & self.MANUAL != 0
 
-    def save(self, name, i1, i2):
+    def save(self, git, name, i1, i2):
         """If this record has changed, save it."""
 
         def set_ref(source):
@@ -2933,7 +2933,7 @@ class MergeState(Block):
             for i1 in range(0, self.len1):
                 record = self[i1, i2]
                 if record.is_known():
-                    record.save(self.name, i1, i2)
+                    record.save(self.git, self.name, i1, i2)
                 if record.is_blocked():
                     blockers.append((i1, i2))
 
