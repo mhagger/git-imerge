@@ -669,6 +669,13 @@ class GitRepository(object):
         [commit] = parents
         return commit
 
+    def rev_list(self, *args):
+        cmd = ['git', 'rev-list'] + list(args)
+        return [
+            l.strip()
+            for l in check_output(cmd).splitlines()
+            ]
+
     def get_author_info(self, commit):
         """Return environment settings to set author metadata.
 
@@ -836,14 +843,6 @@ class GitRepository(object):
 
 def rev_parse(arg):
     return check_output(['git', 'rev-parse', '--verify', '--quiet', arg]).strip()
-
-
-def rev_list(*args):
-    cmd = ['git', 'rev-list'] + list(args)
-    return [
-        l.strip()
-        for l in check_output(cmd).splitlines()
-        ]
 
 
 def rev_list_with_parents(*args):
