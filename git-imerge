@@ -654,12 +654,32 @@ class GitRepository(object):
             new_commit = commit_tree(
                 tree, parents,
                 msg=self.get_log_message(metadata),
-                metadata=get_author_info(metadata),
+                metadata=self.get_author_info(metadata),
                 )
             parents = [new_commit]
 
         [commit] = parents
         return commit
+
+    def get_author_info(self, commit):
+        """Return environment settings to set author metadata.
+
+        Return a map {str : str}."""
+
+        # We use newlines as separators here because msysgit has problems
+        # with NUL characters; see
+        #
+        #     https://github.com/mhagger/git-imerge/pull/71
+        a = check_output([
+            'git', '--no-pager', 'log', '-n1',
+            '--format=%an%n%ae%n%ai', commit
+            ]).strip().splitlines()
+
+        return {
+            'GIT_AUTHOR_NAME': env_encode(a[0]),
+            'GIT_AUTHOR_EMAIL': env_encode(a[1]),
+            'GIT_AUTHOR_DATE': env_encode(a[2]),
+            }
 
     def get_log_message(self, commit):
         contents = check_output([
@@ -757,27 +777,6 @@ def checkout(refname, quiet=False):
         target = '%s^0' % (refname,)
     cmd += [target]
     check_call(cmd)
-
-
-def get_author_info(commit):
-    """Return environment settings to set author metadata.
-
-    Return a map {str : str}."""
-
-    # We use newlines as separators here because msysgit has problems
-    # with NUL characters; see
-    #
-    #     https://github.com/mhagger/git-imerge/pull/71
-    a = check_output([
-        'git', '--no-pager', 'log', '-n1',
-        '--format=%an%n%ae%n%ai', commit
-        ]).strip().splitlines()
-
-    return {
-        'GIT_AUTHOR_NAME': env_encode(a[0]),
-        'GIT_AUTHOR_EMAIL': env_encode(a[1]),
-        'GIT_AUTHOR_DATE': env_encode(a[2]),
-        }
 
 
 def commit_tree(tree, parents, msg, metadata=None):
