@@ -277,6 +277,16 @@ class GitRepository(object):
     def __init__(self):
         pass
 
+    def check_imerge_name_format(self, name):
+        """Check that name is a valid imerge name."""
+
+        try:
+            call_silently(
+                ['git', 'check-ref-format', 'refs/imerge/%s' % (name,)]
+                )
+        except CalledProcessError:
+            raise Failure('Name %r is not a valid refname component!' % (name,))
+
     def iter_existing_imerge_names(self):
         """Iterate over the names of existing MergeStates in this repo."""
 
@@ -2150,17 +2160,6 @@ class MergeState(Block):
                 )
 
     @staticmethod
-    def check_name_format(name):
-        """Check that name is a valid imerge name."""
-
-        try:
-            call_silently(
-                ['git', 'check-ref-format', 'refs/imerge/%s' % (name,)]
-                )
-        except CalledProcessError:
-            raise Failure('Name %r is not a valid refname component!' % (name,))
-
-    @staticmethod
     def initialize(
             git, name, merge_base,
             tip1, commits1,
@@ -2170,7 +2169,7 @@ class MergeState(Block):
             ):
         """Create and return a new MergeState object."""
 
-        MergeState.check_name_format(name)
+        git.check_imerge_name_format(name)
         if branch:
             check_branch_name_format(branch)
         else:
@@ -3110,7 +3109,7 @@ def cmd_merge(parser, options):
     else:
         # By default, name the imerge after the branch being merged:
         name = tip2
-        MergeState.check_name_format(name)
+        git.check_imerge_name_format(name)
 
     try:
         tip1 = check_output(
