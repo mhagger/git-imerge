@@ -436,7 +436,7 @@ class GitRepository(object):
         If not, raise ValueError."""
 
         try:
-            return rev_parse('%s^{commit}' % (arg,))
+            return self.rev_parse('%s^{commit}' % (arg,))
         except CalledProcessError:
             raise ValueError('%r does not refer to a valid git commit' % (arg,))
 
@@ -669,6 +669,9 @@ class GitRepository(object):
         [commit] = parents
         return commit
 
+    def rev_parse(self, arg):
+        return check_output(['git', 'rev-parse', '--verify', '--quiet', arg]).strip()
+
     def rev_list(self, *args):
         cmd = ['git', 'rev-list'] + list(args)
         return [
@@ -721,7 +724,7 @@ class GitRepository(object):
             ).strip().split()
 
     def get_tree(self, arg):
-        return rev_parse('%s^{tree}' % (arg,))
+        return self.rev_parse('%s^{tree}' % (arg,))
 
     def linear_ancestry(self, commit1, commit2, first_parent):
         """Compute a linear ancestry between commit1 and commit2.
@@ -751,8 +754,8 @@ class GitRepository(object):
 
         """
 
-        oid1 = rev_parse(commit1)
-        oid2 = rev_parse(commit2)
+        oid1 = self.rev_parse(commit1)
+        oid2 = self.rev_parse(commit2)
 
         parentage = {oid1 : []}
         for (commit, parents) in self.rev_list_with_parents(
@@ -847,10 +850,6 @@ class GitRepository(object):
         """
 
         return GitTemporaryHead(self, message)
-
-
-def rev_parse(arg):
-    return check_output(['git', 'rev-parse', '--verify', '--quiet', arg]).strip()
 
 
 BRANCH_PREFIX = 'refs/heads/'
@@ -3178,7 +3177,7 @@ def cmd_rebase(parser, options):
             options.name = tip2
 
     except CalledProcessError:
-        tip2 = rev_parse('HEAD')
+        tip2 = git.rev_parse('HEAD')
 
     if not options.name:
         parser.error(
@@ -3237,11 +3236,11 @@ def cmd_drop(parser, options):
                 'Range must either be a single commit '
                 'or in the form "commit..commit"'
                 )
-        start = rev_parse(m.group('start'))
-        end = rev_parse(m.group('end'))
+        start = git.rev_parse(m.group('start'))
+        end = git.rev_parse(m.group('end'))
     else:
-        end = rev_parse(options.range)
-        start = rev_parse('%s^' % (end,))
+        end = git.rev_parse(options.range)
+        start = git.rev_parse('%s^' % (end,))
 
     try:
         to_drop = git.linear_ancestry(start, end, options.first_parent)
@@ -3287,7 +3286,7 @@ def cmd_drop(parser, options):
             options.name = tip1
 
     except CalledProcessError:
-        tip1 = rev_parse('HEAD')
+        tip1 = git.rev_parse('HEAD')
 
     if not options.name:
         parser.error(
@@ -3315,7 +3314,7 @@ def cmd_drop(parser, options):
         cmd += [commit]
         check_call(cmd)
 
-    tip2 = rev_parse('HEAD')
+    tip2 = git.rev_parse('HEAD')
 
     try:
         (merge_base, commits1, commits2) = git.get_boundaries(
@@ -3360,11 +3359,11 @@ def cmd_revert(parser, options):
                 'Range must either be a single commit '
                 'or in the form "commit..commit"'
                 )
-        start = rev_parse(m.group('start'))
-        end = rev_parse(m.group('end'))
+        start = git.rev_parse(m.group('start'))
+        end = git.rev_parse(m.group('end'))
     else:
-        end = rev_parse(options.range)
-        start = rev_parse('%s^' % (end,))
+        end = git.rev_parse(options.range)
+        start = git.rev_parse('%s^' % (end,))
 
     try:
         to_revert = git.linear_ancestry(start, end, options.first_parent)
@@ -3405,7 +3404,7 @@ def cmd_revert(parser, options):
             options.name = tip1
 
     except CalledProcessError:
-        tip1 = rev_parse('HEAD')
+        tip1 = git.rev_parse('HEAD')
 
     if not options.name:
         parser.error(
@@ -3433,7 +3432,7 @@ def cmd_revert(parser, options):
         cmd += [commit]
         check_call(cmd)
 
-    tip2 = rev_parse('HEAD')
+    tip2 = git.rev_parse('HEAD')
 
     try:
         (merge_base, commits1, commits2) = git.get_boundaries(
