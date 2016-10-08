@@ -370,6 +370,16 @@ class GitRepository(object):
         except CalledProcessError:
             raise Failure('Name %r is not a valid refname component!' % (name,))
 
+    def check_branch_name_format(self, name):
+        """Check that name is a valid branch name."""
+
+        try:
+            call_silently(
+                ['git', 'check-ref-format', 'refs/heads/%s' % (name,)]
+                )
+        except CalledProcessError:
+            raise InvalidBranchNameError('Name %r is not a valid branch name!' % (name,))
+
     def iter_existing_imerge_names(self):
         """Iterate over the names of existing MergeStates in this repo."""
 
@@ -448,16 +458,6 @@ class GitRepository(object):
             return False
         except CalledProcessError:
             return True
-
-    def check_branch_name_format(self, name):
-        """Check that name is a valid branch name."""
-
-        try:
-            call_silently(
-                ['git', 'check-ref-format', 'refs/heads/%s' % (name,)]
-                )
-        except CalledProcessError:
-            raise InvalidBranchNameError('Name %r is not a valid branch name!' % (name,))
 
     def get_commit_sha1(self, arg):
         """Convert arg into a SHA1 and verify that it refers to a commit.
