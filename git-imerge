@@ -270,6 +270,10 @@ class AutomaticMergeFailed(Exception):
         self.commit1, self.commit2 = commit1, commit2
 
 
+class InvalidBranchNameError(Failure):
+    pass
+
+
 class GitRepository(object):
     MERGE_STATE_REFNAME_RE = re.compile(
         r"""
@@ -373,6 +377,16 @@ class GitRepository(object):
             return False
         except CalledProcessError:
             return True
+
+    def check_branch_name_format(self, name):
+        """Check that name is a valid branch name."""
+
+        try:
+            call_silently(
+                ['git', 'check-ref-format', 'refs/heads/%s' % (name,)]
+                )
+        except CalledProcessError:
+            raise InvalidBranchNameError('Name %r is not a valid branch name!' % (name,))
 
     def refresh_index(self):
         process = subprocess.Popen(
@@ -602,21 +616,6 @@ class GitRepository(object):
 
         [commit] = parents
         return commit
-
-
-class InvalidBranchNameError(Failure):
-    pass
-
-
-def check_branch_name_format(name):
-    """Check that name is a valid branch name."""
-
-    try:
-        call_silently(
-            ['git', 'check-ref-format', 'refs/heads/%s' % (name,)]
-            )
-    except CalledProcessError:
-        raise InvalidBranchNameError('Name %r is not a valid branch name!' % (name,))
 
 
 def rev_parse(arg):
@@ -2243,7 +2242,7 @@ class MergeState(Block):
 
         git.check_imerge_name_format(name)
         if branch:
-            check_branch_name_format(branch)
+            git.check_branch_name_format(branch)
         else:
             branch = name
 
@@ -3112,7 +3111,7 @@ def cmd_merge(parser, options):
         if not options.branch:
             # See if we can store the result to the checked-out branch:
             try:
-                check_branch_name_format(tip1)
+                git.check_branch_name_format(tip1)
             except InvalidBranchNameError:
                 pass
             else:
@@ -3173,7 +3172,7 @@ def cmd_rebase(parser, options):
         if not options.branch:
             # See if we can store the result to the current branch:
             try:
-                check_branch_name_format(tip2)
+                git.check_branch_name_format(tip2)
             except InvalidBranchNameError:
                 pass
             else:
@@ -3282,7 +3281,7 @@ def cmd_drop(parser, options):
         if not options.branch:
             # See if we can store the result to the current branch:
             try:
-                check_branch_name_format(tip1)
+                git.check_branch_name_format(tip1)
             except InvalidBranchNameError:
                 pass
             else:
@@ -3400,7 +3399,7 @@ def cmd_revert(parser, options):
         if not options.branch:
             # See if we can store the result to the current branch:
             try:
-                check_branch_name_format(tip1)
+                git.check_branch_name_format(tip1)
             except InvalidBranchNameError:
                 pass
             else:
