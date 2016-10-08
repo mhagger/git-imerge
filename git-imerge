@@ -2526,8 +2526,7 @@ class MergeState(Block):
                     ]).strip()
                 ) != 0
 
-    @staticmethod
-    def _set_refname(refname, commit, force=False):
+    def _set_refname(self, refname, commit, force=False):
         try:
             ref_oldval = get_commit_sha1(refname)
         except ValueError:
