@@ -526,6 +526,52 @@ class GitRepository(object):
 
         return True
 
+    def create_commit_chain(self, base, path):
+        """Point refname at the chain of commits indicated by path.
+
+        path is a list [(commit, metadata), ...]. Create a series of
+        commits corresponding to the entries in path. Each commit's tree
+        is taken from the corresponding old commit, and each commit's
+        metadata is taken from the corresponding metadata commit. Use base
+        as the parent of the first commit, or make the first commit a root
+        commit if base is None. Reuse existing commits from the list
+        whenever possible.
+
+        Return a commit object corresponding to the last commit in the
+        chain.
+
+        """
+
+        reusing = True
+        if base is None:
+            if not path:
+                raise ValueError('neither base nor path specified')
+            parents = []
+        else:
+            parents = [base]
+
+        for (commit, metadata) in path:
+            if reusing:
+                if commit == metadata and get_commit_parents(commit) == parents:
+                    # We can reuse this commit, too.
+                    parents = [commit]
+                    continue
+                else:
+                    reusing = False
+
+            # Create a commit, copying the old log message and author info
+            # from the metadata commit:
+            tree = get_tree(commit)
+            new_commit = commit_tree(
+                tree, parents,
+                msg=get_log_message(metadata),
+                metadata=get_author_info(metadata),
+                )
+            parents = [new_commit]
+
+        [commit] = parents
+        return commit
+
 
 def refresh_index():
     process = subprocess.Popen(
@@ -930,53 +976,6 @@ def reparent(commit, parent_sha1s, msg=None):
     if retcode:
         raise Failure('Could not reparent commit %s' % (commit,))
     return out.strip()
-
-
-def create_commit_chain(base, path):
-    """Point refname at the chain of commits indicated by path.
-
-    path is a list [(commit, metadata), ...]. Create a series of
-    commits corresponding to the entries in path. Each commit's tree
-    is taken from the corresponding old commit, and each commit's
-    metadata is taken from the corresponding metadata commit. Use base
-    as the parent of the first commit, or make the first commit a root
-    commit if base is None. Reuse existing commits from the list
-    whenever possible.
-
-    Return a commit object corresponding to the last commit in the
-    chain.
-
-    """
-
-    reusing = True
-    if base is None:
-        if not path:
-            raise ValueError('neither base nor path specified')
-        parents = []
-    else:
-        parents = [base]
-
-    for (commit, metadata) in path:
-        if reusing:
-            if commit == metadata and get_commit_parents(commit) == parents:
-                # We can reuse this commit, too.
-                parents = [commit]
-                continue
-            else:
-                reusing = False
-
-        # Create a commit, copying the old log message and author info
-        # from the metadata commit:
-        tree = get_tree(commit)
-        new_commit = commit_tree(
-            tree, parents,
-            msg=get_log_message(metadata),
-            metadata=get_author_info(metadata),
-            )
-        parents = [new_commit]
-
-    [commit] = parents
-    return commit
 
 
 class MergeRecord(object):
@@ -2854,7 +2853,7 @@ class MergeState(Block):
         # The update is OK, so here we can set force=True:
         self._set_refname(
             refname,
-            create_commit_chain(base_sha1, path_sha1),
+            self.git.create_commit_chain(base_sha1, path_sha1),
             force=True,
             )
 
