@@ -330,13 +330,7 @@ class GitRepository(object):
         exist, just return False.  If it exists but is unusable for
         some other reason, raise an exception."""
 
-        try:
-            call_silently(
-                ['git', 'check-ref-format', 'refs/imerge/%s' % (name,)]
-                )
-        except CalledProcessError:
-            raise Failure('Name %r is not a valid refname component!' % (name,))
-
+        self.check_imerge_name_format(name)
         state_refname = 'refs/imerge/%s/state' % (name,)
         for line in check_output(['git', 'for-each-ref', state_refname]).splitlines():
             (sha1, type, refname) = line.split()
