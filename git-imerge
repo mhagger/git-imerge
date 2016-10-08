@@ -429,6 +429,36 @@ class GitRepository(object):
         else:
             return get_commit_sha1('HEAD')
 
+    def require_clean_work_tree(self, action):
+        """Verify that the current tree is clean.
+
+        The code is a Python translation of the git-sh-setup(1) function
+        of the same name."""
+
+        process = subprocess.Popen(
+            ['git', 'rev-parse', '--verify', 'HEAD'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+        err = communicate(process)[1]
+        retcode = process.poll()
+        if retcode:
+            raise UncleanWorkTreeError(err.rstrip())
+
+        refresh_index()
+
+        error = []
+        if unstaged_changes():
+            error.append('Cannot %s: You have unstaged changes.' % (action,))
+
+        if uncommitted_changes():
+            if not error:
+                error.append('Cannot %s: Your index contains uncommitted changes.' % (action,))
+            else:
+                error.append('Additionally, your index contains uncommitted changes.')
+
+        if error:
+            raise UncleanWorkTreeError('\n'.join(error))
+
     def simple_merge_in_progress(self):
         """Return True iff a merge (of a single branch) is in progress."""
 
@@ -512,37 +542,6 @@ def uncommitted_changes():
         return False
     except CalledProcessError:
         return True
-
-
-def require_clean_work_tree(action):
-    """Verify that the current tree is clean.
-
-    The code is a Python translation of the git-sh-setup(1) function
-    of the same name."""
-
-    process = subprocess.Popen(
-        ['git', 'rev-parse', '--verify', 'HEAD'],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-    err = communicate(process)[1]
-    retcode = process.poll()
-    if retcode:
-        raise UncleanWorkTreeError(err.rstrip())
-
-    refresh_index()
-
-    error = []
-    if unstaged_changes():
-        error.append('Cannot %s: You have unstaged changes.' % (action,))
-
-    if uncommitted_changes():
-        if not error:
-            error.append('Cannot %s: Your index contains uncommitted changes.' % (action,))
-        else:
-            error.append('Additionally, your index contains uncommitted changes.')
-
-    if error:
-        raise UncleanWorkTreeError('\n'.join(error))
 
 
 class InvalidBranchNameError(Failure):
@@ -2694,7 +2693,7 @@ class MergeState(Block):
         if self.git.commit_user_merge(edit_log_msg=edit_log_msg):
             commit = get_commit_sha1('HEAD')
 
-        require_clean_work_tree('proceed')
+        self.git.require_clean_work_tree('proceed')
 
         merge_frontier = MergeFrontier.map_known_frontier(self)
 
@@ -3015,7 +3014,7 @@ def cmd_list(parser, options):
 
 def cmd_init(parser, options):
     git = GitRepository()
-    require_clean_work_tree('proceed')
+    git.require_clean_work_tree('proceed')
 
     if not options.name:
         parser.error(
@@ -3051,7 +3050,7 @@ def cmd_init(parser, options):
 
 def cmd_start(parser, options):
     git = GitRepository()
-    require_clean_work_tree('proceed')
+    git.require_clean_work_tree('proceed')
 
     if not options.name:
         parser.error(
@@ -3095,7 +3094,7 @@ def cmd_start(parser, options):
 
 def cmd_merge(parser, options):
     git = GitRepository()
-    require_clean_work_tree('proceed')
+    git.require_clean_work_tree('proceed')
 
     tip2 = options.tip2
 
@@ -3163,7 +3162,7 @@ def cmd_merge(parser, options):
 
 def cmd_rebase(parser, options):
     git = GitRepository()
-    require_clean_work_tree('proceed')
+    git.require_clean_work_tree('proceed')
 
     tip1 = options.tip1
 
@@ -3234,7 +3233,7 @@ def cmd_rebase(parser, options):
 
 def cmd_drop(parser, options):
     git = GitRepository()
-    require_clean_work_tree('proceed')
+    git.require_clean_work_tree('proceed')
 
     m = re.match(r'^(?P<start>.*[^\.])(?P<sep>\.{2,})(?P<end>[^\.].*)$', options.range)
     if m:
@@ -3357,7 +3356,7 @@ def cmd_drop(parser, options):
 
 def cmd_revert(parser, options):
     git = GitRepository()
-    require_clean_work_tree('proceed')
+    git.require_clean_work_tree('proceed')
 
     m = re.match(r'^(?P<start>.*[^\.])(?P<sep>\.{2,})(?P<end>[^\.].*)$', options.range)
     if m:
@@ -3522,7 +3521,7 @@ def cmd_record(parser, options):
 
 def cmd_autofill(parser, options):
     git = GitRepository()
-    require_clean_work_tree('proceed')
+    git.require_clean_work_tree('proceed')
     merge_state = read_merge_state(git, options.name)
     with TemporaryHead():
         try:
@@ -3533,7 +3532,7 @@ def cmd_autofill(parser, options):
 
 def cmd_simplify(parser, options):
     git = GitRepository()
-    require_clean_work_tree('proceed')
+    git.require_clean_work_tree('proceed')
     merge_state = read_merge_state(git, options.name)
     merge_frontier = MergeFrontier.map_known_frontier(merge_state)
     if not merge_frontier.is_complete():
@@ -3547,7 +3546,7 @@ def cmd_simplify(parser, options):
 
 def cmd_finish(parser, options):
     git = GitRepository()
-    require_clean_work_tree('proceed')
+    git.require_clean_work_tree('proceed')
     merge_state = read_merge_state(git, options.name, default_to_unique=False)
     merge_frontier = MergeFrontier.map_known_frontier(merge_state)
     if not merge_frontier.is_complete():
