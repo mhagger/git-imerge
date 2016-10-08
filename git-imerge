@@ -2162,7 +2162,7 @@ class MergeState(Block):
 
     @staticmethod
     def initialize(
-            name, merge_base,
+            git, name, merge_base,
             tip1, commits1,
             tip2, commits2,
             goal=DEFAULT_GOAL, goalopts=None,
@@ -3045,7 +3045,7 @@ def cmd_init(parser, options):
             parser.error('%s\nPerhaps use "--first-parent"?' % (e,))
 
     merge_state = MergeState.initialize(
-        options.name, merge_base,
+        git, options.name, merge_base,
         tip1, commits1,
         tip2, commits2,
         goal=options.goal, manual=options.manual,
@@ -3082,7 +3082,7 @@ def cmd_start(parser, options):
             parser.error('%s\nPerhaps use "--first-parent"?' % (e,))
 
     merge_state = MergeState.initialize(
-        options.name, merge_base,
+        git, options.name, merge_base,
         tip1, commits1,
         tip2, commits2,
         goal=options.goal, manual=options.manual,
@@ -3150,7 +3150,7 @@ def cmd_merge(parser, options):
         sys.exit(0)
 
     merge_state = MergeState.initialize(
-        name, merge_base,
+        git, name, merge_base,
         tip1, commits1,
         tip2, commits2,
         goal=options.goal, manual=options.manual,
@@ -3221,7 +3221,7 @@ def cmd_rebase(parser, options):
         sys.exit(0)
 
     merge_state = MergeState.initialize(
-        options.name, merge_base,
+        git, options.name, merge_base,
         tip1, commits1,
         tip2, commits2,
         goal=options.goal, manual=options.manual,
@@ -3343,7 +3343,7 @@ def cmd_drop(parser, options):
         sys.exit(0)
 
     merge_state = MergeState.initialize(
-        options.name, merge_base,
+        git, options.name, merge_base,
         tip1, commits1,
         tip2, commits2,
         goal='drop', goalopts={'base' : start},
@@ -3461,7 +3461,7 @@ def cmd_revert(parser, options):
         sys.exit(0)
 
     merge_state = MergeState.initialize(
-        options.name, merge_base,
+        git, options.name, merge_base,
         tip1, commits1,
         tip2, commits2,
         goal='revert',
