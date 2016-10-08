@@ -353,6 +353,15 @@ class GitRepository(object):
         except CalledProcessError:
             return False
 
+    def unstaged_changes(self):
+        """Return True iff there are unstaged changes in the working copy"""
+
+        try:
+            check_call(['git', 'diff-files', '--quiet', '--ignore-submodules'])
+            return False
+        except CalledProcessError:
+            return True
+
     def refresh_index(self):
         process = subprocess.Popen(
             ['git', 'update-index', '-q', '--ignore-submodules', '--refresh'],
@@ -474,7 +483,7 @@ class GitRepository(object):
         self.refresh_index()
 
         error = []
-        if unstaged_changes():
+        if self.unstaged_changes():
             error.append('Cannot %s: You have unstaged changes.' % (action,))
 
         if uncommitted_changes():
@@ -512,7 +521,7 @@ class GitRepository(object):
         # Check if all conflicts are resolved and everything in the
         # working tree is staged:
         self.refresh_index()
-        if unstaged_changes():
+        if self.unstaged_changes():
             raise UncleanWorkTreeError(
                 'Cannot proceed: You have unstaged changes.'
                 )
@@ -581,16 +590,6 @@ class GitRepository(object):
 
         [commit] = parents
         return commit
-
-
-def unstaged_changes():
-    """Return True iff there are unstaged changes in the working copy"""
-
-    try:
-        check_call(['git', 'diff-files', '--quiet', '--ignore-submodules'])
-        return False
-    except CalledProcessError:
-        return True
 
 
 def uncommitted_changes():
