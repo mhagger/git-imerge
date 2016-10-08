@@ -2825,7 +2825,7 @@ def simple_merge_in_progress():
     return len(heads) == 1
 
 
-def commit_user_merge(merge_state, edit_log_msg=None):
+def commit_user_merge(edit_log_msg=None):
     """If a merge is in progress and ready to be committed, commit it.
 
     If a simple merge is in progress and any changes in the working
@@ -2936,7 +2936,7 @@ def incorporate_user_merge(merge_state, edit_log_msg=None):
     # If we reach this point, then the scratch reference exists and is
     # checked out.  Now check whether there is staged content that
     # can be committed:
-    if commit_user_merge(merge_state, edit_log_msg=edit_log_msg):
+    if commit_user_merge(edit_log_msg=edit_log_msg):
         commit = get_commit_sha1('HEAD')
 
     require_clean_work_tree('proceed')
