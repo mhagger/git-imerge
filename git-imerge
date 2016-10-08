@@ -274,6 +274,33 @@ class InvalidBranchNameError(Failure):
     pass
 
 
+class NotFirstParentAncestorError(Failure):
+    def __init__(self, commit1, commit2):
+        Failure.__init__(
+            self,
+            'Commit "%s" is not a first-parent ancestor of "%s"'
+            % (commit1, commit2),
+            )
+
+
+class NonlinearAncestryError(Failure):
+    def __init__(self, commit1, commit2):
+        Failure.__init__(
+            self,
+            'The history "%s..%s" is not linear'
+            % (commit1, commit2),
+            )
+
+
+class NothingToDoError(Failure):
+    def __init__(self, src_tip, dst_tip):
+        Failure.__init__(
+            self,
+            'There are no commits on "%s" that are not already in "%s"'
+            % (src_tip, dst_tip),
+            )
+
+
 class GitTemporaryHead(object):
     """A context manager that records the current HEAD state then restores it.
 
@@ -863,33 +890,6 @@ class GitRepository(object):
         """
 
         return GitTemporaryHead(self, message)
-
-
-class NotFirstParentAncestorError(Failure):
-    def __init__(self, commit1, commit2):
-        Failure.__init__(
-            self,
-            'Commit "%s" is not a first-parent ancestor of "%s"'
-            % (commit1, commit2),
-            )
-
-
-class NonlinearAncestryError(Failure):
-    def __init__(self, commit1, commit2):
-        Failure.__init__(
-            self,
-            'The history "%s..%s" is not linear'
-            % (commit1, commit2),
-            )
-
-
-class NothingToDoError(Failure):
-    def __init__(self, src_tip, dst_tip):
-        Failure.__init__(
-            self,
-            'There are no commits on "%s" that are not already in "%s"'
-            % (src_tip, dst_tip),
-            )
 
 
 def compute_best_merge_base(tip1, tip2):
