@@ -301,6 +301,31 @@ class GitRepository(object):
         except CalledProcessError:
             return None
 
+    def check_imerge_exists(self, name):
+        """Verify that a MergeState with the given name exists.
+
+        Just check for the existence, readability, and compatible
+        version of the 'state' reference.  If the reference doesn't
+        exist, just return False.  If it exists but is unusable for
+        some other reason, raise an exception."""
+
+        try:
+            call_silently(
+                ['git', 'check-ref-format', 'refs/imerge/%s' % (name,)]
+                )
+        except CalledProcessError:
+            raise Failure('Name %r is not a valid refname component!' % (name,))
+
+        state_refname = 'refs/imerge/%s/state' % (name,)
+        for line in check_output(['git', 'for-each-ref', state_refname]).splitlines():
+            (sha1, type, refname) = line.split()
+            if refname == state_refname and type == 'blob':
+                MergeState._read_state(name, sha1)
+                # If that didn't throw an exception:
+                return True
+        else:
+            return False
+
 
 def get_default_edit():
     """Should '--edit' be used when committing intermediate user merges?
@@ -2110,32 +2135,6 @@ class MergeState(Block):
         return state
 
     @staticmethod
-    def check_exists(name):
-        """Verify that a MergeState with the given name exists.
-
-        Just check for the existence, readability, and compatible
-        version of the 'state' reference.  If the reference doesn't
-        exist, just return False.  If it exists but is unusable for
-        some other reason, raise an exception."""
-
-        try:
-            call_silently(
-                ['git', 'check-ref-format', 'refs/imerge/%s' % (name,)]
-                )
-        except CalledProcessError:
-            raise Failure('Name %r is not a valid refname component!' % (name,))
-
-        state_refname = 'refs/imerge/%s/state' % (name,)
-        for line in check_output(['git', 'for-each-ref', state_refname]).splitlines():
-            (sha1, type, refname) = line.split()
-            if refname == state_refname and type == 'blob':
-                MergeState._read_state(name, sha1)
-                # If that didn't throw an exception:
-                return True
-        else:
-            return False
-
-    @staticmethod
     def _check_no_merges(commits):
         multiparent_commits = [
             commit
@@ -2974,7 +2973,7 @@ def incorporate_user_merge(merge_state, edit_log_msg=None):
 def choose_merge_name(git, name, default_to_unique=True):
     # If a name was specified, try to use it and fail if not possible:
     if name is not None:
-        if not MergeState.check_exists(name):
+        if not git.check_imerge_exists(name):
             raise Failure('There is no incremental merge called \'%s\'!' % (name,))
         git.set_default_imerge_name(name)
         return name
@@ -2982,7 +2981,7 @@ def choose_merge_name(git, name, default_to_unique=True):
     # A name was not specified.  Try to use the default name:
     default_name = git.get_default_imerge_name()
     if default_name:
-        if MergeState.check_exists(default_name):
+        if git.check_imerge_exists(default_name):
             return default_name
         else:
             # There's no reason to keep the invalid default around:
@@ -2997,7 +2996,7 @@ def choose_merge_name(git, name, default_to_unique=True):
     if default_to_unique:
         # If there is exactly one imerge, set it to be the default and use it.
         names = list(git.iter_existing_imerge_names())
-        if len(names) == 1 and MergeState.check_exists(names[0]):
+        if len(names) == 1 and git.check_imerge_exists(names[0]):
             git.set_default_imerge_name(names[0])
             return names[0]
 
