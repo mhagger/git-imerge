@@ -507,7 +507,19 @@ class GitRepository(object):
         state_string = check_output(
             ['git', 'cat-file', 'blob', 'refs/imerge/%s/state' % (name,)],
             )
-        return json.loads(state_string)
+        state = json.loads(state_string)
+
+        # Convert state['version'] to a tuple of integers, and verify
+        # that it is compatible with this version of the script:
+        version = tuple(int(i) for i in state['version'].split('.'))
+        if version[0] != STATE_VERSION[0] or version[1] > STATE_VERSION[1]:
+            raise Failure(
+                'The format of imerge %s (%s) is not compatible with this script version.'
+                % (name, state['version'],)
+                )
+        state['version'] = version
+
+        return state
 
     def write_imerge_state_dict(self, name, state):
         state_string = json.dumps(state, sort_keys=True) + '\n'
@@ -2216,16 +2228,7 @@ class MergeState(Block):
 
     @staticmethod
     def _read_state(git, name):
-        state = git.read_imerge_state_dict(name)
-
-        version = tuple(int(i) for i in state['version'].split('.'))
-        if version[0] != STATE_VERSION[0] or version[1] > STATE_VERSION[1]:
-            raise Failure(
-                'The format of imerge %s (%s) is not compatible with this script version.'
-                % (name, state['version'],)
-                )
-        state['version'] = version
-        return state
+        return git.read_imerge_state_dict(name)
 
     @staticmethod
     def _check_no_merges(git, commits):
