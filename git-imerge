@@ -497,7 +497,7 @@ class GitRepository(object):
         for line in check_output(['git', 'for-each-ref', state_refname]).splitlines():
             (sha1, type, refname) = line.split()
             if refname == state_refname and type == 'blob':
-                MergeState._read_state(self, name)
+                self.read_imerge_state_dict(name)
                 # If that didn't throw an exception:
                 return True
         else:
@@ -2227,10 +2227,6 @@ class MergeState(Block):
         return 'refs/heads/imerge/%s' % (name,)
 
     @staticmethod
-    def _read_state(git, name):
-        return git.read_imerge_state_dict(name)
-
-    @staticmethod
     def _check_no_merges(git, commits):
         multiparent_commits = [
             commit
@@ -2326,7 +2322,7 @@ class MergeState(Block):
             if m:
                 if type != 'blob':
                     raise Failure('Reference %r is not a blob!' % (refname,))
-                state = MergeState._read_state(git, name)
+                state = git.read_imerge_state_dict(name)
                 continue
 
             unexpected.append(refname)
