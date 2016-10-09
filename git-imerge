@@ -521,6 +521,87 @@ class GitRepository(object):
 
         return state
 
+    def read_imerge_state(self, name):
+        """Read the state associated with the specified imerge.
+
+        Return the tuple
+
+            (state_dict, {(i1, i2) : (sha1, source), ...})
+
+        , where source is 'auto' or 'manual'. Validity is checked only
+        lightly.
+
+        """
+
+        merge_ref_re = re.compile(
+            r"""
+            ^
+            refs\/imerge\/
+            """ + re.escape(name) + r"""
+            \/(?P<source>auto|manual)\/
+            (?P<i1>0|[1-9][0-9]*)
+            \-
+            (?P<i2>0|[1-9][0-9]*)
+            $
+            """,
+            re.VERBOSE,
+            )
+
+        state_ref_re = re.compile(
+            r"""
+            ^
+            refs\/imerge\/
+            """ + re.escape(name) + r"""
+            \/state
+            $
+            """,
+            re.VERBOSE,
+            )
+
+        state = None
+
+        # A map {(i1, i2) : (sha1, source)}:
+        merges = {}
+
+        # refnames that were found but not understood:
+        unexpected = []
+
+        for line in check_output([
+                'git', 'for-each-ref', 'refs/imerge/%s' % (name,)
+                ]).splitlines():
+            (sha1, type, refname) = line.split()
+            m = merge_ref_re.match(refname)
+            if m:
+                if type != 'commit':
+                    raise Failure('Reference %r is not a commit!' % (refname,))
+                i1, i2 = int(m.group('i1')), int(m.group('i2'))
+                source = m.group('source')
+                merges[i1, i2] = (sha1, source)
+                continue
+
+            m = state_ref_re.match(refname)
+            if m:
+                if type != 'blob':
+                    raise Failure('Reference %r is not a blob!' % (refname,))
+                state = self.read_imerge_state_dict(name)
+                continue
+
+            unexpected.append(refname)
+
+        if state is None:
+            raise Failure(
+                'No state found; it should have been a blob reference at '
+                '"refs/imerge/%s/state"' % (name,)
+                )
+
+        if unexpected:
+            raise Failure(
+                'Unexpected reference(s) found in "refs/imerge/%s" namespace:\n    %s\n'
+                % (name, '\n    '.join(unexpected),)
+                )
+
+        return (state, merges)
+
     def write_imerge_state_dict(self, name, state):
         state_string = json.dumps(state, sort_keys=True) + '\n'
 
@@ -2272,74 +2353,16 @@ class MergeState(Block):
 
     @staticmethod
     def read(git, name):
-        merge_ref_re = re.compile(
-            r"""
-            ^
-            refs\/imerge\/
-            """ + re.escape(name) + r"""
-            \/(?P<source>auto|manual)\/
-            (?P<i1>0|[1-9][0-9]*)
-            \-
-            (?P<i2>0|[1-9][0-9]*)
-            $
-            """,
-            re.VERBOSE,
-            )
+        (state, merges) = git.read_imerge_state(name)
 
-        state_ref_re = re.compile(
-            r"""
-            ^
-            refs\/imerge\/
-            """ + re.escape(name) + r"""
-            \/state
-            $
-            """,
-            re.VERBOSE,
-            )
-
-        state = None
-
-        # A map {(i1, i2) : (sha1, source)}:
-        merges = {}
-
-        # refnames that were found but not understood:
-        unexpected = []
-
-        for line in check_output([
-                'git', 'for-each-ref', 'refs/imerge/%s' % (name,)
-                ]).splitlines():
-            (sha1, type, refname) = line.split()
-            m = merge_ref_re.match(refname)
-            if m:
-                if type != 'commit':
-                    raise Failure('Reference %r is not a commit!' % (refname,))
-                i1, i2 = int(m.group('i1')), int(m.group('i2'))
-                source = MergeState.SOURCE_TABLE[m.group('source')]
-                merges[i1, i2] = (sha1, source)
-                continue
-
-            m = state_ref_re.match(refname)
-            if m:
-                if type != 'blob':
-                    raise Failure('Reference %r is not a blob!' % (refname,))
-                state = git.read_imerge_state_dict(name)
-                continue
-
-            unexpected.append(refname)
-
-        if state is None:
-            raise Failure(
-                'No state found; it should have been a blob reference at '
-                '"refs/imerge/%s/state"' % (name,)
-                )
+        # Translate sources from strings into MergeRecord constants
+        # SAVED_AUTO or SAVED_MANUAL:
+        merges = dict((
+            ((i1, i2), (sha1, MergeState.SOURCE_TABLE[source]))
+            for ((i1, i2), (sha1, source)) in merges.items()
+            ))
 
         blockers = state.get('blockers', [])
-
-        if unexpected:
-            raise Failure(
-                'Unexpected reference(s) found in "refs/imerge/%s" namespace:\n    %s\n'
-                % (name, '\n    '.join(unexpected),)
-                )
 
         # Find merge_base, commits1, and commits2:
         (merge_base, source) = merges.pop((0, 0))
