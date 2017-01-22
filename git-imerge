@@ -666,14 +666,15 @@ class TemporaryHead(object):
                     'Could not restore HEAD to %r!:    %s\n'
                     % (self.head_name, e.message,)
                     )
-            else:
-                try:
-                    check_call(['git', 'reset', '--hard', self.orig_head])
-                except Exception as e:
-                    raise Failure(
-                        'Could not restore HEAD to %r!:    %s\n'
-                        % (self.orig_head, e.message,)
-                        )
+
+            try:
+                check_call(['git', 'reset', '--hard', self.orig_head])
+            except Exception as e:
+                raise Failure(
+                    'Could not restore HEAD to %r!:    %s\n'
+                    % (self.orig_head, e.message,)
+                    )
+
         return False
 
 
