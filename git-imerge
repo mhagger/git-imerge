@@ -1032,6 +1032,15 @@ class GitRepository(object):
 
         return out.strip()
 
+    def revert(self, commit):
+        """Apply the inverse of commit^..commit to HEAD and commit."""
+
+        cmd = ['git', 'revert', '--no-edit']
+        if len(self.get_commit_parents(commit)) > 1:
+            cmd += ['-m', '1']
+        cmd += [commit]
+        check_call(cmd)
+
     def reparent(self, commit, parent_sha1s, msg=None):
         """Create a new commit object like commit, but with the specified parents.
 
@@ -3314,11 +3323,7 @@ def cmd_drop(parser, options):
 
     git.checkout(end)
     for commit in reversed(to_drop):
-        cmd = ['git', 'revert', '--no-edit']
-        if len(git.get_commit_parents(commit)) > 1:
-            cmd += ['-m', '1']
-        cmd += [commit]
-        check_call(cmd)
+        git.revert(commit)
 
     tip2 = git.rev_parse('HEAD')
 
@@ -3429,11 +3434,7 @@ def cmd_revert(parser, options):
 
     git.checkout(end)
     for commit in reversed(to_revert):
-        cmd = ['git', 'revert', '--no-edit']
-        if len(git.get_commit_parents(commit)) > 1:
-            cmd += ['-m', '1']
-        cmd += [commit]
-        check_call(cmd)
+        git.revert(commit)
 
     tip2 = git.rev_parse('HEAD')
 
