@@ -311,10 +311,7 @@ class GitTemporaryHead(object):
 
     def __enter__(self, git, message):
         self.message = message
-        try:
-            self.head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
-        except CalledProcessError:
-            self.head_name = None
+        self.head_name = git.get_head_refname()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -976,6 +973,21 @@ class GitRepository(object):
             raise NothingToDoError(tip2, tip1)
 
         return (merge_base, commits1, commits2)
+
+    def get_head_refname(self, short=False):
+        """Return the name of the reference that is currently checked out.
+
+        If `short` is set, return it as a branch name. If HEAD is
+        currently detached, return None."""
+
+        cmd = ['git', 'symbolic-ref', '--quiet']
+        if short:
+            cmd += ['--short']
+        cmd += ['HEAD']
+        try:
+            return check_output(cmd).strip()
+        except CalledProcessError:
+            return None
 
     def checkout(self, refname, quiet=False):
         cmd = ['git', 'checkout']
@@ -2434,10 +2446,7 @@ class MergeState(Block):
         # If HEAD is the scratch refname, abort any in-progress
         # commits and detach HEAD:
         scratch_refname = MergeState.get_scratch_refname(name)
-        try:
-            head_refname = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
-        except CalledProcessError:
-            head_refname = None
+        head_refname = git.get_head_refname()
         if head_refname == scratch_refname:
             try:
                 # We don't use "git merge --abort" here because it was
@@ -2676,12 +2685,10 @@ class MergeState(Block):
         except ValueError:
             raise NoManualMergeError('Reference %s does not exist.' % (refname,))
 
-        try:
-            head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
-        except CalledProcessError:
+        head_name = self.git.get_head_refname()
+        if head_name is None:
             raise NoManualMergeError('HEAD is currently detached.')
-
-        if head_name != refname:
+        elif head_name != refname:
             # This should not usually happen.  The scratch reference
             # exists, but it is not current.  Perhaps the user gave up on
             # an attempted merge then switched to another branch.  We want
@@ -2767,10 +2774,7 @@ class MergeState(Block):
             # refname already exists.  This has two ramifications:
             # 1. HEAD might point at it
             # 2. We may only fast-forward it (unless force is set)
-            try:
-                head_refname = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
-            except CalledProcessError:
-                head_refname = None
+            head_refname = self.git.get_head_refname()
 
             if not force:
                 if not self.git.is_ancestor(ref_oldval, commit):
@@ -3034,12 +3038,7 @@ def cmd_init(parser, options):
         parser.error(
             'Please specify the --name to be used for this incremental merge'
             )
-    try:
-        tip1 = check_output(
-            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-            ).strip()
-    except CalledProcessError:
-        tip1 = 'HEAD'
+    tip1 = git.get_head_refname(short=True) or 'HEAD'
     tip2 = options.tip2
     try:
         (merge_base, commits1, commits2) = git.get_boundaries(
@@ -3070,12 +3069,7 @@ def cmd_start(parser, options):
         parser.error(
             'Please specify the --name to be used for this incremental merge'
             )
-    try:
-        tip1 = check_output(
-            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-            ).strip()
-    except CalledProcessError:
-        tip1 = 'HEAD'
+    tip1 = git.get_head_refname(short=True) or 'HEAD'
     tip2 = options.tip2
 
     try:
@@ -3119,10 +3113,8 @@ def cmd_merge(parser, options):
         name = tip2
         git.check_imerge_name_format(name)
 
-    try:
-        tip1 = check_output(
-            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-            ).strip()
+    tip1 = git.get_head_refname(short=True)
+    if tip1:
         if not options.branch:
             # See if we can store the result to the checked-out branch:
             try:
@@ -3131,7 +3123,7 @@ def cmd_merge(parser, options):
                 pass
             else:
                 options.branch = tip1
-    except CalledProcessError:
+    else:
         tip1 = 'HEAD'
 
     if not options.branch:
@@ -3180,10 +3172,8 @@ def cmd_rebase(parser, options):
 
     tip1 = options.tip1
 
-    try:
-        tip2 = check_output(
-            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-            ).strip()
+    tip2 = git.get_head_refname(short=True)
+    if tip2:
         if not options.branch:
             # See if we can store the result to the current branch:
             try:
@@ -3195,8 +3185,7 @@ def cmd_rebase(parser, options):
         if not options.name:
             # By default, name the imerge after the branch being rebased:
             options.name = tip2
-
-    except CalledProcessError:
+    else:
         tip2 = git.rev_parse('HEAD')
 
     if not options.name:
@@ -3289,10 +3278,8 @@ def cmd_drop(parser, options):
     #
     #     goalopts['base'] = rev_parse(commit1)
 
-    try:
-        tip1 = check_output(
-            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-            ).strip()
+    tip1 = git.get_head_refname(short=True)
+    if tip1:
         if not options.branch:
             # See if we can store the result to the current branch:
             try:
@@ -3304,8 +3291,7 @@ def cmd_drop(parser, options):
         if not options.name:
             # By default, name the imerge after the branch being rebased:
             options.name = tip1
-
-    except CalledProcessError:
+    else:
         tip1 = git.rev_parse('HEAD')
 
     if not options.name:
@@ -3407,10 +3393,8 @@ def cmd_revert(parser, options):
     #
     # Then we use imerge to rebase tip2 onto tip1.
 
-    try:
-        tip1 = check_output(
-            ['git', 'symbolic-ref', '--quiet', '--short', 'HEAD'],
-            ).strip()
+    tip1 = git.get_head_refname(short=True)
+    if tip1:
         if not options.branch:
             # See if we can store the result to the current branch:
             try:
@@ -3422,8 +3406,7 @@ def cmd_revert(parser, options):
         if not options.name:
             # By default, name the imerge after the branch being rebased:
             options.name = tip1
-
-    except CalledProcessError:
+    else:
         tip1 = git.rev_parse('HEAD')
 
     if not options.name:
