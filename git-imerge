@@ -642,7 +642,10 @@ def get_boundaries(tip1, tip2, first_parent):
 class TemporaryHead(object):
     """A context manager that records the current HEAD state then restores it.
 
-    The message is used for the reflog."""
+    This should only be used when the working copy is clean. message
+    is used for the reflog.
+
+    """
 
     def __enter__(self, message='imerge: restoring'):
         self.message = message
@@ -650,7 +653,6 @@ class TemporaryHead(object):
             self.head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
         except CalledProcessError:
             self.head_name = None
-        self.orig_head = get_commit_sha1('HEAD')
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -661,18 +663,11 @@ class TemporaryHead(object):
                     '-m', self.message, 'HEAD',
                     self.head_name,
                     ])
+                check_call(['git', 'reset', '--hard'])
             except CalledProcessError as e:
                 raise Failure(
                     'Could not restore HEAD to %r!:    %s\n'
                     % (self.head_name, e.message,)
-                    )
-
-            try:
-                check_call(['git', 'reset', '--hard', self.orig_head])
-            except CalledProcessError as e:
-                raise Failure(
-                    'Could not restore HEAD to %r!:    %s\n'
-                    % (self.orig_head, e.message,)
                     )
 
         return False
