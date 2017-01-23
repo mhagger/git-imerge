@@ -3035,14 +3035,13 @@ def choose_merge_name(git, name):
             raise Failure(
                 'Warning: The default incremental merge \'%s\' has disappeared.\n'
                 '(The setting imerge.default has been cleared.)\n'
-                'Please select an incremental merge using --name'
+                'Please try again.'
                 % (default_name,)
                 )
 
     # If there is exactly one imerge, set it to be the default and use it.
     names = list(git.iter_existing_imerge_names())
     if len(names) == 1 and git.check_imerge_exists(names[0]):
-        git.set_default_imerge_name(names[0])
         return names[0]
 
     raise Failure('Please select an incremental merge using --name')
