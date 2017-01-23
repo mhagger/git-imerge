@@ -862,6 +862,11 @@ class GitRepository(object):
 
         check_call(['git', 'update-ref'] + opt + ['-m', msg, '-d', refname])
 
+    def detach(self, msg):
+        """Detach HEAD. msg is used for the reflog."""
+
+        self.update_ref('HEAD', 'HEAD^0', msg, deref=False)
+
     def compute_best_merge_base(self, tip1, tip2):
         try:
             merge_bases = check_output(['git', 'merge-base', '--all', tip1, tip2]).splitlines()
@@ -2464,11 +2469,7 @@ class MergeState(Block):
             except CalledProcessError:
                 pass
             # Detach head so that we can delete scratch_refname:
-            git.update_ref(
-                'HEAD', 'HEAD^0',
-                'Detach HEAD from %s' % (scratch_refname,),
-                deref=False,
-                )
+            git.detach('Detach HEAD from %s' % (scratch_refname,))
 
         # Delete the scratch refname:
         git.delete_ref(
@@ -2751,9 +2752,7 @@ class MergeState(Block):
         (i1, i2) = self.incorporate_manual_merge(commit)
 
         # Now detach head so that we can delete refname.
-        self.git.update_ref(
-            'HEAD', commit, 'Detach HEAD from %s' % (refname,), deref=False,
-            )
+        self.git.detach('Detach HEAD from %s' % (refname,))
 
         self.git.delete_ref(
             refname, 'imerge %s: remove scratch reference' % (self.name,),
