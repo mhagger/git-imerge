@@ -861,10 +861,9 @@ class GitRepository(object):
         check_call(['git', 'update-ref'] + opt + ['-m', msg, '-d', refname])
 
     def delete_imerge_refs(self, name):
-        for line in check_output([
-                'git', 'for-each-ref', 'refs/imerge/%s' % (name,)
+        for refname in check_output([
+                'git', 'for-each-ref', '--format=%(refname)', 'refs/imerge/%s' % (name,)
                 ]).splitlines():
-            (sha1, type, refname) = line.split()
             try:
                 self.delete_ref(refname, 'imerge: remove merge %r' % (name,))
             except CalledProcessError as e:
