@@ -3017,11 +3017,15 @@ class MergeState(Block):
 
 
 def choose_merge_name(git, name):
+    names = list(git.iter_existing_imerge_names())
+
     # If a name was specified, try to use it and fail if not possible:
     if name is not None:
-        if not git.check_imerge_exists(name):
+        if name not in names:
             raise Failure('There is no incremental merge called \'%s\'!' % (name,))
-        git.set_default_imerge_name(name)
+        if len(names) > 1:
+            # Record this as the new default:
+            git.set_default_imerge_name(name)
         return name
 
     # A name was not specified.  Try to use the default name:
@@ -3040,7 +3044,6 @@ def choose_merge_name(git, name):
                 )
 
     # If there is exactly one imerge, set it to be the default and use it.
-    names = list(git.iter_existing_imerge_names())
     if len(names) == 1 and git.check_imerge_exists(names[0]):
         return names[0]
 
@@ -3053,8 +3056,11 @@ def read_merge_state(git, name=None):
 
 def cmd_list(parser, options):
     git = GitRepository()
+    names = list(git.iter_existing_imerge_names())
     default_merge = git.get_default_imerge_name()
-    for name in git.iter_existing_imerge_names():
+    if not default_merge and len(names) == 1:
+        default_merge = names[0]
+    for name in names:
         if name == default_merge:
             sys.stdout.write('* %s\n' % (name,))
         else:
@@ -3089,7 +3095,8 @@ def cmd_init(parser, options):
         branch=(options.branch or options.name),
         )
     merge_state.save()
-    git.set_default_imerge_name(options.name)
+    if len(list(git.iter_existing_imerge_names())) > 1:
+        git.set_default_imerge_name(options.name)
 
 
 def cmd_start(parser, options):
@@ -3121,7 +3128,8 @@ def cmd_start(parser, options):
         branch=(options.branch or options.name),
         )
     merge_state.save()
-    git.set_default_imerge_name(options.name)
+    if len(list(git.iter_existing_imerge_names())) > 1:
+        git.set_default_imerge_name(options.name)
 
     try:
         merge_state.auto_complete_frontier()
@@ -3187,7 +3195,8 @@ def cmd_merge(parser, options):
         branch=options.branch,
         )
     merge_state.save()
-    git.set_default_imerge_name(name)
+    if len(list(git.iter_existing_imerge_names())) > 1:
+        git.set_default_imerge_name(name)
 
     try:
         merge_state.auto_complete_frontier()
@@ -3255,7 +3264,8 @@ def cmd_rebase(parser, options):
         branch=options.branch,
         )
     merge_state.save()
-    git.set_default_imerge_name(options.name)
+    if len(list(git.iter_existing_imerge_names())) > 1:
+        git.set_default_imerge_name(options.name)
 
     try:
         merge_state.auto_complete_frontier()
@@ -3371,7 +3381,8 @@ def cmd_drop(parser, options):
         branch=options.branch,
         )
     merge_state.save()
-    git.set_default_imerge_name(options.name)
+    if len(list(git.iter_existing_imerge_names())) > 1:
+        git.set_default_imerge_name(options.name)
 
     try:
         merge_state.auto_complete_frontier()
@@ -3482,7 +3493,8 @@ def cmd_revert(parser, options):
         branch=options.branch,
         )
     merge_state.save()
-    git.set_default_imerge_name(options.name)
+    if len(list(git.iter_existing_imerge_names())) > 1:
+        git.set_default_imerge_name(options.name)
 
     try:
         merge_state.auto_complete_frontier()
