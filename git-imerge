@@ -861,15 +861,30 @@ class GitRepository(object):
         check_call(['git', 'update-ref'] + opt + ['-m', msg, '-d', refname])
 
     def delete_imerge_refs(self, name):
-        for refname in check_output([
-                'git', 'for-each-ref', '--format=%(refname)', 'refs/imerge/%s' % (name,)
-                ]).splitlines():
-            try:
-                self.delete_ref(refname, 'imerge: remove merge %r' % (name,))
-            except CalledProcessError as e:
-                sys.stderr.write(
-                    'Warning: error removing reference %r: %s' % (refname, e)
-                    )
+        stdin = ''.join(
+            'delete %s\n' % (refname,)
+            for refname in check_output([
+                    'git', 'for-each-ref',
+                    '--format=%(refname)',
+                    'refs/imerge/%s' % (name,)
+                    ]).splitlines()
+            )
+
+        process = subprocess.Popen(
+            [
+                'git', 'update-ref',
+                '-m', 'imerge: remove merge %r' % (name,),
+                '--stdin',
+                ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            )
+        out = communicate(process, input=stdin)[0]
+        retcode = process.poll()
+        if retcode:
+            sys.stderr.write(
+                'Warning: error removing references:\n%s' % (out,)
+                )
 
     def detach(self, msg):
         """Detach HEAD. msg is used for the reflog."""
