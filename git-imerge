@@ -656,9 +656,7 @@ class GitRepository(object):
         try:
             call_silently(cmd)
         except CalledProcessError:
-            # We don't use "git merge --abort" here because it was only
-            # added in git version 1.7.4.
-            call_silently(['git', 'reset', '--merge'])
+            self.abort_merge()
             raise AutomaticMergeFailed(commit1, commit2)
         else:
             return self.get_commit_sha1('HEAD')
@@ -866,6 +864,11 @@ class GitRepository(object):
         """Detach HEAD. msg is used for the reflog."""
 
         self.update_ref('HEAD', 'HEAD^0', msg, deref=False)
+
+    def abort_merge(self):
+        # We don't use "git merge --abort" here because it was
+        # only added in git version 1.7.4.
+        check_call(['git', 'reset', '--merge'])
 
     def compute_best_merge_base(self, tip1, tip2):
         try:
@@ -2460,12 +2463,9 @@ class MergeState(Block):
         # If HEAD is the scratch refname, abort any in-progress
         # commits and detach HEAD:
         scratch_refname = MergeState.get_scratch_refname(name)
-        head_refname = git.get_head_refname()
-        if head_refname == scratch_refname:
+        if git.get_head_refname() == scratch_refname:
             try:
-                # We don't use "git merge --abort" here because it was
-                # only added in git version 1.7.4.
-                check_call(['git', 'reset', '--merge'])
+                git.abort_merge()
             except CalledProcessError:
                 pass
             # Detach head so that we can delete scratch_refname:
