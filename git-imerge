@@ -661,6 +661,11 @@ class GitRepository(object):
         else:
             return self.get_commit_sha1('HEAD')
 
+    def manualmerge(self, commit, msg):
+        """Initiate a merge of commit into the current HEAD."""
+
+        check_call(['git', 'merge', '--no-commit', '-m', msg, commit,])
+
     def require_clean_work_tree(self, action):
         """Verify that the current tree is clean.
 
@@ -2631,11 +2636,7 @@ class MergeState(Block):
         self.git.checkout(refname)
         logmsg = 'imerge \'%s\': manual merge %d-%d' % (self.name, i1, i2)
         try:
-            check_call([
-                'git', 'merge', '--no-commit',
-                '-m', logmsg,
-                left.sha1,
-                ])
+            self.git.manualmerge(left.sha1, logmsg)
         except CalledProcessError:
             # We expect an error (otherwise we would have automerged!)
             pass
