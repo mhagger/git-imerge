@@ -901,6 +901,9 @@ class GitRepository(object):
 
         self.update_ref('HEAD', 'HEAD^0', msg, deref=False)
 
+    def reset_hard(self, commit):
+        check_call(['git', 'reset', '--hard', commit])
+
     def abort_merge(self):
         # We don't use "git merge --abort" here because it was
         # only added in git version 1.7.4.
@@ -2813,7 +2816,7 @@ class MergeState(Block):
                     )
 
             if head_refname == refname:
-                check_call(['git', 'reset', '--hard', commit])
+                self.git.reset_hard(commit)
             else:
                 self.git.update_ref(
                     refname, commit, 'imerge: recording final merge',
