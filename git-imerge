@@ -860,6 +860,18 @@ class GitRepository(object):
 
         check_call(['git', 'update-ref'] + opt + ['-m', msg, '-d', refname])
 
+    def delete_imerge_refs(self, name):
+        for line in check_output([
+                'git', 'for-each-ref', 'refs/imerge/%s' % (name,)
+                ]).splitlines():
+            (sha1, type, refname) = line.split()
+            try:
+                self.delete_ref(refname, 'imerge: remove merge %r' % (name,))
+            except CalledProcessError as e:
+                sys.stderr.write(
+                    'Warning: error removing reference %r: %s' % (refname, e)
+                    )
+
     def detach(self, msg):
         """Detach HEAD. msg is used for the reflog."""
 
@@ -2477,16 +2489,7 @@ class MergeState(Block):
             )
 
         # Remove any references referring to intermediate merges:
-        for line in check_output([
-                'git', 'for-each-ref', 'refs/imerge/%s' % (name,)
-                ]).splitlines():
-            (sha1, type, refname) = line.split()
-            try:
-                git.delete_ref(refname, 'imerge: remove merge %r' % (name,))
-            except CalledProcessError as e:
-                sys.stderr.write(
-                    'Warning: error removing reference %r: %s' % (refname, e)
-                    )
+        git.delete_imerge_refs(name)
 
         # If this merge was the default, unset the default:
         if git.get_default_imerge_name() == name:
