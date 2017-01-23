@@ -904,6 +904,9 @@ class GitRepository(object):
     def reset_hard(self, commit):
         check_call(['git', 'reset', '--hard', commit])
 
+    def amend(self):
+        check_call(['git', 'commit', '--amend'])
+
     def abort_merge(self):
         # We don't use "git merge --abort" here because it was
         # only added in git version 1.7.4.
@@ -2962,7 +2965,7 @@ class MergeState(Block):
         self._set_refname(refname, sha1, force=force)
 
         # Now let the user edit the commit log message:
-        check_call(['git', 'commit', '--amend'])
+        self.git.amend()
 
     def simplify(self, refname, force=False):
         """Simplify this MergeState and save the result to refname.
