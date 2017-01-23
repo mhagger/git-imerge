@@ -2807,11 +2807,10 @@ class MergeState(Block):
             # 2. We may only fast-forward it (unless force is set)
             head_refname = self.git.get_head_refname()
 
-            if not force:
-                if not self.git.is_ancestor(ref_oldval, commit):
-                    raise Failure(
-                        '%s cannot be fast-forwarded to %s!' % (refname, commit)
-                        )
+            if not force and not self.git.is_ancestor(ref_oldval, commit):
+                raise Failure(
+                    '%s cannot be fast-forwarded to %s!' % (refname, commit)
+                    )
 
             if head_refname == refname:
                 check_call(['git', 'reset', '--hard', commit])
