@@ -1912,23 +1912,29 @@ class MergeFrontier(object):
             MergeFrontier(self.block[block.len1 - 1:, :block.len2], right),
             )
 
+    def iter_boundary_blocks(self):
+        """Iterate over the complete blocks that form this block's boundary.
+
+        Iterate over them from bottom left to top right. This is like
+        self.blocks, except that it also includes the implicit blocks
+        at self.block[0, :] and self.blocks[:, 0] if they are needed
+        to complete the boundary.
+
+        """
+
+        if not self or self.blocks[0].len2 < self.block.len2:
+            yield self.block[0, :]
+        for block in self:
+            yield block
+        if not self or self.blocks[-1].len1 < self.block.len1:
+            yield self.block[:, 0]
+
     def iter_blocker_blocks(self):
         """Iterate over the blocks on the far side of this frontier.
 
         This must only be called for an outlined frontier."""
 
-        if not self:
-            yield self.block
-            return
-
-        blockruns = []
-        if self.blocks[0].len2 < self.block.len2:
-            blockruns.append([self.block[0, :]])
-        blockruns.append(self)
-        if self.blocks[-1].len1 < self.block.len1:
-            blockruns.append([self.block[:, 0]])
-
-        for block1, block2 in iter_neighbors(itertools.chain(*blockruns)):
+        for block1, block2 in iter_neighbors(self.iter_boundary_blocks()):
             yield self.block[block1.len1 - 1:block2.len1, block2.len2 - 1: block1.len2]
 
     def get_affected_blocker_block(self, i1, i2):
