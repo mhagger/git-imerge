@@ -1448,6 +1448,57 @@ def find_frontier_blocks(block):
                 )
 
 
+def find_rebase_blocker(block):
+    """Return the commit blocking the rebase of the specified block.
+
+    When rebasing, our goal is always to determine the last column (i1
+    - 1) that can be completed in full plus the part of the following
+    column that can be completed automatically. This method returns
+    (i1, i2) of the leftmost merge that can't be done, or None if
+    there is no such merge.
+
+    Use bisection to find the blocker. Record the blocker in block if
+    we find one (we will find at most one).
+
+    We make the same assumptions as in find_frontier_blocks() above.
+
+    """
+
+    # Given that these diagrams typically have few blocks, check
+    # the end of a range first to see if the whole range can be
+    # determined, and fall back to bisection otherwise.  We
+    # determine the frontier block by block, starting in the lower
+    # left.
+
+    if block.len1 <= 1 or block.len2 <= 1:
+        return None
+
+    if block.is_mergeable(block.len1 - 1, block.len2 - 1):
+        # The whole block is mergable!
+        return None
+
+    # Find the first column i1 that can't be completed in full. We
+    # know that the whole block can't be completed, so we will always
+    # get an answer, even if it is block.len1 - 1:
+    i1 = find_first_false(
+        lambda i: block.is_mergable(i, block.len2 - 1),
+        1, block.len1 - 1,
+        )
+
+    # Now find the blocker in column i1. We know that the column can't
+    # be completed, so we will always get an answer, even if it is
+    # block.len2 - 1:
+    i2 = find_first_false(
+        lambda i: block.is_mergable(i1, i),
+        1, block.len2 - 1,
+        )
+
+    # Record that (i1, i2) is unmergeable:
+    block[i1, i2].record_blocked(True)
+
+    return (i1, i2)
+
+
 def write_diagram_with_axes(f, diagram, tip1, tip2):
     """Write a diagram of one-space-wide characters to file-like object f.
 
