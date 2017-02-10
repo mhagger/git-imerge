@@ -26,7 +26,7 @@ git checkout c
 "$GIT_IMERGE" autofill 2>&1 | tee autofill.out
 if grep -q Traceback autofill.out
 then
-    echo 'KNOWN FAILURE!'
+    exit 1
 fi
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge1.html
 "$GIT_IMERGE" continue --edit

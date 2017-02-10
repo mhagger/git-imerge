@@ -282,8 +282,11 @@ class GitTemporaryHead(object):
 
     """
 
-    def __enter__(self, git, message):
+    def __init__(self, git, message):
+        self.git = git
         self.message = message
+
+    def __enter__(self):
         try:
             self.head_name = check_output(['git', 'symbolic-ref', '--quiet', 'HEAD']).strip()
         except CalledProcessError:
