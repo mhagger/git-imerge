@@ -1952,9 +1952,13 @@ class BlockwiseMergeFrontier(MergeFrontier):
         unblocked_block[1, 1].record_blocked(False)
 
     def auto_fill(self):
-        """Try to outline this merge frontier.
+        """Outline this merge frontier to the extent possible.
 
-        Return True iff some progress was made."""
+        Return True iff some progress was made. This method does *not*
+        keep self up to date on any progress; if it returns
+        successfully, you should recompute the frontier from scratch.
+
+        """
 
         while self:
             best_block = min(self, key=lambda block: (block.len1, block.len2))
