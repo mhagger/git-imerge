@@ -2314,16 +2314,17 @@ class Block(object):
         for (i1, i2, merge) in merges:
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
 
-    def auto_fill_micromerge(self):
-        """Try to fill the very first micromerge in this block.
+    def auto_fill_micromerge(self, i1=1, i2=1):
+        """Try to fill micromerge (i1, i2) in this block (default (1, 1)).
 
         Return True iff the attempt was successful."""
 
-        assert (1, 1) not in self
-        if self.len1 <= 1 or self.len2 <= 1 or self.is_blocked(1, 1):
+        assert (i1, i2) not in self
+        assert (i1 - 1, i2) in self
+        assert (i1, i2 - 1) in self
+        if self.len1 <= i1 or self.len2 <= i2 or self.is_blocked(i1, i2):
             return False
 
-        i1, i2 = 1, 1
         (i1orig, i2orig) = self.get_original_indexes(i1, i2)
         sys.stderr.write('Attempting to merge %d-%d...' % (i1orig, i2orig))
         logmsg = 'imerge \'%s\': automatic merge %d-%d' % (self.name, i1orig, i2orig)
