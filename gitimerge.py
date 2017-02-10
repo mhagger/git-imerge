@@ -1759,12 +1759,24 @@ class BlockwiseMergeFrontier(MergeFrontier):
     def initiate_merge(block):
         """Return a BlockwiseMergeFrontier instance for block.
 
-        Compute the blocks making up the boundary using bisection. See
-        find_frontier_blocks() for more information.
+        Compute the blocks making up the boundary using bisection (see
+        find_frontier_blocks() for more information). Outline the
+        blocks, and return a BlockwiseMergeFrontier reflecting the
+        final result.
 
         """
 
-        return BlockwiseMergeFrontier(block, list(find_frontier_blocks(block)))
+        merge_frontier = BlockwiseMergeFrontier(
+            block, list(find_frontier_blocks(block)),
+            )
+
+        if merge_frontier.auto_fill():
+            # Auto-fill doesn't necessarily update its object to
+            # reflect all of the changes it might have made, so we
+            # have to generate a fresh one:
+            merge_frontier = BlockwiseMergeFrontier.map_known_frontier(block)
+
+        return merge_frontier
 
     def __init__(self, block, blocks=None):
         MergeFrontier.__init__(self, block)
@@ -2346,7 +2358,7 @@ class Block(object):
             return self.auto_fill_micromerge()
         else:
             merge_frontier = BlockwiseMergeFrontier.initiate_merge(self)
-            return merge_frontier.auto_fill()
+            return bool(merge_frontier)
 
     # The codes in the 2D array returned from create_diagram()
     MERGE_UNKNOWN = 0
