@@ -1756,7 +1756,7 @@ class BlockwiseMergeFrontier(MergeFrontier):
                             break
 
     @staticmethod
-    def compute_by_bisection(block):
+    def initiate_merge(block):
         """Return a BlockwiseMergeFrontier instance for block.
 
         Compute the blocks making up the boundary using bisection. See
@@ -2334,7 +2334,7 @@ class Block(object):
         elif merge_state.goal == 'full':
             return self.auto_fill_micromerge()
         else:
-            merge_frontier = BlockwiseMergeFrontier.compute_by_bisection(self)
+            merge_frontier = BlockwiseMergeFrontier.initiate_merge(self)
             return merge_frontier.auto_fill()
 
     # The codes in the 2D array returned from create_diagram()
