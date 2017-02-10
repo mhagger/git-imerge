@@ -309,10 +309,12 @@ class GitTemporaryHead(object):
 
     """
 
-    def __enter__(self, git, message):
+    def __init__(self, git, message):
         self.git = git
         self.message = message
-        self.head_name = git.get_head_refname()
+
+    def __enter__(self):
+        self.head_name = self.git.get_head_refname()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
