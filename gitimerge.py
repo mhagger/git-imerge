@@ -2012,7 +2012,7 @@ class MergeFrontier(object):
         blocks.sort(key=lambda block: block.get_original_indexes(0, 0))
 
         for block in blocks:
-            if block.auto_expand_frontier():
+            if block.auto_fill():
                 return
         else:
             # None of the blocks could be expanded.  Suggest that the
@@ -2277,24 +2277,25 @@ class Block(object):
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
             return True
 
-    def auto_outline_frontier(self, merge_frontier=None):
-        """Try to outline the merge frontier of this block.
+    def auto_fill(self):
+        """Try to expand the merge frontier within this block.
 
-        Return True iff some progress was made."""
+        Try to "fill" part or all of this block, using only automatic
+        merges. What "fill" means depends on the goal; it might mean
+        filling in the whole block, or filling it its outline (if
+        possible), or splitting it into smaller blocks and outlining
+        those, or whatever. Return True iff some progress was made.
 
-        if merge_frontier is None:
-            merge_frontier = MergeFrontier.compute_by_bisection(self)
+        """
 
-        return merge_frontier.auto_fill()
-
-    def auto_expand_frontier(self):
         merge_state = self.get_merge_state()
         if merge_state.manual:
             return False
         elif merge_state.goal == 'full':
             return self.auto_fill_micromerge()
         else:
-            return self.auto_outline_frontier()
+            merge_frontier = MergeFrontier.compute_by_bisection(self)
+            return merge_frontier.auto_fill()
 
     # The codes in the 2D array returned from create_diagram()
     MERGE_UNKNOWN = 0
