@@ -1969,31 +1969,31 @@ class MergeFrontier(object):
 
         Return True iff some progress was made."""
 
-        if not self:
-            return False
+        while self:
+            best_block = max(self, key=lambda block: block.get_original_indexes(0, 0))
 
-        best_block = max(self, key=lambda block: block.get_original_indexes(0, 0))
+            try:
+                best_block.auto_outline()
+            except UnexpectedMergeFailure as e:
+                # One of the merges that we expected to succeed in
+                # fact failed.
+                self.remove_failure(e.i1, e.i2)
 
-        try:
-            best_block.auto_outline()
-        except UnexpectedMergeFailure as e:
-            # One of the merges that we expected to succeed in
-            # fact failed.
-            self.remove_failure(e.i1, e.i2)
+                if (e.i1, e.i2) == (1, 1):
+                    # The failed merge was the first micromerge that we'd
+                    # need for `best_block`, so record it as a blocker:
+                    best_block[1, 1].record_blocked(True)
 
-            if (e.i1, e.i2) == (1, 1):
-                # The failed merge was the first micromerge that we'd
-                # need for `best_block`, so record it as a blocker:
-                best_block[1, 1].record_blocked(True)
+                # Continue looping...
+            else:
+                f1, f2 = self.partition(best_block)
+                if f1:
+                    f1.auto_fill()
+                if f2:
+                    f2.auto_fill()
+                return True
 
-            return self.auto_fill()
-        else:
-            f1, f2 = self.partition(best_block)
-            if f1:
-                f1.auto_fill()
-            if f2:
-                f2.auto_fill()
-            return True
+        return False
 
     def auto_expand(self):
         """Try pushing out one of the blocks on this frontier.
