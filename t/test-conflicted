@@ -23,7 +23,11 @@ git checkout c
 "$GIT_IMERGE" init --name=c-d d
 "$GIT_IMERGE" list
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge0.html
-"$GIT_IMERGE" autofill || true
+"$GIT_IMERGE" autofill 2>&1 | tee autofill.out
+if grep -q Traceback autofill.out
+then
+    echo 'KNOWN FAILURE!'
+fi
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge1.html
 "$GIT_IMERGE" continue --edit
 echo 'cd version' >conflict.txt
@@ -36,7 +40,11 @@ GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=c-d-merge
 "$GIT_IMERGE" remove
 
 git checkout c
-"$GIT_IMERGE" start --goal=full --first-parent --name=c-d d || true
+"$GIT_IMERGE" start --goal=full --first-parent --name=c-d d 2>&1 | tee start.out
+if grep -q Traceback start.out
+then
+    exit 1
+fi
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge3.html
 echo 'cd version' >conflict.txt
 git add conflict.txt
