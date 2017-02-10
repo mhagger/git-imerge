@@ -1933,6 +1933,16 @@ class BlockwiseMergeFrontier(MergeFrontier):
                 % self.block.get_original_indexes(i1, i2)
                 )
 
+    def incorporate_merge(self, i1, i2):
+        """Incorporate a successful merge at (i1, i2).
+
+        Raise NotABlockingCommitError if that merge was not a blocker.
+
+        """
+
+        unblocked_block = self.get_affected_blocker_block(i1, i2)
+        unblocked_block[1, 1].record_blocked(False)
+
     def auto_fill(self):
         """Try to outline this merge frontier.
 
@@ -2880,8 +2890,6 @@ class MergeState(Block):
 
         self.git.require_clean_work_tree('proceed')
 
-        merge_frontier = self.map_frontier()
-
         # This might throw ManualMergeUnusableError:
         (i1, i2) = self.incorporate_manual_merge(commit)
 
@@ -2892,16 +2900,14 @@ class MergeState(Block):
             refname, 'imerge %s: remove scratch reference' % (self.name,),
             )
 
+        merge_frontier = self.map_frontier()
         try:
             # This might throw NotABlockingCommitError:
-            unblocked_block = merge_frontier.get_affected_blocker_block(i1, i2)
-            unblocked_block[1, 1].record_blocked(False)
+            merge_frontier.incorporate_merge(i1, i2)
             sys.stderr.write(
                 'Merge has been recorded for merge %d-%d.\n'
-                % unblocked_block.get_original_indexes(1, 1)
+                % self.get_original_indexes(i1, i2)
                 )
-        except NotABlockingCommitError:
-            raise
         finally:
             self.save()
 
