@@ -1854,10 +1854,10 @@ class BlockwiseMergeFrontier(MergeFrontier):
             self.blocks = self._normalized_blocks(newblocks)
 
     def partition(self, block):
-        """Return two BlockwiseMergeFrontier instances partitioned by block.
+        """Iterate over the BlockwiseMergeFrontiers partitioned by block.
 
-        Return (frontier1, frontier2), where each frontier is limited
-        to each side of the argument.
+        Iterate over the zero, one, or two BlockwiseMergeFrontiers to
+        the left and/or right of block.
 
         block must be contained in this frontier and already be
         outlined.
@@ -1882,10 +1882,12 @@ class BlockwiseMergeFrontier(MergeFrontier):
                 raise ValueError(
                     'BlockwiseMergeFrontier partitioned with inappropriate block'
                     )
-        return (
-            BlockwiseMergeFrontier(self.block[:block.len1, block.len2 - 1:], left),
-            BlockwiseMergeFrontier(self.block[block.len1 - 1:, :block.len2], right),
-            )
+
+        if block.len2 < self.block.len2:
+            yield BlockwiseMergeFrontier(self.block[:block.len1, block.len2 - 1:], left)
+
+        if block.len1 < self.block.len1:
+            yield BlockwiseMergeFrontier(self.block[block.len1 - 1:, :block.len2], right)
 
     def iter_boundary_blocks(self):
         """Iterate over the complete blocks that form this block's boundary.
@@ -1971,11 +1973,10 @@ class BlockwiseMergeFrontier(MergeFrontier):
 
                 # Continue looping...
             else:
-                f1, f2 = self.partition(best_block)
-                if f1:
-                    f1.auto_fill()
-                if f2:
-                    f2.auto_fill()
+                for f in self.partition(best_block):
+                    if f:
+                        f.auto_fill()
+
                 return True
 
         return False
