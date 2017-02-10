@@ -1761,22 +1761,58 @@ class BlockwiseMergeFrontier(MergeFrontier):
 
         Compute the blocks making up the boundary using bisection (see
         find_frontier_blocks() for more information). Outline the
-        blocks, and return a BlockwiseMergeFrontier reflecting the
+        blocks, then return a BlockwiseMergeFrontier reflecting the
         final result.
 
         """
 
-        merge_frontier = BlockwiseMergeFrontier(
+        top_level_frontier = BlockwiseMergeFrontier(
             block, list(find_frontier_blocks(block)),
             )
 
-        if merge_frontier.auto_fill():
-            # Auto-fill doesn't necessarily update its object to
-            # reflect all of the changes it might have made, so we
-            # have to generate a fresh one:
-            merge_frontier = BlockwiseMergeFrontier.map_known_frontier(block)
+        # Now outline the mergeable blocks, backtracking if there are
+        # any unexpected merge failures:
 
-        return merge_frontier
+        frontier = top_level_frontier
+        while frontier:
+            subblock = next(iter(frontier))
+
+            try:
+                subblock.auto_outline()
+            except UnexpectedMergeFailure as e:
+                # One of the merges that we expected to succeed in
+                # fact failed.
+                frontier.remove_failure(e.i1, e.i2)
+
+                if (e.i1, e.i2) == (1, 1):
+                    # The failed merge was the first micromerge that we'd
+                    # need for `best_block`, so record it as a blocker:
+                    subblock[1, 1].record_blocked(True)
+
+                if frontier is not top_level_frontier:
+                    # Report that failure back to the top-level
+                    # frontier, too (but first we have to translate
+                    # the indexes):
+                    (i1orig, i2orig) = subblock.get_original_indexes(e.i1, e.i2)
+                    top_level_frontier.remove_failure(
+                        *block.convert_original_indexes(i1orig, i2orig),
+                        )
+                # Restart loop for the same frontier...
+            else:
+                # We're only interested in subfrontiers that contain
+                # mergeable subblocks:
+                sub_frontiers = [f for f in frontier.partition(subblock) if f]
+                if not sub_frontiers:
+                    break
+
+                # Since we just outlined the first (i.e., leftmost)
+                # mergeable block in `frontier`,
+                # `frontier.partition()` can at most have returned a
+                # single non-empty value, namely one to the right of
+                # `subblock`.
+                [frontier] = sub_frontiers
+
+        return top_level_frontier
 
     def __init__(self, block, blocks=None):
         MergeFrontier.__init__(self, block)
@@ -1962,52 +1998,6 @@ class BlockwiseMergeFrontier(MergeFrontier):
 
         unblocked_block = self.get_affected_blocker_block(i1, i2)
         unblocked_block[1, 1].record_blocked(False)
-
-    def auto_fill(self):
-        """Outline this merge frontier to the extent possible.
-
-        Return True iff some progress was made. This method does *not*
-        keep self up to date on any progress; if it returns
-        successfully, you should recompute the frontier from scratch.
-
-        """
-
-        progress_made = False
-        frontier = self
-
-        while frontier:
-            block = next(iter(frontier))
-
-            try:
-                block.auto_outline()
-            except UnexpectedMergeFailure as e:
-                # One of the merges that we expected to succeed in
-                # fact failed.
-                frontier.remove_failure(e.i1, e.i2)
-
-                if (e.i1, e.i2) == (1, 1):
-                    # The failed merge was the first micromerge that we'd
-                    # need for `best_block`, so record it as a blocker:
-                    block[1, 1].record_blocked(True)
-
-                # Continue looping...
-            else:
-                progress_made = True
-
-                # We're only interested in subfrontiers that contain
-                # mergeable subblocks:
-                sub_frontiers = [f for f in frontier.partition(block) if f]
-                if not sub_frontiers:
-                    break
-
-                # Since we just outlined the first (i.e., leftmost)
-                # mergeable block in `frontier`,
-                # `frontier.partition()` can at most have returned a
-                # single non-empty value, namely one to the right of
-                # `block`.
-                [frontier] = sub_frontiers
-
-        return progress_made
 
     def auto_expand(self):
         """Try pushing out one of the blocks on this frontier.
