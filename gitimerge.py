@@ -1776,7 +1776,13 @@ class BlockwiseMergeFrontier(MergeFrontier):
         return iter(self.blocks)
 
     def __bool__(self):
-        """Return True iff this frontier has no completed parts."""
+        """Return True iff this frontier contains any SubBlocks.
+
+        Return True if this BlockwiseMergeFrontier contains any
+        SubBlocks that are thought to be completely mergeable (whether
+        they have been outlined or not).
+
+        """
 
         return bool(self.blocks)
 
