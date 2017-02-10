@@ -320,12 +320,7 @@ class GitTemporaryHead(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.head_name:
             try:
-                check_call([
-                    'git', 'symbolic-ref',
-                    '-m', self.message, 'HEAD',
-                    self.head_name,
-                    ])
-                check_call(['git', 'reset', '--hard'])
+                self.git.restore_head(self.head_name, self.message)
             except CalledProcessError as e:
                 raise Failure(
                     'Could not restore HEAD to %r!:    %s\n'
@@ -991,6 +986,10 @@ class GitRepository(object):
             return check_output(cmd).strip()
         except CalledProcessError:
             return None
+
+    def restore_head(self, refname, message):
+        check_call(['git', 'symbolic-ref', '-m', message, 'HEAD', refname])
+        check_call(['git', 'reset', '--hard'])
 
     def checkout(self, refname, quiet=False):
         cmd = ['git', 'checkout']
