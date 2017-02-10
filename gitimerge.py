@@ -1964,6 +1964,37 @@ class MergeFrontier(object):
                 % self.block.get_original_indexes(i1, i2)
                 )
 
+    def auto_fill(self):
+        """Try to outline this merge frontier.
+
+        Return True iff some progress was made."""
+
+        if not self:
+            return False
+
+        best_block = max(self, key=lambda block: block.get_original_indexes(0, 0))
+
+        try:
+            best_block.auto_outline()
+        except UnexpectedMergeFailure as e:
+            # One of the merges that we expected to succeed in
+            # fact failed.
+            self.remove_failure(e.i1, e.i2)
+
+            if (e.i1, e.i2) == (1, 1):
+                # The failed merge was the first micromerge that we'd
+                # need for `best_block`, so record it as a blocker:
+                best_block[1, 1].record_blocked(True)
+
+            return self.auto_fill()
+        else:
+            f1, f2 = self.partition(best_block)
+            if f1:
+                f1.auto_fill()
+            if f2:
+                f2.auto_fill()
+            return True
+
     def auto_expand(self):
         """Try pushing out one of the blocks on this frontier.
 
@@ -2254,32 +2285,7 @@ class Block(object):
         if merge_frontier is None:
             merge_frontier = MergeFrontier.compute_by_bisection(self)
 
-        if not merge_frontier:
-            # Nothing to do.
-            return False
-
-        best_block = max(merge_frontier, key=lambda block: block.get_original_indexes(0, 0))
-
-        try:
-            best_block.auto_outline()
-        except UnexpectedMergeFailure as e:
-            # One of the merges that we expected to succeed in
-            # fact failed.
-            merge_frontier.remove_failure(e.i1, e.i2)
-
-            if (e.i1, e.i2) == (1, 1):
-                # The failed merge was the first micromerge that we'd
-                # need for `best_block`, so record it as a blocker:
-                best_block[e.i1, e.i2].record_blocked(True)
-
-            return self.auto_outline_frontier(merge_frontier)
-        else:
-            f1, f2 = merge_frontier.partition(best_block)
-            if f1:
-                f1.block.auto_outline_frontier(f1)
-            if f2:
-                f2.block.auto_outline_frontier(f2)
-            return True
+        return merge_frontier.auto_fill()
 
     def auto_expand_frontier(self):
         merge_state = self.get_merge_state()
