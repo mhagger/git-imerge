@@ -1957,7 +1957,7 @@ class BlockwiseMergeFrontier(MergeFrontier):
         Return True iff some progress was made."""
 
         while self:
-            best_block = max(self, key=lambda block: block.get_original_indexes(0, 0))
+            best_block = min(self, key=lambda block: (block.len1, block.len2))
 
             try:
                 best_block.auto_outline()
