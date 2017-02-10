@@ -2194,6 +2194,13 @@ class Block(object):
                 sys.stderr.write('failure.\n')
                 return False
 
+    def map_frontier(self):
+        """Return a MergeFrontier instance describing the current frontier.
+
+        """
+
+        return BlockwiseMergeFrontier.map_known_frontier(self)
+
     def auto_outline(self):
         """Complete the outline of this Block.
 
@@ -2691,7 +2698,7 @@ class MergeState(Block):
         progress_made = False
         try:
             while True:
-                frontier = BlockwiseMergeFrontier.map_known_frontier(self)
+                frontier = self.map_frontier()
                 frontier.auto_expand()
                 self.save()
                 progress_made = True
@@ -2873,7 +2880,7 @@ class MergeState(Block):
 
         self.git.require_clean_work_tree('proceed')
 
-        merge_frontier = BlockwiseMergeFrontier.map_known_frontier(self)
+        merge_frontier = self.map_frontier()
 
         # This might throw ManualMergeUnusableError:
         (i1, i2) = self.incorporate_manual_merge(commit)
@@ -3762,8 +3769,7 @@ def cmd_simplify(parser, options):
     git = GitRepository()
     git.require_clean_work_tree('proceed')
     merge_state = read_merge_state(git, options.name)
-    merge_frontier = BlockwiseMergeFrontier.map_known_frontier(merge_state)
-    if not merge_frontier.is_complete():
+    if not merge_state.map_frontier().is_complete():
         raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
     refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
     if options.goal is not None:
@@ -3776,8 +3782,7 @@ def cmd_finish(parser, options):
     git = GitRepository()
     git.require_clean_work_tree('proceed')
     merge_state = read_merge_state(git, options.name)
-    merge_frontier = BlockwiseMergeFrontier.map_known_frontier(merge_state)
-    if not merge_frontier.is_complete():
+    if not merge_state.map_frontier().is_complete():
         raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
     refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
     if options.goal is not None:
@@ -3799,11 +3804,11 @@ def cmd_diagram(parser, options):
         merge_state.write(sys.stdout, merge_state.tip1, merge_state.tip2)
         sys.stdout.write('\n')
     if options.frontier:
-        merge_frontier = BlockwiseMergeFrontier.map_known_frontier(merge_state)
+        merge_frontier = merge_state.map_frontier()
         merge_frontier.write(sys.stdout, merge_state.tip1, merge_state.tip2)
         sys.stdout.write('\n')
     if options.html:
-        merge_frontier = BlockwiseMergeFrontier.map_known_frontier(merge_state)
+        merge_frontier = merge_state.map_frontier()
         html = open(options.html, 'w')
         merge_frontier.write_html(html, merge_state.name)
         html.close()
