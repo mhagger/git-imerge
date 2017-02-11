@@ -2302,20 +2302,6 @@ class Block(object):
                 sys.stderr.write('success.\n')
                 return True
 
-    def map_frontier(self):
-        """Return a MergeFrontier instance describing the current frontier.
-
-        """
-
-        merge_state = self.get_merge_state()
-        if merge_state.manual:
-            # FIXME:
-            return BlockwiseMergeFrontier.map_known_frontier(self)
-        elif merge_state.goal == 'full':
-            return FullMergeFrontier.map_known_frontier(self)
-        else:
-            return BlockwiseMergeFrontier.map_known_frontier(self)
-
     def auto_outline(self):
         """Complete the outline of this Block.
 
@@ -2805,6 +2791,19 @@ class MergeState(Block):
         (i1, i2) = self._normalize_indexes(index)
         value = self._data[i1][i2]
         return (value is not None) and value.is_known()
+
+    def map_frontier(self):
+        """Return a MergeFrontier instance describing the current frontier.
+
+        """
+
+        if self.manual:
+            # FIXME:
+            return BlockwiseMergeFrontier.map_known_frontier(self)
+        elif self.goal == 'full':
+            return FullMergeFrontier.map_known_frontier(self)
+        else:
+            return BlockwiseMergeFrontier.map_known_frontier(self)
 
     def auto_complete_frontier(self):
         """Complete the frontier using automerges.
