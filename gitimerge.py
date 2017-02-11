@@ -2223,11 +2223,12 @@ class Block(object):
                 )
             try:
                 self.git.automerge(self[i1, 0].sha1, self[0, i2].sha1)
-                sys.stderr.write('success.\n')
-                return True
             except AutomaticMergeFailed:
                 sys.stderr.write('failure.\n')
                 return False
+            else:
+                sys.stderr.write('success.\n')
+                return True
 
     def map_frontier(self):
         """Return a MergeFrontier instance describing the current frontier.
@@ -2253,10 +2254,12 @@ class Block(object):
             logmsg = 'imerge \'%s\': automatic merge %d-%d' % (self.name, i1orig, i2orig)
             try:
                 merge = self.git.automerge(commit1, commit2, msg=logmsg)
-                sys.stderr.write('success.\n')
             except AutomaticMergeFailed as e:
                 sys.stderr.write('unexpected conflict.  Backtracking...\n')
                 raise UnexpectedMergeFailure(str(e), i1, i2)
+            else:
+                sys.stderr.write('success.\n')
+
             if record:
                 merges.append((i1, i2, merge))
             return merge
@@ -2334,12 +2337,12 @@ class Block(object):
                 self[i1 - 1, i2].sha1,
                 msg=logmsg,
                 )
-            sys.stderr.write('success.\n')
         except AutomaticMergeFailed:
             sys.stderr.write('conflict.\n')
             self[i1, i2].record_blocked(True)
             return False
         else:
+            sys.stderr.write('success.\n')
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
             return True
 
