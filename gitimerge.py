@@ -2738,13 +2738,14 @@ class MergeState(Block):
         try:
             while True:
                 frontier = self.map_frontier()
-                frontier.auto_expand()
-                self.save()
+                try:
+                    frontier.auto_expand()
+                finally:
+                    self.save()
                 progress_made = True
         except BlockCompleteError:
             return
         except FrontierBlockedError as e:
-            self.save()
             if not progress_made:
                 # Adjust the error message:
                 raise FrontierBlockedError(
