@@ -2087,8 +2087,19 @@ class BlockwiseMergeFrontier(MergeFrontier):
         # Try blocks from left to right:
         blocks.sort(key=lambda block: block.get_original_indexes(0, 0))
 
+        merge_state = self.block.get_merge_state()
+        if merge_state.manual:
+            i1, i2 = blocks[0].get_original_indexes(1, 1)
+            raise FrontierBlockedError(
+                'Manual merges requested; please merge %d-%d' % (i1, i2),
+                i1, i2
+                )
+        elif merge_state.goal == 'full':
+            raise RuntimeError('BUG: auto_expand() called with goal "full"')
+
         for block in blocks:
-            if block.auto_fill():
+            merge_frontier = BlockwiseMergeFrontier.initiate_merge(block)
+            if bool(merge_frontier):
                 return
         else:
             # None of the blocks could be expanded.  Suggest that the
@@ -2410,26 +2421,6 @@ class Block(object):
             sys.stderr.write('success.\n')
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
             return True
-
-    def auto_fill(self):
-        """Try to expand the merge frontier within this block.
-
-        Try to "fill" part or all of this block, using only automatic
-        merges. What "fill" means depends on the goal; it might mean
-        filling in the whole block, or filling it its outline (if
-        possible), or splitting it into smaller blocks and outlining
-        those, or whatever. Return True iff some progress was made.
-
-        """
-
-        merge_state = self.get_merge_state()
-        if merge_state.manual:
-            return False
-        elif merge_state.goal == 'full':
-            raise RuntimeError('BUG: auto_fill called with goal "full"')
-        else:
-            merge_frontier = BlockwiseMergeFrontier.initiate_merge(self)
-            return bool(merge_frontier)
 
     # The codes in the 2D array returned from create_diagram()
     MERGE_UNKNOWN = 0
