@@ -1650,6 +1650,78 @@ class MergeFrontier(object):
         f.write('</table>\n</body>\n</html>\n')
 
 
+class FullMergeFrontier(MergeFrontier):
+    """A MergeFrontier that is to be filled completely.
+
+    """
+
+    @staticmethod
+    def map_known_frontier(block):
+        return FullMergeFrontier(block)
+
+    def __bool__(self):
+        """Return True iff this frontier contains any merges.
+
+        """
+
+        return (1, 1) in self.block
+
+    def is_complete(self):
+        """Return True iff the frontier covers the whole block."""
+
+        return (self.block.len1 - 1, self.block.len2 - 1) in self.block
+
+    def incorporate_merge(self, i1, i2):
+        """Incorporate a successful merge at (i1, i2).
+
+        Raise NotABlockingCommitError if that merge was not a blocker.
+
+        """
+
+        if not self.block[i1, i2].is_blocked():
+            raise NotABlockingCommitError(
+                'Commit %d-%d was not on the frontier.'
+                % self.block.get_original_indexes(i1, i2)
+                )
+        else:
+            self.block[i1, i2].record_blocked(False)
+
+    def auto_expand(self):
+        block = self.block
+        len2 = block.len2
+
+        blocker = None
+        for i1 in range(1, block.len1):
+            for i2 in range(1, len2):
+                if (i1, i2) in block:
+                    pass
+                elif block.is_blocked(i1, i2):
+                    if blocker is None:
+                        blocker = (i1, i2)
+                    len2 = i2
+                    # Done with this row:
+                    break
+                elif block.auto_fill_micromerge(i1, i2):
+                    # Merge successful
+                    pass
+                else:
+                    block[i1, i2].record_blocked(True)
+                    if blocker is None:
+                        blocker = (i1, i2)
+                    len2 = i2
+                    # Done with this row:
+                    break
+
+        if blocker:
+            i1orig, i2orig = self.block.get_original_indexes(*blocker)
+            raise FrontierBlockedError(
+                'Conflict; suggest manual merge of %d-%d' % (i1orig, i2orig),
+                i1orig, i2orig,
+                )
+        else:
+            raise BlockCompleteError('The block is already complete')
+
+
 class BlockwiseMergeFrontier(MergeFrontier):
     """A MergeFrontier that is filled blockwise, using outlining.
 
@@ -2235,7 +2307,14 @@ class Block(object):
 
         """
 
-        return BlockwiseMergeFrontier.map_known_frontier(self)
+        merge_state = self.get_merge_state()
+        if merge_state.manual:
+            # FIXME:
+            return BlockwiseMergeFrontier.map_known_frontier(self)
+        elif merge_state.goal == 'full':
+            return FullMergeFrontier.map_known_frontier(self)
+        else:
+            return BlockwiseMergeFrontier.map_known_frontier(self)
 
     def auto_outline(self):
         """Complete the outline of this Block.
@@ -2361,7 +2440,7 @@ class Block(object):
         if merge_state.manual:
             return False
         elif merge_state.goal == 'full':
-            return self.auto_fill_micromerge()
+            raise RuntimeError('BUG: auto_fill called with goal "full"')
         else:
             merge_frontier = BlockwiseMergeFrontier.initiate_merge(self)
             return bool(merge_frontier)
