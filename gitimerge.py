@@ -1722,6 +1722,30 @@ class FullMergeFrontier(MergeFrontier):
             raise BlockCompleteError('The block is already complete')
 
 
+class ManualMergeFrontier(FullMergeFrontier):
+    """A FullMergeFrontier that is to be filled completely by user merges.
+
+    """
+
+    @staticmethod
+    def map_known_frontier(block):
+        return ManualMergeFrontier(block)
+
+    def auto_expand(self):
+        block = self.block
+
+        for i1 in range(1, block.len1):
+            for i2 in range(1, block.len2):
+                if (i1, i2) not in block:
+                    i1orig, i2orig = block.get_original_indexes(i1, i2)
+                    raise FrontierBlockedError(
+                        'Manual merges requested; please merge %d-%d' % (i1orig, i2orig),
+                        i1orig, i2orig
+                        )
+
+        raise BlockCompleteError('The block is already complete')
+
+
 class BlockwiseMergeFrontier(MergeFrontier):
     """A MergeFrontier that is filled blockwise, using outlining.
 
@@ -2086,16 +2110,6 @@ class BlockwiseMergeFrontier(MergeFrontier):
 
         # Try blocks from left to right:
         blocks.sort(key=lambda block: block.get_original_indexes(0, 0))
-
-        merge_state = self.block.get_merge_state()
-        if merge_state.manual:
-            i1, i2 = blocks[0].get_original_indexes(1, 1)
-            raise FrontierBlockedError(
-                'Manual merges requested; please merge %d-%d' % (i1, i2),
-                i1, i2
-                )
-        elif merge_state.goal == 'full':
-            raise RuntimeError('BUG: auto_expand() called with goal "full"')
 
         for block in blocks:
             merge_frontier = BlockwiseMergeFrontier.initiate_merge(block)
@@ -2789,8 +2803,7 @@ class MergeState(Block):
         """
 
         if self.manual:
-            # FIXME:
-            return BlockwiseMergeFrontier.map_known_frontier(self)
+            return ManualMergeFrontier.map_known_frontier(self)
         elif self.goal == 'full':
             return FullMergeFrontier.map_known_frontier(self)
         else:
