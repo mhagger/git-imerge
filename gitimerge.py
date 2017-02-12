@@ -2230,6 +2230,131 @@ class BlockwiseMergeFrontier(MergeFrontier):
         return diagram
 
 
+class ColumnwiseMergeFrontier(MergeFrontier):
+    """A MergeFrontier that is to be completed in full columns.
+
+    """
+
+    @staticmethod
+    def _is_column_full(block, i1):
+        if (i1, block.len2 - 1) not in block:
+            return False
+
+        for i2 in range(1, block.len2 - 1):
+            if (i1, i2) not in block:
+                # This column is not complete.
+                return False
+        else:
+            return True
+
+    @staticmethod
+    def _find_i1full(block):
+        """Find the value of i1 for the rightmost full column."""
+
+        for i1 in reversed(range(1, block.len1)):
+            if ColumnwiseMergeFrontier._is_column_full(block, i1):
+                return i1
+        else:
+            return 0
+
+    @staticmethod
+    def map_known_frontier(block):
+        i1 = ColumnwiseMergeFrontier._find_i1full(block) + 1
+        if i1 >= block.len1:
+            return ColumnwiseMergeFrontier(block, None)
+        else:
+            for i2 in range(1, block.len2 - 1):
+                if (i1, i2) not in block:
+                    return ColumnwiseMergeFrontier(block, (i1, i2))
+            else:
+                return ColumnwiseMergeFrontier(block, (i1, block.len2 - 1))
+
+    def __init__(self, block, blocker):
+        MergeFrontier.__init__(self, block)
+        self.blocker = blocker
+
+    def __bool__(self):
+        """Return True iff this frontier contains any merges.
+
+        """
+
+        if self.blocker is None:
+            return block.len1 > 1 and block.len2 > 1
+        else:
+            (i1, i2) = self.blocker
+            return i1 > 1 or i2 > 1
+
+    def is_complete(self):
+        """Return True iff the frontier covers the whole block."""
+
+        return self.blocker is None
+
+    def incorporate_merge(self, i1, i2):
+        """Incorporate a successful merge at (i1, i2).
+
+        Raise NotABlockingCommitError if that merge was not a blocker.
+
+        """
+
+        if not self.block[i1, i2].is_blocked():
+            raise NotABlockingCommitError(
+                'Commit %d-%d was not a blocker.'
+                % self.block.get_original_indexes(i1, i2)
+                )
+
+        self.block[i1, i2].record_blocked(False)
+        if self.blocker == (i1, i2):
+            i2 += 1
+            if i2 >= self.block.len2:
+                i1 += 1
+                i2 = 1
+                if i1 >= self.block.len1:
+                    self.blocker = None
+                    return
+
+        self.blocker = (i1, i2)
+
+    def auto_expand(self):
+        if self.blocker is None:
+            raise BlockCompleteError('The block is already complete')
+
+        (i1, i2) = self.blocker
+
+        block = self.block
+        len2 = block.len2
+
+        blocker = None
+        for i1 in range(1, block.len1):
+            for i2 in range(1, len2):
+                if (i1, i2) in block:
+                    pass
+                elif block.is_blocked(i1, i2):
+                    if blocker is None:
+                        blocker = (i1, i2)
+                    len2 = i2
+                    # Done with this row:
+                    break
+                elif block.auto_fill_micromerge(i1, i2):
+                    # Merge successful
+                    pass
+                else:
+                    block[i1, i2].record_blocked(True)
+                    if blocker is None:
+                        blocker = (i1, i2)
+                    len2 = i2
+                    # Done with this row:
+                    break
+
+        if blocker:
+            i1orig, i2orig = self.block.get_original_indexes(*blocker)
+            raise FrontierBlockedError(
+                'Conflict; suggest manual merge of %d-%d' % (i1orig, i2orig),
+                i1orig, i2orig,
+                )
+        else:
+            raise BlockCompleteError('The block is already complete')
+
+
 class NoManualMergeError(Exception):
     pass
 
