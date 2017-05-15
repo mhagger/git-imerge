@@ -111,7 +111,9 @@ commands that are similar to the corresponding ``git`` commands:
 
 (``git-imerge drop`` is also analogous to running ``git rebase
 --interactive``, then deleting the specified commit(s) from the
-history.)
+history. Both the ``drop`` and the ``revert`` subcommands are included
+in git-imerge because the equivalent git operations can conflict,
+so they both can benefit from using the incremental merge approach.)
 
 A few more options are available if you start the incremental merge
 using ``git imerge start``::
