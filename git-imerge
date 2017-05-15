@@ -2840,7 +2840,8 @@ class MergeState(Block):
 
         self._set_refname(refname, self[-1, -1].sha1, force=force)
 
-    def simplify_to_rebase_with_history(self, refname, force=False):
+    def simplify_to_rebase_with_history(self, refname, force=False,
+                                        preserve_author=False):
         i1 = self.len1 - 1
         for i2 in range(1, self.len2):
             if not (i1, i2) in self:
@@ -2860,8 +2861,10 @@ class MergeState(Block):
                 self.git.get_log_message(orig).rstrip('\n')
                 + '\n\n(rebased-with-history from commit %s)\n' % orig
                 )
-            commit = self.git.commit_tree(tree, [commit, orig], msg=msg)
-
+            kwargs = dict(tree=tree, parents=[commit, orig], msg=msg)
+            if (preserve_author):
+                kwargs['metadata']=self.git.get_author_info(orig)
+            commit = self.git.commit_tree(**kwargs)
         self._set_refname(refname, commit, force=force)
 
     def _simplify_to_path(self, refname, base, path, force=False):
@@ -2969,7 +2972,7 @@ class MergeState(Block):
         # Now let the user edit the commit log message:
         self.git.amend()
 
-    def simplify(self, refname, force=False):
+    def simplify(self, refname, force=False, preserve_author=False):
         """Simplify this MergeState and save the result to refname.
 
         The merge must be complete before calling this method."""
@@ -2977,7 +2980,8 @@ class MergeState(Block):
         if self.goal == 'full':
             self.simplify_to_full(refname, force=force)
         elif self.goal == 'rebase-with-history':
-            self.simplify_to_rebase_with_history(refname, force=force)
+            self.simplify_to_rebase_with_history(refname, force=force,
+                                                 preserve_author=preserve_author)
         elif self.goal == 'rebase':
             self.simplify_to_rebase(refname, force=force)
         elif self.goal == 'drop':
@@ -3587,7 +3591,8 @@ def cmd_finish(parser, options):
     if options.goal is not None:
         merge_state.set_goal(options.goal)
         merge_state.save()
-    merge_state.simplify(refname, force=options.force)
+    merge_state.simplify(refname, force=options.force,
+                         preserve_author=options.preserve_author)
     MergeState.remove(git, merge_state.name)
 
 
@@ -3830,6 +3835,11 @@ def main(args):
         '--force',
         action='store_true', default=False,
         help='allow the target branch to be updated in a non-fast-forward manner',
+        )
+    subparser.add_argument(
+        '--preserve-author', dest="preserve_author",
+        action='store_true', default=False,
+        help='preserve original author information on simplify-to-rebase',
         )
 
     subparser = subparsers.add_parser(
