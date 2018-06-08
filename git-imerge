@@ -3629,9 +3629,22 @@ def cmd_diagram(parser, options):
 
 
 def cmd_reparent(parser, options):
+    if len(options.parents) == 0:
+        parser.error('Parent is not specified, please specify at least one parent.')
+    sys.stdout.write('Reparenting from HEAD to %s...\n' % options.commit_to_reparent)
+
+    if options.commit_to_reparent is None:
+        commit_to_reparent = 'HEAD'
+    else:
+        commit_to_reparent = options.commit_to_reparent
     git = GitRepository()
     try:
-        commit_sha1 = git.get_commit_sha1('HEAD')
+        commit_to_reparent_sha1 = git.get_commit_sha1(commit_to_reparent)
+    except ValueError:
+        sys.exit('%s is not a valid commit', commit_to_reparent)
+
+    try:
+        head_sha1 = git.get_commit_sha1('HEAD')
     except ValueError:
         sys.exit('HEAD is not a valid commit')
 
@@ -3640,8 +3653,22 @@ def cmd_reparent(parser, options):
     except ValueError as e:
         sys.exit(e.message)
 
-    sys.stdout.write('%s\n' % (git.reparent(commit_sha1, parent_sha1s),))
+    iterative_reparent(head_sha1, commit_to_reparent_sha1, parent_sha1s, git)
 
+def iterative_reparent(head, commit_to_reparent, parents, git):
+    commit_list = [head];
+    current_commit = head;
+    while current_commit != commit_to_reparent:
+        current_parents = git.get_commit_parents(current_commit)
+        first_parent_commit = current_parents[0]
+        commit_list.append(first_parent_commit)
+        current_commit = first_parent_commit
+
+    commit_list.reverse()
+    for i in range(0, len(commit_list)):
+        new_commit = git.reparent(commit_list[i], parents)
+        parents = [new_commit] + parents[1:len(parents)]
+        sys.stdout.write('Commit to reparent: %s, new commit: %s, new parents: %s\n' % (commit_to_reparent, new_commit, parents))
 
 def main(args):
     NAME_INIT_HELP = 'name to use for this incremental merge'
@@ -3715,6 +3742,18 @@ def main(args):
         subparser.add_argument(
             'tip2', action='store', metavar='branch',
             help='the tip of the branch to be merged into HEAD',
+        )
+
+    def add_commit_to_reparent_argument(subparser):
+        subparser.add_argument(
+            '--commit-to-reparent', dest='commit_to_reparent', action='store', default=None,
+            help=(
+                'target commit to reparent. reparent will happen from this commit all the way back to HEAD. '
+                'reparent operation creates a new commit object like the original commit, but with the specified parents. '
+                'reparent command first executes the reparent operation on the commit specified by the --commit-to-reparent argument to generate a new commit object, '
+                'then it uses this object to replace the first parent of its child commit on the path towards the HEAD commit.\n'
+                'the command repeats this process till the HEAD commit so that a list of new commit objects are created.'
+                ),
         )
 
     parser = argparse.ArgumentParser(
@@ -3927,11 +3966,20 @@ def main(args):
 
     subparser = subparsers.add_parser(
         'reparent',
-        help='change the parents of the HEAD commit',
+        help=(
+            'change the parents of the specified commit and propagate the change to HEAD commit'
+            ),
         )
     subparser.add_argument(
-        'parents', nargs='*', help='[PARENT...]',
+        'parents', 
+        nargs='*', 
+        help=(
+            '[PARENT...] \n'
+            'parents is a list of SHA1.\n'
+            ),
         )
+
+    add_commit_to_reparent_argument(subparser)
 
     options = parser.parse_args(args)
 
