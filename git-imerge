@@ -3666,9 +3666,14 @@ def iterative_reparent(head, commit_to_reparent, parents, git):
 
     commit_list.reverse()
     for i in range(0, len(commit_list)):
-        new_commit = git.reparent(commit_list[i], parents)
-        parents = [new_commit] + parents[1:len(parents)]
-        sys.stdout.write('Commit to reparent: %s, new commit: %s, new parents: %s\n' % (commit_to_reparent, new_commit, parents))
+        if i == 0:
+            current_parents = parents
+        else:
+            current_parents = git.get_commit_parents(commit_list[i])
+            current_parents = [new_commit] + current_parents[1:len(current_parents)]
+
+        new_commit = git.reparent(commit_list[i], current_parents)
+        sys.stdout.write('Commit to reparent: %s, new commit: %s, new parents: %s\n' % (commit_list[i], new_commit, current_parents))
 
 def main(args):
     NAME_INIT_HELP = 'name to use for this incremental merge'
