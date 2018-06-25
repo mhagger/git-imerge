@@ -195,8 +195,106 @@ history by using either the ``finish`` or ``simplify`` command.  The
     approach.  See [2]_ for more information.
 
 ``full``
+
     don't simplify the incremental merge at all: do all of the
     intermediate merges and retain them all in the permanent history.
+    In other words, it transforms this::
+
+        o---o---1---2---3      BRANCH1
+             \
+              A---B---C---D    BRANCH2
+
+    into this::
+
+        o---o---1---2---3
+             \   \   \   \
+              A---A1--A2--A3
+               \   \   \   \
+                B---B1--B2--B3
+                 \   \   \   \
+                  C---C1--C2--C3
+                   \   \   \   \
+                    D---D1--D2--D3    NEW_BRANCH
+
+    This approach retains the complete history and ancestry
+    information, which gives the maximum flexibility for conducting
+    future merges. On the other hand, it clutters up the permanent Git
+    history considerably.
+
+``border``
+    this experimental goal retains the rebase of ``BRANCH2`` onto
+    ``BRANCH1`` and also the rebase of ``BRANCH1`` onto ``BRANCH2``,
+    plus a merge commit that includes both branches. In other words,
+    it transforms this::
+
+        o---o---1---2---3      BRANCH1
+             \
+              A---B---C---D    BRANCH2
+
+    into this::
+
+        o---o---1---2---3
+             \           \
+              A           A2
+               \           \
+                B           B2
+                 \           \
+                  C           C2
+                   \           \
+                    D---D1--D2--D3    NEW_BRANCH
+
+    This approach leaves more history than a simple merge or rebase,
+    possibly making future merges easier.
+
+``border-with-history``
+    this experimental goal retains the rebase-with-history of
+    ``BRANCH2`` onto ``BRANCH1`` and also the rebase (without history)
+    of ``BRANCH1`` onto ``BRANCH2``, plus a merge commit that includes
+    both branches. In other words, it transforms this::
+
+        o---o---1---2---3      BRANCH1
+             \
+              A---B---C---D    BRANCH2
+
+    into this::
+
+        o---o---1---2---3
+             \           \
+              A-----------A3
+               \           \
+                B-----------B3
+                 \           \
+                  C-----------C3
+                   \           \
+                    D---D1--D2--D3    NEW_BRANCH
+
+    This approach leaves more history and ancestry information than a
+    simple merge or rebase, possibly making future merges easier.
+
+``border-with-history2``
+    this experimental goal retains the rebase-with-history of
+    ``BRANCH1`` onto ``BRANCH2`` and also the rebase-with-history of
+    ``BRANCH2`` onto ``BRANCH1``, plus a merge commit that includes
+    both branches. In other words, it transforms this::
+
+        o---o---1---2---3      BRANCH1
+             \
+              A---B---C---D    BRANCH2
+
+    into this::
+
+        o---o---1---2---3
+             \   \   \   \
+              A--- --- ---A3
+               \   \   \   \
+                B--- --- ---B3
+                 \   \   \   \
+                  C--- --- ---C3
+                   \   \   \   \
+                    D---D1--D2--D3    NEW_BRANCH
+
+    This approach leaves more history and ancestry information than a
+    simple merge or rebase, possibly making future merges easier.
 
 
 Technical notes
