@@ -2831,6 +2831,15 @@ class MergeState(Block):
                     )
                 self.git.checkout(refname, quiet=True)
 
+    def get_modified_log_message(self, orig, kind):
+        msg = self.git.get_log_message(orig)
+        if os.environ.get('IMERGE_MODIFY_COMMIT_MSG','1') != '0':
+            msg = (
+                msg.rstrip('\n')
+                + '\n\n(%s from commit %s)\n' % (kind,orig)
+            )
+        return msg
+
     def simplify_to_full(self, refname, force=False):
         for i1 in range(1, self.len1):
             for i2 in range(1, self.len2):
@@ -2859,10 +2868,7 @@ class MergeState(Block):
             tree = self.git.get_tree(self[i1, i2].sha1)
 
             # Create a commit, copying the old log message:
-            msg = (
-                self.git.get_log_message(orig).rstrip('\n')
-                + '\n\n(rebased-with-history from commit %s)\n' % orig
-                )
+            msg = self.get_modified_log_message(orig, 'rebased-with-history')
             commit = self.git.commit_tree(tree, [commit, orig], msg=msg)
 
         self._set_refname(refname, commit, force=force)
@@ -2898,16 +2904,10 @@ class MergeState(Block):
             # Create a commit, copying the old log message:
             if with_history2:
                 parents = [commit, orig]
-                msg = (
-                    self.git.get_log_message(orig).rstrip('\n')
-                    + '\n\n(rebased-with-history from commit %s)\n' % (orig,)
-                    )
+                msg = self.get_modified_log_message(orig, 'rebased-with-history')
             else:
                 parents = [commit]
-                msg = (
-                    self.git.get_log_message(orig).rstrip('\n')
-                    + '\n\n(rebased from commit %s)\n' % (orig,)
-                    )
+                msg = self.get_modified_log_message(orig, 'rebased')
 
             commit = self.git.commit_tree(tree, parents, msg=msg)
         commit1 = commit
@@ -2921,16 +2921,10 @@ class MergeState(Block):
             # Create a commit, copying the old log message:
             if with_history1:
                 parents = [orig, commit]
-                msg = (
-                    self.git.get_log_message(orig).rstrip('\n')
-                    + '\n\n(rebased-with-history from commit %s)\n' % (orig,)
-                    )
+                msg = self.get_modified_log_message(orig, 'rebased-with-history')
             else:
                 parents = [commit]
-                msg = (
-                    self.git.get_log_message(orig).rstrip('\n')
-                    + '\n\n(rebased from commit %s)\n' % (orig,)
-                    )
+                msg = self.get_modified_log_message(orig, 'rebased')
 
             commit = self.git.commit_tree(tree, parents, msg=msg)
         commit2 = commit
