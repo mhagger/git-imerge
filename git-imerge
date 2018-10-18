@@ -2913,7 +2913,11 @@ class MergeState(Block):
                     + '\n\n(rebased from commit %s)\n' % (orig,)
                     )
 
-            commit = self.git.commit_tree(tree, parents, msg=msg)
+            commit = self.git.commit_tree(
+                tree, parents,
+                msg=msg,
+                metadata=self.git.get_author_info(orig),
+            )
         commit1 = commit
 
         i2 = self.len2 - 1
@@ -2936,7 +2940,11 @@ class MergeState(Block):
                     + '\n\n(rebased from commit %s)\n' % (orig,)
                     )
 
-            commit = self.git.commit_tree(tree, parents, msg=msg)
+            commit = self.git.commit_tree(
+                tree, parents,
+                msg=msg,
+                metadata=self.git.get_author_info(orig),
+            )
         commit2 = commit
 
         # Construct the apex commit:
