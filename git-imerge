@@ -2863,7 +2863,11 @@ class MergeState(Block):
                 self.git.get_log_message(orig).rstrip('\n')
                 + '\n\n(rebased-with-history from commit %s)\n' % orig
                 )
-            commit = self.git.commit_tree(tree, [commit, orig], msg=msg)
+            commit = self.git.commit_tree(
+                tree, [commit, orig],
+                msg=msg,
+                metadata=self.git.get_author_info(orig),
+            )
 
         self._set_refname(refname, commit, force=force)
 
