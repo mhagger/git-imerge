@@ -4,6 +4,9 @@ set -e
 
 DESCRIPTION="git-imerge test repository"
 
+# Sleep between commits to give commits distinct timestamps:
+SLEEP="sleep 1"
+
 modify() {
     filename="$1"
     text="$2"
@@ -36,12 +39,14 @@ git config user.email 'luser@example.com'
 
 modify a.txt 0
 git commit -m 'm⇒0'
+$SLEEP
 
 git checkout -b a --
 for i in $(seq 8)
 do
     modify a.txt $i
     git commit -m "a⇒$i"
+    $SLEEP
 done
 
 git checkout -b b master --
@@ -49,6 +54,7 @@ for i in $(seq 5)
 do
     modify b.txt $i
     git commit -m "b⇒$i"
+    $SLEEP
 done
 
 git checkout -b c master --
@@ -56,13 +62,16 @@ for i in $(seq 3)
 do
     modify c.txt $i
     git commit -m "c⇒$i"
+    $SLEEP
 done
 modify conflict.txt "c version"
 git commit -m "c conflict"
+$SLEEP
 for i in $(seq 4 8)
 do
     modify c.txt $i
     git commit -m "c⇒$i"
+    $SLEEP
 done
 
 git checkout -b d master --
@@ -70,6 +79,7 @@ for i in $(seq 2)
 do
     modify d.txt $i
     git commit -m "d⇒$i"
+    $SLEEP
 done
 modify conflict.txt "d version"
 git commit -m "d conflict"
@@ -77,6 +87,7 @@ for i in $(seq 3 5)
 do
     modify d.txt $i
     git commit -m "d⇒$i"
+    $SLEEP
 done
 
 git checkout master --
