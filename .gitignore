@@ -1,3 +1,7 @@
+*.egg-info/
 *.pyc
 *.pyo
+.tox/
 /*.html
+build/
+dist/

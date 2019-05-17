@@ -1,0 +1,7 @@
+include completions/git-imerge
+include COPYING
+include t/create-test-repo
+include t/test-conflicted
+include t/test-drop
+include t/test-unconflicted
+include tox.ini

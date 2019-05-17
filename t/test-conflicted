@@ -7,7 +7,7 @@ set -x
 
 BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
 TMP="$BASE/t/tmp/main"
-GIT_IMERGE="$BASE/git-imerge"
+GIT_IMERGE="git-imerge"
 
 cd "$TMP"
 

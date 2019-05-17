@@ -48,9 +48,8 @@ command.
 An incremental merge can be interrupted and resumed arbitrarily, or
 even pushed to a server to allow somebody else to work on it.
 
-``git-imerge`` comes with a Bash completion script. It can be installed
-by copying ``git-imerge.bashcomplete`` to the place where usually completion
-scripts are installed on your system, e.g. /etc/bash_completion.d/.
+``git-imerge`` comes with a Bash completion script, ``completions/git-imerge``,
+that is installed automatically when installing ``git-imerge``.
 
 
 Requirements
@@ -66,14 +65,22 @@ Requirements
 
   * Python 3.x, version 3.3 or later.
 
-  The script tries to use a Python interpreter called ``python`` in
-  your ``PATH``.  If your Python interpreter has a different name or
-  is not in your ``PATH``, please adjust the first line of the script
-  accordingly.
-
 * A recent version of Git.
 
 Bash completion requires Git's completion being available.
+
+
+Installation
+============
+
+``git-imerge`` is available on PyPI_, so you can install it with ``pip``::
+
+    $ pip install git-imerge
+
+
+or using ``setup.py`` if you have downloaded the source package locally::
+
+    $ python setup.py install
 
 
 Instructions
@@ -399,6 +406,22 @@ line or change the default in your configuration::
     git config --global imerge.editmergemessages true
 
 
+Testing
+=======
+
+``git-imerge`` uses tox_ to run tests. To run the test suite with the system's
+default Python::
+
+    $ tox
+
+To run with a specific Python version, such as 3.7, pass the ``-e`` argument to
+tox::
+
+    $ tox -e py37
+
+.. _tox: https://tox.readthedocs.io/
+
+
 License
 =======
 
@@ -423,5 +446,3 @@ References
    * http://softwareswirl.blogspot.com/2009/04/truce-in-merge-vs-rebase-war.html
    * http://softwareswirl.blogspot.com/2009/08/upstream-rebase-just-works-if-history.html
    * http://softwareswirl.blogspot.com/2009/08/rebase-with-history-implementation.html
-
-
