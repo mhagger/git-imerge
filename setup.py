@@ -18,7 +18,7 @@ else:
 
 
 setup(
-    name="gitimerge",
+    name="git-imerge",
     description="Incremental merge for git",
     url="https://github.com/mhagger/git-imerge",
     author="Michael Haggerty",
