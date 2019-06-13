@@ -3,6 +3,9 @@ import subprocess
 
 from setuptools import setup
 
+with open("README.rst", "r") as fh:
+    long_description = fh.read()
+
 data_files = []
 try:
     completionsdir = subprocess.check_output(
@@ -21,10 +24,12 @@ setup(
     name="git-imerge",
     description="Incremental merge for git",
     url="https://github.com/mhagger/git-imerge",
+    version="1.1.0",
     author="Michael Haggerty",
     author_email="mhagger@alum.mit.edu",
+    long_description=long_description,
+    long_description_content_type="text/x-rst",
     license="GPLv2+",
-    version="1.1.0",
     py_modules=["gitimerge"],
     data_files=data_files,
     entry_points={"console_scripts": ["git-imerge = gitimerge:climain"]},
