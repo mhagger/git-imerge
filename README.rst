@@ -66,7 +66,7 @@ Requirements
 
   * Python 3.x, version 3.3 or later.
 
-  The script tries to use a Python interpreter called ``python`` in
+  The script tries to use a Python interpreter called ``python3`` in
   your ``PATH``.  If your Python interpreter has a different name or
   is not in your ``PATH``, please adjust the first line of the script
   accordingly.
