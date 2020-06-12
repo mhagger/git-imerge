@@ -1,4 +1,3 @@
-#! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # Copyright 2012-2013 Michael Haggerty <mhagger@alum.mit.edu>
@@ -4137,11 +4136,15 @@ def main(args):
         parser.error('Unrecognized subcommand')
 
 
-if __name__ == '__main__':
+def climain():
     try:
         main(sys.argv[1:])
     except Failure as e:
         sys.exit(str(e))
+
+
+if __name__ == "__main__":
+    climain()
 
 
 # vim: set expandtab ft=python:

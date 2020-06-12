@@ -15,7 +15,7 @@ modify() {
 
 BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
 TMP="$BASE/t/tmp/drop"
-GIT_IMERGE="$BASE/git-imerge"
+GIT_IMERGE="git-imerge"
 
 rm -rf "$TMP"
 mkdir -p "$TMP"
