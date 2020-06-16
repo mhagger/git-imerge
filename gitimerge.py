@@ -2391,7 +2391,7 @@ class MergeState(Block):
             ]
         if multiparent_commits:
             raise Failure(
-                'The following commits on the to-be-merged branch are merge commits:\n'
+                'The following commits on the to-be-rebased branch are merge commits:\n'
                 '    %s\n'
                 '--goal=\'rebase\' is not yet supported for branches that include merges.\n'
                 % ('\n    '.join(multiparent_commits),)
