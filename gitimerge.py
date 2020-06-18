@@ -243,21 +243,21 @@ def communicate(process, input=None):
     return (output, error)
 
 
-if sys.hexversion < 0x03000000:
-    # In Python 2.x, os.environ keys and values must be byte
-    # strings:
-    def env_encode(s):
-        """Encode unicode keys or values for use in os.environ."""
-
-        return s.encode(PREFERRED_ENCODING)
-
-else:
+if sys.hexversion >= 0x03000000:
     # In Python 3.x, os.environ keys and values must be unicode
     # strings:
     def env_encode(s):
         """Use unicode keys or values unchanged in os.environ."""
 
         return s
+
+else:
+    # In Python 2.x, os.environ keys and values must be byte
+    # strings:
+    def env_encode(s):
+        """Encode unicode keys or values for use in os.environ."""
+
+        return s.encode(PREFERRED_ENCODING)
 
 
 class UncleanWorkTreeError(Failure):
