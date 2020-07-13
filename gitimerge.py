@@ -3930,20 +3930,25 @@ def cmd_diagram(parser, options):
         merge_frontier.write_html(html, merge_state.name)
         html.close()
     sys.stdout.write(
-        'Key:\n'
+        'Key:                                                    Map:\n'
+        )
+    sys.stdout.write(
+        '  * = merge done manually                                 o-0-1-2..-%(len1)d  %(tip1)s\n'
+        '  . = merge done automatically                              1\n'
+        '  # = conflict that is currently blocking progress          ..\n'
+        '  @ = merge was blocked but has been resolved               %(len2)d\n'
+        '  ? = no merge recorded                                    %(tip2)s\n'
+        '' % {
+            'tip1': merge_state.tip1,
+            'tip2': merge_state.tip2,
+            'len1': merge_state.len1-1,
+            'len2': merge_state.len2-1}
         )
     if options.frontier:
         sys.stdout.write(
             '  |,-,+ = rectangles forming current merge frontier\n'
             )
-    sys.stdout.write(
-        '  * = merge done manually\n'
-        '  . = merge done automatically\n'
-        '  # = conflict that is currently blocking progress\n'
-        '  @ = merge was blocked but has been resolved\n'
-        '  ? = no merge recorded\n'
-        '\n'
-        )
+    sys.stdout.write('\n')
 
 
 def reparent_recursively(git, start_commit, parents, end_commit):
