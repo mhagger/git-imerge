@@ -1456,6 +1456,59 @@ def find_frontier_blocks(block):
                 )
 
 
+def write_diagram_with_axes(f, diagram):
+    """Write a diagram of one-space-wide characters to file-like object f.
+
+    Include integers along the top and left sides showing the indexes
+    corresponding to the rows and columns.
+
+    """
+
+    len1 = len(diagram)
+    len2 = len(diagram[0])
+
+    # Write the line of i1 numbers:
+    f.write('   ')
+    for i1 in range(0, len1, 5):
+        f.write('%5d' % (i1,))
+
+    if (len1 - 1) % 5 == 0:
+        # The last multiple-of-five integer that we just wrote was
+        # the index of the last column. We're done.
+        f.write('\n')
+    else:
+        if (len1 - 1) % 5 == 1:
+            # Add an extra space so that the numbers don't run together:
+            f.write(' ')
+        f.write('%s%d\n' % (' ' * ((len1 - 1) % 5 - 1), len1 - 1,))
+
+    # Write a line of '|' marks under the numbers emitted above:
+    f.write('   ')
+    for i1 in range(0, len1, 5):
+        f.write('%5s' % ('|',))
+
+    if (len1 - 1) % 5 == 0:
+        # The last multiple-of-five integer was at the last
+        # column. We're done.
+        f.write('\n')
+    elif (len1 - 1) % 5 == 1:
+        # Tilt the tick mark to account for the extra space:
+        f.write(' /\n')
+    else:
+        f.write('%s|\n' % (' ' * ((len1 - 1) % 5 - 1),))
+
+    # Write the actual body of the diagram:
+    for i2 in range(len2):
+        if i2 % 5 == 0 or i2 == len2 - 1:
+            f.write('%4d - ' % (i2,))
+        else:
+            f.write('       ')
+
+        for i1 in range(len1):
+            f.write(diagram[i1][i2])
+        f.write('\n')
+
+
 class MergeFrontier(object):
     """Represents the merge frontier within a Block.
 
@@ -1698,11 +1751,8 @@ class MergeFrontier(object):
 
     def write(self, f):
         """Write this frontier to file-like object f."""
-        diagram = self.format_diagram()
-        for i2 in range(self.block.len2):
-            for i1 in range(self.block.len1):
-                f.write(diagram[i1][i2])
-            f.write('\n')
+
+        write_diagram_with_axes(f, self.format_diagram())
 
     def write_html(self, f, name, cssfile='imerge.css', abbrev_sha1=7):
         class_map = {
@@ -2279,10 +2329,8 @@ class Block(object):
             [legend[diagram[i1][i2]] for i2 in range(self.len2)]
             for i1 in range(self.len1)]
 
-    def write(self, f, legend=None, sep='', linesep='\n'):
-        diagram = self.format_diagram(legend)
-        for i2 in range(self.len2):
-            f.write(sep.join(diagram[i1][i2] for i1 in range(self.len1)) + linesep)
+    def write(self, f):
+        write_diagram_with_axes(f, self.format_diagram())
 
     def writeppm(self, f):
         legend = ['127 127 0', '0 255 0', '0 127 0', '255 0 0', '127 0 0']
