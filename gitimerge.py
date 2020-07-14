@@ -1456,7 +1456,7 @@ def find_frontier_blocks(block):
                 )
 
 
-def write_diagram_with_axes(f, diagram):
+def write_diagram_with_axes(f, diagram, tip1, tip2):
     """Write a diagram of one-space-wide characters to file-like object f.
 
     Include integers along the top and left sides showing the indexes
@@ -1506,7 +1506,15 @@ def write_diagram_with_axes(f, diagram):
 
         for i1 in range(len1):
             f.write(diagram[i1][i2])
-        f.write('\n')
+
+        if tip1 and i2 == 0:
+            f.write(' - %s\n' % (tip1,))
+        else:
+            f.write('\n')
+
+    if tip2:
+        f.write('       |\n')
+        f.write('     %s\n' % (tip2,))
 
 
 class MergeFrontier(object):
@@ -1749,10 +1757,10 @@ class MergeFrontier(object):
             [formatter(diagram[i1][i2]) for i2 in range(self.block.len2)]
             for i1 in range(self.block.len1)]
 
-    def write(self, f):
+    def write(self, f, tip1=None, tip2=None):
         """Write this frontier to file-like object f."""
 
-        write_diagram_with_axes(f, self.format_diagram())
+        write_diagram_with_axes(f, self.format_diagram(), tip1, tip2)
 
     def write_html(self, f, name, cssfile='imerge.css', abbrev_sha1=7):
         class_map = {
@@ -2329,8 +2337,8 @@ class Block(object):
             [legend[diagram[i1][i2]] for i2 in range(self.len2)]
             for i1 in range(self.len1)]
 
-    def write(self, f):
-        write_diagram_with_axes(f, self.format_diagram())
+    def write(self, f, tip1='', tip2=''):
+        write_diagram_with_axes(f, self.format_diagram(), tip1, tip2)
 
     def writeppm(self, f):
         legend = ['127 127 0', '0 255 0', '0 127 0', '255 0 0', '127 0 0']
@@ -3753,11 +3761,11 @@ def cmd_diagram(parser, options):
 
     merge_state = read_merge_state(git, options.name)
     if options.commits:
-        merge_state.write(sys.stdout)
+        merge_state.write(sys.stdout, merge_state.tip1, merge_state.tip2)
         sys.stdout.write('\n')
     if options.frontier:
         merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-        merge_frontier.write(sys.stdout)
+        merge_frontier.write(sys.stdout, merge_state.tip1, merge_state.tip2)
         sys.stdout.write('\n')
     if options.html:
         merge_frontier = MergeFrontier.map_known_frontier(merge_state)
