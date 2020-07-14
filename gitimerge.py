@@ -2285,10 +2285,13 @@ class Block(object):
             f.write(sep.join(diagram[i1][i2] for i1 in range(self.len1)) + linesep)
 
     def writeppm(self, f):
+        legend = ['127 127 0', '0 255 0', '0 127 0', '255 0 0', '127 0 0']
+        diagram = self.format_diagram(legend)
+
         f.write('P3\n')
         f.write('%d %d 255\n' % (self.len1, self.len2,))
-        legend = ['127 127 0', '0 255 0', '0 127 0', '255 0 0', '127 0 0']
-        self.write(f, legend, sep='  ')
+        for i2 in range(self.len2):
+            f.write('  '.join(diagram[i1][i2] for i1 in range(self.len1)) + '\n')
 
 
 class SubBlock(Block):
