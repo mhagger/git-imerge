@@ -29,6 +29,9 @@ Ferris Nicolaisen for his `GitMinutes Podcast #12`_.
 .. _`GitMinutes Podcast #12`:
    http://episodes.gitminutes.com/2013/06/gitminutes-12-git-merge-2013-part-4.html
 
+.. _`Shout-out by Patrick McKenna at GitMerge May 2017`:
+   https://www.youtube.com/watch?v=2UKd0YMuc-M&t=32m3s
+
 To learn how to use the ``git-imerge`` tool itself, I suggest the blog
 article `git-imerge: A Practical Introduction`_ and also typing
 ``git-imerge --help`` and ``git-imerge SUBCOMMAND --help``.  If you
