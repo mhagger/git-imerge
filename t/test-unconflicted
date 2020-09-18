@@ -6,21 +6,20 @@ set -e
 set -x
 
 BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
-TMP="$BASE/t/tmp/main"
+. "$BASE/t/test-lib.sh"
+
 GIT_IMERGE="git-imerge"
+TMP="$BASE/t/tmp/main"
 
 cd "$TMP"
 
 # Clean up detritus from possible previous runs:
 git checkout master
 "$GIT_IMERGE" remove --name=a-b || true
-for b in a-b-merge \
+delete_branches a-b-merge \
 	     a-b-rebase a-b-rebase-with-history \
 	     a-b-border a-b-border-with-history a-b-border-with-history2 \
 	     a-b-full
-do
-    git branch -D $b || true
-done
 
 git checkout a
 "$GIT_IMERGE" start --first-parent --name=a-b --branch=a-b-merge b
