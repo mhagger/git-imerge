@@ -47,5 +47,5 @@ git checkout -b reverted master
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge-revert.html
 "$GIT_IMERGE" finish
 
-git diff dropped reverted
+git --no-pager diff dropped reverted
 

@@ -4,14 +4,18 @@ set -e
 
 DESCRIPTION="git-imerge test repository"
 
-# Sleep between commits to give commits distinct timestamps:
-SLEEP="sleep 1"
-
 modify() {
     filename="$1"
     text="$2"
     echo "$text" >"$filename" &&
     git add "$filename"
+}
+
+TIME=1112911993
+
+commit() {
+    TIME=$(( TIME + 1 ))
+    GIT_AUTHOR_DATE="@$TIME +0000" GIT_COMMITTER_DATE="@$TIME +0000" git commit "$@"
 }
 
 BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
@@ -38,56 +42,48 @@ git config user.name 'Loú User'
 git config user.email 'luser@example.com'
 
 modify a.txt 0
-git commit -m 'm⇒0'
-$SLEEP
+commit -m 'm⇒0'
 
 git checkout -b a --
 for i in $(seq 8)
 do
     modify a.txt $i
-    git commit -m "a⇒$i"
-    $SLEEP
+    commit -m "a⇒$i"
 done
 
 git checkout -b b master --
 for i in $(seq 5)
 do
     modify b.txt $i
-    git commit -m "b⇒$i"
-    $SLEEP
+    commit -m "b⇒$i"
 done
 
 git checkout -b c master --
 for i in $(seq 3)
 do
     modify c.txt $i
-    git commit -m "c⇒$i"
-    $SLEEP
+    commit -m "c⇒$i"
 done
 modify conflict.txt "c version"
-git commit -m "c conflict"
-$SLEEP
+commit -m "c conflict"
 for i in $(seq 4 8)
 do
     modify c.txt $i
-    git commit -m "c⇒$i"
-    $SLEEP
+    commit -m "c⇒$i"
 done
 
 git checkout -b d master --
 for i in $(seq 2)
 do
     modify d.txt $i
-    git commit -m "d⇒$i"
-    $SLEEP
+    commit -m "d⇒$i"
 done
 modify conflict.txt "d version"
-git commit -m "d conflict"
+commit -m "d conflict"
 for i in $(seq 3 5)
 do
     modify d.txt $i
-    git commit -m "d⇒$i"
-    $SLEEP
+    commit -m "d⇒$i"
 done
 
 git checkout master --
