@@ -6,3 +6,17 @@ delete_branches() {
         git branch -D $b 2>/dev/null || true
     done
 }
+
+modify() {
+    filename="$1"
+    text="$2"
+    echo "$text" >"$filename" &&
+    git add "$filename"
+}
+
+TIME=1112911993
+
+commit() {
+    TIME=$(( TIME + 1 ))
+    GIT_AUTHOR_DATE="@$TIME +0000" GIT_COMMITTER_DATE="@$TIME +0000" git commit "$@"
+}

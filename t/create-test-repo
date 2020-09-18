@@ -2,24 +2,11 @@
 
 set -e
 
-DESCRIPTION="git-imerge test repository"
-
-modify() {
-    filename="$1"
-    text="$2"
-    echo "$text" >"$filename" &&
-    git add "$filename"
-}
-
-TIME=1112911993
-
-commit() {
-    TIME=$(( TIME + 1 ))
-    GIT_AUTHOR_DATE="@$TIME +0000" GIT_COMMITTER_DATE="@$TIME +0000" git commit "$@"
-}
-
 BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
+. "$BASE/t/test-lib.sh"
+
 TMP="$BASE/t/tmp/main"
+DESCRIPTION="git-imerge test repository"
 
 if test -d "$TMP"
 then
