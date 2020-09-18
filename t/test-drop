@@ -21,12 +21,12 @@ git config user.name 'Loú User'
 git config user.email 'luser@example.com'
 
 modify a.txt 0
-git commit -m 'm⇒0'
+commit -m 'm⇒0'
 
 for i in $(seq 6)
 do
     modify a$i.txt $i
-    git commit -m "a$i⇒$i"
+    commit -m "a$i⇒$i"
 done
 
 ln -s "$BASE/imerge.css" .
