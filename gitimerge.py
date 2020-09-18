@@ -799,13 +799,6 @@ class GitRepository(object):
     def rev_parse(self, arg):
         return check_output(['git', 'rev-parse', '--verify', '--quiet', arg]).strip()
 
-    def rev_list(self, *args):
-        cmd = ['git', 'rev-list'] + list(args)
-        return [
-            l.strip()
-            for l in check_output(cmd).splitlines()
-            ]
-
     def rev_list_with_parents(self, *args):
         """Iterate over (commit, [parent,...])."""
 
