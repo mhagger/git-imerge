@@ -1,0 +1,63 @@
+#! /bin/sh
+
+# This should be executed in a clean working copy of the test repo.
+
+set -e
+set -x
+
+BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
+. "$BASE/t/test-lib.sh"
+
+GIT_IMERGE="git-imerge"
+TMP="$BASE/t/tmp/duplicated"
+DESCRIPTION="git-imerge test repository with duplicate commits"
+
+# Set up a test repo with two branches, `a` and `b`, that have some
+# identical commits. This should cause some automatic commits to fail,
+# only to succeed when the graph is filled in one micromerge at a
+# time:
+init_test_repo "$TMP" "$DESCRIPTION"
+cd "$TMP"
+
+modify a.txt 0
+commit -m 'm⇒0'
+
+git checkout -b a --
+for i in $(seq 3)
+do
+    modify a.txt $i
+    commit -m "a⇒$i on branch a"
+done
+
+git checkout -b b master --
+for i in $(seq 4)
+do
+    modify a.txt $i
+    commit -m "a⇒$i on branch b"
+done
+
+EXPECTED_TREE=9d521927e179e882efacd2a0ba94b89a1de00eb2
+
+git checkout a
+"$GIT_IMERGE" start --first-parent --name=a-b --branch=a-b-merge b
+"$GIT_IMERGE" diagram --commits --frontier --html=imerge5.html
+GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=a-b-merge
+check_tree a-b-merge $EXPECTED_TREE
+"$GIT_IMERGE" simplify --goal=rebase --branch=a-b-rebase
+check_tree a-b-rebase $EXPECTED_TREE
+"$GIT_IMERGE" simplify --goal=rebase-with-history --branch=a-b-rebase-with-history
+check_tree a-b-rebase-with-history $EXPECTED_TREE
+"$GIT_IMERGE" simplify --goal=border --branch=a-b-border
+check_tree a-b-border $EXPECTED_TREE
+"$GIT_IMERGE" simplify --goal=border-with-history --branch=a-b-border-with-history
+check_tree a-b-border-with-history $EXPECTED_TREE
+"$GIT_IMERGE" finish --goal=border-with-history2 --branch=a-b-border-with-history2
+check_tree a-b-border-with-history2 $EXPECTED_TREE
+
+git checkout a
+"$GIT_IMERGE" start --goal=full --name=a-b b
+"$GIT_IMERGE" list
+"$GIT_IMERGE" diagram --commits --frontier --html=imerge6.html
+"$GIT_IMERGE" finish --branch=a-b-full
+check_tree a-b-full $EXPECTED_TREE
+
