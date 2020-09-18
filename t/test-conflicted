@@ -9,19 +9,48 @@ BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
 . "$BASE/t/test-lib.sh"
 
 GIT_IMERGE="git-imerge"
-TMP="$BASE/t/tmp/main"
+TMP="$BASE/t/tmp/conflicted"
+DESCRIPTION="git-imerge test repository with conflicts"
 
+# Set up a test repo with two branches, `c` and `d`, that each have a
+# commit making incompatible changes to the same file `conflict.txt`:
+init_test_repo "$TMP" "$DESCRIPTION"
 cd "$TMP"
 
-# Clean up detritus from possible previous runs of this test:
-git checkout master
-"$GIT_IMERGE" remove --name=c-d || true
-delete_branches c-d-merge \
-	     c-d-rebase c-d-rebase-with-history \
-	     c-d-border c-d-border-with-history c-d-border-with-history2 \
-	     c-d-full
+modify c.txt 0
+modify d.txt 0
+modify conflict.txt "original version"
+commit -m 'm⇒0'
 
-EXPECTED_TREE=0978dd73523c9932950aa645d6fd5676abd77839
+git checkout -b c master --
+for i in $(seq 3)
+do
+    modify c.txt $i
+    commit -m "c⇒$i"
+done
+modify conflict.txt "c version"
+commit -m "c conflict"
+for i in $(seq 4 8)
+do
+    modify c.txt $i
+    commit -m "c⇒$i"
+done
+
+git checkout -b d master --
+for i in $(seq 2)
+do
+    modify d.txt $i
+    commit -m "d⇒$i"
+done
+modify conflict.txt "d version"
+commit -m "d conflict"
+for i in $(seq 3 5)
+do
+    modify d.txt $i
+    commit -m "d⇒$i"
+done
+
+EXPECTED_TREE=17757010e20dad50f089115ae9425414ad00c749
 
 git checkout c
 "$GIT_IMERGE" init --name=c-d d

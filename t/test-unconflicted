@@ -9,17 +9,31 @@ BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
 . "$BASE/t/test-lib.sh"
 
 GIT_IMERGE="git-imerge"
-TMP="$BASE/t/tmp/main"
+TMP="$BASE/t/tmp/unconflicted"
+DESCRIPTION="git-imerge test repository without conflicts"
 
+# Set up a test repo with two branches, `a` and `b`, that don't
+# conflict with each other:
+init_test_repo "$TMP" "$DESCRIPTION"
 cd "$TMP"
 
-# Clean up detritus from possible previous runs:
-git checkout master
-"$GIT_IMERGE" remove --name=a-b || true
-delete_branches a-b-merge \
-	     a-b-rebase a-b-rebase-with-history \
-	     a-b-border a-b-border-with-history a-b-border-with-history2 \
-	     a-b-full
+modify a.txt 0
+modify b.txt 0
+commit -m 'm⇒0'
+
+git checkout -b a --
+for i in $(seq 8)
+do
+    modify a.txt $i
+    commit -m "a⇒$i"
+done
+
+git checkout -b b master --
+for i in $(seq 5)
+do
+    modify b.txt $i
+    commit -m "b⇒$i"
+done
 
 EXPECTED_TREE=e4a7b27799be355bbcbf8bfe9c29d74190082c42
 
