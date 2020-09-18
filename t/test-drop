@@ -11,14 +11,10 @@ GIT_IMERGE="git-imerge"
 TMP="$BASE/t/tmp/drop"
 DESCRIPTION="git-imerge drop test repository"
 
-rm -rf "$TMP"
-mkdir -p "$TMP"
+# Set up a test repo with a linear string of commits, all modifying
+# different files:
+init_test_repo "$TMP" "$DESCRIPTION"
 cd "$TMP"
-
-git init
-echo "$DESCRIPTION" >.git/description
-git config user.name 'Loú User'
-git config user.email 'luser@example.com'
 
 modify a.txt 0
 commit -m 'm⇒0'
@@ -28,8 +24,6 @@ do
     modify a$i.txt $i
     commit -m "a$i⇒$i"
 done
-
-ln -s "$BASE/imerge.css" .
 
 git checkout -b dropped master
 "$GIT_IMERGE" drop HEAD~5..HEAD~3
