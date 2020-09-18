@@ -21,6 +21,8 @@ delete_branches c-d-merge \
 	     c-d-border c-d-border-with-history c-d-border-with-history2 \
 	     c-d-full
 
+EXPECTED_TREE=0978dd73523c9932950aa645d6fd5676abd77839
+
 git checkout c
 "$GIT_IMERGE" init --name=c-d d
 "$GIT_IMERGE" list
@@ -37,11 +39,17 @@ git add conflict.txt
 "$GIT_IMERGE" continue --no-edit
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge2.html
 GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=c-d-merge
+check_tree c-d-merge $EXPECTED_TREE
 "$GIT_IMERGE" simplify --goal=rebase --branch=c-d-rebase
+check_tree c-d-rebase $EXPECTED_TREE
 "$GIT_IMERGE" simplify --goal=rebase-with-history --branch=c-d-rebase-with-history
+check_tree c-d-rebase-with-history $EXPECTED_TREE
 "$GIT_IMERGE" simplify --goal=border --branch=c-d-border
+check_tree c-d-border $EXPECTED_TREE
 "$GIT_IMERGE" simplify --goal=border-with-history --branch=c-d-border-with-history
+check_tree c-d-border-with-history $EXPECTED_TREE
 "$GIT_IMERGE" simplify --goal=border-with-history2 --branch=c-d-border-with-history2
+check_tree c-d-border-with-history2 $EXPECTED_TREE
 "$GIT_IMERGE" remove
 
 git checkout c
@@ -57,4 +65,5 @@ GIT_EDITOR=cat git commit
 "$GIT_IMERGE" continue --edit
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge4.html
 "$GIT_IMERGE" finish --branch=c-d-full
+check_tree c-d-full $EXPECTED_TREE
 

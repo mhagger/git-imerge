@@ -20,3 +20,14 @@ commit() {
     TIME=$(( TIME + 1 ))
     GIT_AUTHOR_DATE="@$TIME +0000" GIT_COMMITTER_DATE="@$TIME +0000" git commit "$@"
 }
+
+check_tree () {
+    local refname="$1"
+    local expected_tree="$2"
+    if ! test "$(git rev-parse "$refname^{tree}")" = "$expected_tree"
+    then
+        echo "error: the tree for $refname is incorrect!"
+        git diff "$expected_tree" "$refname"
+        exit 1
+    fi
+}

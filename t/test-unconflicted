@@ -21,16 +21,24 @@ delete_branches a-b-merge \
 	     a-b-border a-b-border-with-history a-b-border-with-history2 \
 	     a-b-full
 
+EXPECTED_TREE=e4a7b27799be355bbcbf8bfe9c29d74190082c42
+
 git checkout a
 "$GIT_IMERGE" start --first-parent --name=a-b --branch=a-b-merge b
 "$GIT_IMERGE" list
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge3.html
 GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=a-b-merge
+check_tree a-b-merge $EXPECTED_TREE
 "$GIT_IMERGE" simplify --goal=rebase --branch=a-b-rebase
+check_tree a-b-rebase $EXPECTED_TREE
 "$GIT_IMERGE" simplify --goal=rebase-with-history --branch=a-b-rebase-with-history
+check_tree a-b-rebase-with-history $EXPECTED_TREE
 "$GIT_IMERGE" simplify --goal=border --branch=a-b-border
+check_tree a-b-border $EXPECTED_TREE
 "$GIT_IMERGE" simplify --goal=border-with-history --branch=a-b-border-with-history
+check_tree a-b-border-with-history $EXPECTED_TREE
 "$GIT_IMERGE" simplify --goal=border-with-history2 --branch=a-b-border-with-history2
+check_tree a-b-border-with-history2 $EXPECTED_TREE
 "$GIT_IMERGE" remove
 
 git checkout a
@@ -38,4 +46,5 @@ git checkout a
 "$GIT_IMERGE" list
 "$GIT_IMERGE" diagram --commits --frontier --html=imerge4.html
 "$GIT_IMERGE" finish --branch=a-b-full
+check_tree a-b-full $EXPECTED_TREE
 
