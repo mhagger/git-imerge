@@ -3,6 +3,7 @@ include COPYING
 include t/test-conflicted
 include t/test-drop
 include t/test-duplicated
+include t/test-flip-flop
 include t/test-lib.sh
 include t/test-unconflicted
 include tox.ini

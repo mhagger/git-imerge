@@ -1,0 +1,49 @@
+#! /bin/sh
+
+# This should be executed in a clean working copy of the test repo.
+
+set -e
+set -x
+
+BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
+. "$BASE/t/test-lib.sh"
+
+GIT_IMERGE="git-imerge"
+TMP="$BASE/t/tmp/flip-flop"
+DESCRIPTION="git-imerge test repository with a commit and its revert"
+
+# Set up a test repo with two branches, `a` and `b`, where `b` has a
+# commit that conflicts with one from `a` that is immediately
+# reverted. This should make it look like the whole block can be
+# merged, only to fail when outlining, forcing backtracking that
+# ultimately also fails.
+init_test_repo "$TMP" "$DESCRIPTION"
+cd "$TMP"
+
+modify a.txt 0
+commit -m 'm⇒0'
+
+git checkout -b a --
+for i in 1 2 3
+do
+    modify a.txt $i
+    commit -m "a⇒$i on branch a"
+done
+
+git checkout -b b master --
+modify b.txt 1
+commit -m "b⇒1"
+modify a.txt X
+commit -m "a⇒X"
+modify a.txt 0
+commit -m "revert a⇒0"
+modify b.txt 2
+commit -m "b⇒2"
+
+git checkout a
+"$GIT_IMERGE" start --first-parent --name=a-b --branch=a-b-merge b 2>&1 | tee imerge.out
+if ! grep -q 'There was a conflict merging commit 1-2' imerge.out
+then
+    echo "conflict along outline not detected"
+    exit 1
+fi
