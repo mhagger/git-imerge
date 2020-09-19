@@ -1,0 +1,199 @@
+#! /bin/sh
+
+set -ex
+
+BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
+. "$BASE/t/test-lib.sh"
+
+GIT_IMERGE="git-imerge"
+TMP="$BASE/t/tmp/really-conflicted"
+DESCRIPTION="git-imerge test repository with multiple conflicts"
+
+# Set up a test repo with two branches, `c` and `d`, that have commits
+# making incompatible changes to the same files `conflictN.txt` in the
+# following locations:
+#
+#         0    5   9
+#         |    |   |
+#     0 - ********** - c
+#         *0...6....
+#         *...1..2..
+#         *.........
+#         *.........
+#     5 - *....3....
+#         *4........
+#         *.....5...
+#     8 - *........7
+#         |
+#       d
+
+init_test_repo "$TMP" "$DESCRIPTION"
+cd "$TMP"
+
+modify c.txt 0
+modify d.txt 0
+for i in $(seq 0 7)
+do
+    modify conflict$i.txt "original version"
+done
+commit -m 'm⇒0'
+
+git checkout -b c master --
+
+modify c.txt 1
+modify conflict0.txt "c version"
+modify conflict4.txt "c version"
+commit -m "c⇒1"
+
+modify c.txt 2
+commit -m "c⇒2"
+
+modify c.txt 3
+commit -m "c⇒3"
+
+modify c.txt 4
+modify conflict1.txt "c version"
+commit -m "c⇒4"
+
+modify c.txt 5
+modify conflict3.txt "c version"
+modify conflict6.txt "c version"
+commit -m "c⇒5"
+
+modify c.txt 6
+modify conflict5.txt "c version"
+commit -m "c⇒6"
+
+modify c.txt 7
+modify conflict2.txt "c version"
+commit -m "c⇒7"
+
+modify c.txt 8
+commit -m "c⇒8"
+
+modify c.txt 9
+modify conflict7.txt "c version"
+commit -m "c⇒9"
+
+git checkout -b d master --
+
+modify d.txt 1
+modify conflict0.txt "d version"
+modify conflict6.txt "d version"
+commit -m "d⇒1"
+
+modify d.txt 2
+modify conflict1.txt "d version"
+modify conflict2.txt "d version"
+commit -m "d⇒2"
+
+modify d.txt 3
+commit -m "d⇒3"
+
+modify d.txt 4
+commit -m "d⇒4"
+
+modify d.txt 5
+modify conflict3.txt "d version"
+commit -m "d⇒5"
+
+modify d.txt 6
+modify conflict4.txt "d version"
+commit -m "d⇒6"
+
+modify d.txt 7
+modify conflict5.txt "d version"
+commit -m "d⇒7"
+
+modify d.txt 8
+modify conflict7.txt "d version"
+commit -m "d⇒8"
+
+
+git checkout c
+"$GIT_IMERGE" init --name=c-d d
+"$GIT_IMERGE" diagram --commits --frontier
+
+# We expect eight conflicts:
+conflict_count=0
+while true
+do
+    "$GIT_IMERGE" continue --no-edit 2>&1 | tee autofill.out
+    if grep -q Traceback autofill.out
+    then
+        exit 1
+    fi
+
+    "$GIT_IMERGE" diagram --frontier
+
+    if ! grep -q "There was a conflict merging" autofill.out
+    then
+        break
+    fi
+
+    for i in $(seq 0 7)
+    do
+        if grep -q '====' conflict$i.txt
+        then
+            modify conflict$i.txt "merged version"
+            conflict_count=$(( conflict_count + 1 ))
+        fi
+    done
+done
+
+if test $conflict_count -ne 8
+then
+    echo "Expected 8 conflicts but there were $conflict_count"
+    exit 1
+fi
+
+
+# Check the diagram output, which also checks which commits were done
+# automatically, which were done manually, and which were skipped
+# over. This test is a bit fragile to changes in the filling
+# algorithm.
+"$GIT_IMERGE" diagram --commits >diagram.out
+{
+cat <<'EOF'
+       0    5   9
+       |    |   |
+   0 - ********** - c
+       **?..*....
+       *.?.*..*..
+       *.?.......
+       *.?.......
+   5 - *....*....
+       **?.......
+       *.?...*...
+   8 - *........*
+       |
+     d
+
+Key:
+  * = merge done manually
+  . = merge done automatically
+  # = conflict that is currently blocking progress
+  @ = merge was blocked but has been resolved
+  ? = no merge recorded
+
+EOF
+} | diff -u - diagram.out || {
+    echo "diagram disagrees with expectations"
+    exit 1
+}
+
+EXPECTED_TREE=13e5a8955ab8f88dc7fec8278ee2622655c21d7f
+
+GIT_EDITOR=cat "$GIT_IMERGE" simplify --goal=merge --branch=c-d-merge
+check_tree c-d-merge $EXPECTED_TREE
+"$GIT_IMERGE" simplify --goal=rebase --branch=c-d-rebase
+check_tree c-d-rebase $EXPECTED_TREE
+"$GIT_IMERGE" simplify --goal=rebase-with-history --branch=c-d-rebase-with-history
+check_tree c-d-rebase-with-history $EXPECTED_TREE
+"$GIT_IMERGE" simplify --goal=border --branch=c-d-border
+check_tree c-d-border $EXPECTED_TREE
+"$GIT_IMERGE" simplify --goal=border-with-history --branch=c-d-border-with-history
+check_tree c-d-border-with-history $EXPECTED_TREE
+"$GIT_IMERGE" simplify --goal=border-with-history2 --branch=c-d-border-with-history2
+check_tree c-d-border-with-history2 $EXPECTED_TREE
+"$GIT_IMERGE" remove
