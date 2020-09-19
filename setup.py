@@ -3,7 +3,7 @@ import subprocess
 
 from setuptools import setup
 
-with open("README.rst", "r") as fh:
+with open("README.md", "r") as fh:
     long_description = fh.read()
 
 data_files = []
@@ -28,7 +28,7 @@ setup(
     author="Michael Haggerty",
     author_email="mhagger@alum.mit.edu",
     long_description=long_description,
-    long_description_content_type="text/x-rst",
+    long_description_content_type="text/markdown",
     license="GPLv2+",
     py_modules=["gitimerge"],
     data_files=data_files,
