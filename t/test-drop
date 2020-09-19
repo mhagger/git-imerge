@@ -1,8 +1,6 @@
 #! /bin/sh
 
-# This should be executed in a clean working copy of the test repo.
-
-set -e
+set -ex
 
 BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
 . "$BASE/t/test-lib.sh"
