@@ -2260,6 +2260,12 @@ class Block(object):
             # One of the merges that we expected to succeed in
             # fact failed.
             merge_frontier.remove_failure(e.i1, e.i2)
+
+            if (e.i1, e.i2) == (1, 1):
+                # The failed merge was the first micromerge that we'd
+                # need for `best_block`, so record it as a blocker:
+                best_block[e.i1, e.i2].record_blocked(True)
+
             return self.auto_outline_frontier(merge_frontier)
         else:
             f1, f2 = merge_frontier.partition(best_block)
