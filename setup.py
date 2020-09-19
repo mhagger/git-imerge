@@ -24,7 +24,7 @@ setup(
     name="git-imerge",
     description="Incremental merge for git",
     url="https://github.com/mhagger/git-imerge",
-    version="1.1.0",
+    version="1.2.0",
     author="Michael Haggerty",
     author_email="mhagger@alum.mit.edu",
     long_description=long_description,
