@@ -5,5 +5,6 @@ include t/test-drop
 include t/test-duplicated
 include t/test-flip-flop
 include t/test-lib.sh
+include t/test-really-conflicted
 include t/test-unconflicted
 include tox.ini
