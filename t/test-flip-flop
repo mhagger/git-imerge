@@ -1,79 +1,119 @@
 #! /bin/sh
 
-# This should be executed in a clean working copy of the test repo.
+# Test a bunch of scenarios where branch `b` has a pair of commits,
+# the first of which conflicts with branch `a`, and the second of
+# which reverts that change. This tests the code for backtracking when
+# outlining. We try placing the conflict-revert pair at the beginning,
+# the middle, and the end of branch `b`, and we try merging both `b`
+# into `a` and `a` into `b`.
 
-set -e
-set -x
+set -ex
 
 BASE="$(dirname "$(cd $(dirname "$0") && pwd)")"
 . "$BASE/t/test-lib.sh"
 
 GIT_IMERGE="git-imerge"
-TMP="$BASE/t/tmp/flip-flop"
-DESCRIPTION="git-imerge test repository with a commit and its revert"
 
-# Set up a test repo with two branches, `a` and `b`, where `b` has a
-# commit that conflicts with one from `a` that is immediately
-# reverted. This should make it look like the whole block can be
-# merged, only to fail when outlining, forcing backtracking that
-# ultimately also fails.
-init_test_repo "$TMP" "$DESCRIPTION"
-cd "$TMP"
+test_merge() {
+    # The name of this test:
+    local name=$1
 
-modify a.txt 0
-commit -m 'm⇒0'
+    # The name of the branch being merged into:
+    local dst=$2
 
-git checkout -b a --
-for i in 1 2 3
+    # The name of the branch being merged from:
+    local src=$3
+
+    # The indexes of the first and second conflicting micromerges
+    # (e.g., "2-1"):
+    local conflict1=$4
+    local conflict2=$5
+
+    # Test merging branch `$dst` into `$src`:
+    git checkout $dst
+    "$GIT_IMERGE" merge --branch=$name $src 2>&1 | tee imerge-$name-1.out
+
+    "$GIT_IMERGE" diagram --commits --frontier
+
+    if ! grep -q "There was a conflict merging commit $conflict1" imerge-$name-1.out
+    then
+        echo "conflict at $conflict1 not detected"
+        exit 1
+    fi
+
+    # Fix the first conflict:
+    echo 1 >a.txt
+    git add a.txt
+    "$GIT_IMERGE" continue --no-edit 2>&1 | tee imerge-$name-2.out
+
+    "$GIT_IMERGE" diagram --commits --frontier
+
+    if ! grep -q "There was a conflict merging commit $conflict2" imerge-$name-2.out
+    then
+        echo "conflict at $conflict2 not detected"
+        exit 1
+    fi
+
+    # Fix the second conflict:
+    echo 1 >a.txt
+    git add a.txt
+    "$GIT_IMERGE" continue --no-edit 2>&1 | tee imerge-$name-3.out
+    if ! grep -q 'Merge is complete' imerge-$name-3.out
+    then
+        echo "merge failed"
+        exit 1
+    fi
+
+    "$GIT_IMERGE" diagram --commits --frontier
+
+    GIT_EDITOR=cat "$GIT_IMERGE" finish
+}
+
+flip_flop_test () {
+    local n="$1"
+
+    TMP="$BASE/t/tmp/flip-flop-$n"
+    DESCRIPTION="git-imerge test repository with a commit and its revert at n=$n"
+
+    init_test_repo "$TMP" "$DESCRIPTION"
+    cd "$TMP"
+
+    modify a.txt 0
+    commit -m 'm⇒0'
+
+    git checkout -b a --
+    for i in 1 2 3
+    do
+        modify a.txt $i
+        commit -m "a⇒$i on branch a"
+    done
+
+    git checkout -b b master --
+    for i in 1 2 3 4
+    do
+        modify b.txt $i
+        msg="b⇒$i"
+        if test $i = $n
+        then
+            modify a.txt X
+            msg="$msg and a⇒X"
+        fi
+        if test $i = $(( n + 1 ))
+        then
+            modify a.txt 0
+            msg="$msg and a⇒0"
+        fi
+        commit -m "$msg on branch b"
+    done
+
+    # Test merging `b` into `a`:
+    test_merge "b-into-a-$n" a b "1-$n" "1-$(( n + 1 ))"
+
+    # Test merging `a` into `b`:
+    test_merge "a-into-b-$n" b a "$n-1" "$(( n + 1 ))-1"
+}
+
+for n in 1 2 3
 do
-    modify a.txt $i
-    commit -m "a⇒$i on branch a"
+    flip_flop_test $n
 done
-
-git checkout -b b master --
-modify b.txt 1
-commit -m "b⇒1"
-modify a.txt X
-commit -m "a⇒X on branch b"
-modify a.txt 0
-commit -m "revert a⇒0 on branch b"
-modify b.txt 2
-commit -m "b⇒2"
-
-git checkout a
-"$GIT_IMERGE" merge b 2>&1 | tee imerge-1.out
-
-"$GIT_IMERGE" diagram --commits --frontier
-
-if ! grep -q 'There was a conflict merging commit 1-2' imerge-1.out
-then
-    echo "conflict along outline not detected"
-    exit 1
-fi
-
-# Fix the first conflict:
-echo 1 >a.txt
-git add a.txt
-"$GIT_IMERGE" continue --no-edit 2>&1 | tee imerge-2.out
-
-"$GIT_IMERGE" diagram --commits --frontier
-
-if ! grep -q 'There was a conflict merging commit 1-3' imerge-2.out
-then
-    echo "conflict along outline not detected"
-    exit 1
-fi
-
-# Fix the second conflict:
-echo 1 >a.txt
-git add a.txt
-"$GIT_IMERGE" continue --no-edit 2>&1 | tee imerge-3.out
-if ! grep -q 'Merge is complete' imerge-3.out
-then
-    echo "merge failed"
-    exit 1
-fi
-
-"$GIT_IMERGE" diagram --commits --frontier
-
-GIT_EDITOR=cat "$GIT_IMERGE" finish
