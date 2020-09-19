@@ -34,16 +34,46 @@ git checkout -b b master --
 modify b.txt 1
 commit -m "b⇒1"
 modify a.txt X
-commit -m "a⇒X"
+commit -m "a⇒X on branch b"
 modify a.txt 0
-commit -m "revert a⇒0"
+commit -m "revert a⇒0 on branch b"
 modify b.txt 2
 commit -m "b⇒2"
 
 git checkout a
-"$GIT_IMERGE" start --first-parent --name=a-b --branch=a-b-merge b 2>&1 | tee imerge.out
-if ! grep -q 'There was a conflict merging commit 1-2' imerge.out
+"$GIT_IMERGE" merge b 2>&1 | tee imerge-1.out
+
+"$GIT_IMERGE" diagram --commits --frontier
+
+if ! grep -q 'There was a conflict merging commit 1-2' imerge-1.out
 then
     echo "conflict along outline not detected"
     exit 1
 fi
+
+# Fix the first conflict:
+echo 1 >a.txt
+git add a.txt
+"$GIT_IMERGE" continue --no-edit 2>&1 | tee imerge-2.out
+
+"$GIT_IMERGE" diagram --commits --frontier
+
+if ! grep -q 'There was a conflict merging commit 1-3' imerge-2.out
+then
+    echo "conflict along outline not detected"
+    exit 1
+fi
+
+# Fix the second conflict:
+echo 1 >a.txt
+git add a.txt
+"$GIT_IMERGE" continue --no-edit 2>&1 | tee imerge-3.out
+if ! grep -q 'Merge is complete' imerge-3.out
+then
+    echo "merge failed"
+    exit 1
+fi
+
+"$GIT_IMERGE" diagram --commits --frontier
+
+GIT_EDITOR=cat "$GIT_IMERGE" finish
