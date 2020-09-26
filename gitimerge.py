@@ -1334,9 +1334,8 @@ def find_frontier_blocks(block):
     and conflicting in any row or column.
 
     Of course these assumptions are not rigorously true, so the
-    MergeFrontier returned by this function is only an
-    approximation of the real merge diagram.  We check for and
-    correct such inconsistencies later.
+    frontier blocks returned by this function are only an
+    approximation. We check for and correct inconsistencies later.
 
     """
 
@@ -1511,154 +1510,23 @@ def write_diagram_with_axes(f, diagram, tip1, tip2):
 
 
 class MergeFrontier(object):
-    """Represents the merge frontier within a Block.
-
-    A MergeFrontier is represented by a list of SubBlocks, each of
-    which is thought to be completely mergeable.  The list is kept in
-    normalized form:
-
-    * Only non-empty blocks are retained
-
-    * Blocks are sorted from bottom left to upper right
-
-    * No redundant blocks
+    """The merge frontier within a Block, and a strategy for filling it.
 
     """
-
-    @staticmethod
-    def map_known_frontier(block):
-        """Return the MergeFrontier describing existing successful merges in block.
-
-        The return value only includes the part that is fully outlined
-        and whose outline consists of rectangles reaching back to
-        (0,0).
-
-        A blocked commit is *not* considered to be within the
-        frontier, even if a merge is registered for it.  Such merges
-        must be explicitly unblocked."""
-
-        # FIXME: This algorithm can take combinatorial time, for
-        # example if there is a big block of merges that is a dead
-        # end:
-        #
-        #     +++++++
-        #     +?+++++
-        #     +?+++++
-        #     +?+++++
-        #     +?*++++
-        #
-        # The problem is that the algorithm will explore all of the
-        # ways of getting to commit *, and the number of paths grows
-        # like a binomial coefficient.  The solution would be to
-        # remember dead-ends and reject any curves that visit a point
-        # to the right of a dead-end.
-        #
-        # For now we don't intend to allow a situation like this to be
-        # created, so we ignore the problem.
-
-        # A list (i1, i2, down) of points in the path so far.  down is
-        # True iff the attempted step following this one was
-        # downwards.
-        path = []
-
-        def create_frontier(path):
-            blocks = []
-            for ((i1old, i2old, downold), (i1new, i2new, downnew)) in iter_neighbors(path):
-                if downold is True and downnew is False:
-                    blocks.append(block[:i1new + 1, :i2new + 1])
-            return MergeFrontier(block, blocks)
-
-        # Loop invariants:
-        #
-        # * path is a valid path
-        #
-        # * (i1, i2) is in block but it not yet added to path
-        #
-        # * down is True if a step downwards from (i1, i2) has not yet
-        #   been attempted
-        (i1, i2) = (block.len1 - 1, 0)
-        down = True
-        while True:
-            if down:
-                if i2 == block.len2 - 1:
-                    # Hit edge of block; can't move down:
-                    down = False
-                elif (i1, i2 + 1) in block and not block.is_blocked(i1, i2 + 1):
-                    # Can move down
-                    path.append((i1, i2, True))
-                    i2 += 1
-                else:
-                    # Can't move down.
-                    down = False
-            else:
-                if i1 == 0:
-                    # Success!
-                    path.append((i1, i2, False))
-                    return create_frontier(path)
-                elif (i1 - 1, i2) in block and not block.is_blocked(i1 - 1, i2):
-                    # Can move left
-                    path.append((i1, i2, False))
-                    down = True
-                    i1 -= 1
-                else:
-                    # There's no way to go forward; backtrack until we
-                    # find a place where we can still try going left:
-                    while True:
-                        try:
-                            (i1, i2, down) = path.pop()
-                        except IndexError:
-                            # This shouldn't happen because, in the
-                            # worst case, there is a valid path across
-                            # the top edge of the merge diagram.
-                            raise RuntimeError('Block is improperly formed!')
-                        if down:
-                            down = False
-                            break
-
-    @staticmethod
-    def compute_by_bisection(block):
-        """Return a MergeFrontier instance for block.
-
-        Compute the blocks making up the boundary using bisection. See
-        find_frontier_blocks() for more information.
-
-        """
-
-        return MergeFrontier(block, list(find_frontier_blocks(block)))
-
-    def __init__(self, block, blocks=None):
-        self.block = block
-        self.blocks = self._normalized_blocks(blocks or [])
-
-    def __iter__(self):
-        """Iterate over blocks from bottom left to upper right."""
-
-        return iter(self.blocks)
-
-    def __bool__(self):
-        """Return True iff this frontier has no completed parts."""
-
-        return bool(self.blocks)
-
-    def __nonzero__(self):
-        """Return True iff this frontier has no completed parts."""
-
-        return bool(self.blocks)
-
-    def is_complete(self):
-        """Return True iff the frontier covers the whole block."""
-
-        return (
-            len(self.blocks) == 1
-            and self.blocks[0].len1 == self.block.len1
-            and self.blocks[0].len2 == self.block.len2
-            )
 
     # Additional codes used in the 2D array returned from create_diagram()
     FRONTIER_WITHIN = 0x10
     FRONTIER_RIGHT_EDGE = 0x20
     FRONTIER_BOTTOM_EDGE = 0x40
     FRONTIER_MASK = 0x70
+
+    def __init__(self, block):
+        self.block = block
+
+    def __nonzero__(self):
+        """Alias for __bool__."""
+
+        return self.__bool__()
 
     @classmethod
     def default_formatter(cls, node, legend=None):
@@ -1687,59 +1555,18 @@ class MergeFrontier(object):
     def create_diagram(self):
         """Generate a diagram of this frontier.
 
-        The returned diagram is a nested list of integers forming a 2D array,
-        representing the merge frontier embedded in the diagram of commits
-        returned from Block.create_diagram().
+        The returned diagram is a nested list of integers forming a 2D
+        array, representing the merge frontier embedded in the diagram
+        of commits returned from Block.create_diagram().
 
-        At each node in the returned diagram is an integer whose value is a
-        bitwise-or of existing MERGE_* constant from Block.create_diagram()
-        and zero or more of the FRONTIER_* constants defined in this class."""
+        At each node in the returned diagram is an integer whose value
+        is a bitwise-or of existing MERGE_* constant from
+        Block.create_diagram() and possibly zero or more of the
+        FRONTIER_* constants defined in this class.
 
-        diagram = self.block.create_diagram()
+        """
 
-        try:
-            next_block = self.blocks[0]
-        except IndexError:
-            next_block = None
-
-        diagram[0][-1] |= self.FRONTIER_BOTTOM_EDGE
-        for i2 in range(1, self.block.len2):
-            if next_block is None or i2 >= next_block.len2:
-                diagram[0][i2] |= self.FRONTIER_RIGHT_EDGE
-
-        prev_block = None
-        for n in range(len(self.blocks)):
-            block = self.blocks[n]
-            try:
-                next_block = self.blocks[n + 1]
-            except IndexError:
-                next_block = None
-
-            for i1 in range(block.len1):
-                for i2 in range(block.len2):
-                    v = self.FRONTIER_WITHIN
-                    if i1 == block.len1 - 1 and (
-                            next_block is None or i2 >= next_block.len2
-                            ):
-                        v |= self.FRONTIER_RIGHT_EDGE
-                    if i2 == block.len2 - 1 and (
-                            prev_block is None or i1 >= prev_block.len1
-                            ):
-                        v |= self.FRONTIER_BOTTOM_EDGE
-                    diagram[i1][i2] |= v
-            prev_block = block
-
-        try:
-            prev_block = self.blocks[-1]
-        except IndexError:
-            prev_block = None
-
-        for i1 in range(1, self.block.len1):
-            if prev_block is None or i1 >= prev_block.len1:
-                diagram[i1][0] |= self.FRONTIER_BOTTOM_EDGE
-        diagram[-1][0] |= self.FRONTIER_RIGHT_EDGE
-
-        return diagram
+        return self.block.create_diagram()
 
     def format_diagram(self, formatter=None, diagram=None):
         if formatter is None:
@@ -1822,6 +1649,296 @@ class MergeFrontier(object):
             f.write('  </tr>\n')
         f.write('</table>\n</body>\n</html>\n')
 
+
+class FullMergeFrontier(MergeFrontier):
+    """A MergeFrontier that is to be filled completely.
+
+    """
+
+    @staticmethod
+    def map_known_frontier(block):
+        return FullMergeFrontier(block)
+
+    def __bool__(self):
+        """Return True iff this frontier contains any merges.
+
+        """
+
+        return (1, 1) in self.block
+
+    def is_complete(self):
+        """Return True iff the frontier covers the whole block."""
+
+        return (self.block.len1 - 1, self.block.len2 - 1) in self.block
+
+    def incorporate_merge(self, i1, i2):
+        """Incorporate a successful merge at (i1, i2).
+
+        Raise NotABlockingCommitError if that merge was not a blocker.
+
+        """
+
+        if not self.block[i1, i2].is_blocked():
+            raise NotABlockingCommitError(
+                'Commit %d-%d was not on the frontier.'
+                % self.block.get_original_indexes(i1, i2)
+                )
+        else:
+            self.block[i1, i2].record_blocked(False)
+
+    def auto_expand(self):
+        block = self.block
+        len2 = block.len2
+
+        blocker = None
+        for i1 in range(1, block.len1):
+            for i2 in range(1, len2):
+                if (i1, i2) in block:
+                    pass
+                elif block.is_blocked(i1, i2):
+                    if blocker is None:
+                        blocker = (i1, i2)
+                    len2 = i2
+                    # Done with this row:
+                    break
+                elif block.auto_fill_micromerge(i1, i2):
+                    # Merge successful
+                    pass
+                else:
+                    block[i1, i2].record_blocked(True)
+                    if blocker is None:
+                        blocker = (i1, i2)
+                    len2 = i2
+                    # Done with this row:
+                    break
+
+        if blocker:
+            i1orig, i2orig = self.block.get_original_indexes(*blocker)
+            raise FrontierBlockedError(
+                'Conflict; suggest manual merge of %d-%d' % (i1orig, i2orig),
+                i1orig, i2orig,
+                )
+        else:
+            raise BlockCompleteError('The block is already complete')
+
+
+class ManualMergeFrontier(FullMergeFrontier):
+    """A FullMergeFrontier that is to be filled completely by user merges.
+
+    """
+
+    @staticmethod
+    def map_known_frontier(block):
+        return ManualMergeFrontier(block)
+
+    def auto_expand(self):
+        block = self.block
+
+        for i1 in range(1, block.len1):
+            for i2 in range(1, block.len2):
+                if (i1, i2) not in block:
+                    i1orig, i2orig = block.get_original_indexes(i1, i2)
+                    raise FrontierBlockedError(
+                        'Manual merges requested; please merge %d-%d' % (i1orig, i2orig),
+                        i1orig, i2orig
+                        )
+
+        raise BlockCompleteError('The block is already complete')
+
+
+class BlockwiseMergeFrontier(MergeFrontier):
+    """A MergeFrontier that is filled blockwise, using outlining.
+
+    A BlockwiseMergeFrontier is represented by a list of SubBlocks,
+    each of which is thought to be completely mergeable. The list is
+    kept in normalized form:
+
+    * Only non-empty blocks are retained
+
+    * Blocks are sorted from bottom left to upper right
+
+    * No redundant blocks
+
+    """
+
+    @staticmethod
+    def map_known_frontier(block):
+        """Return the object describing existing successful merges in block.
+
+        The return value only includes the part that is fully outlined
+        and whose outline consists of rectangles reaching back to
+        (0,0).
+
+        A blocked commit is *not* considered to be within the
+        frontier, even if a merge is registered for it.  Such merges
+        must be explicitly unblocked."""
+
+        # FIXME: This algorithm can take combinatorial time, for
+        # example if there is a big block of merges that is a dead
+        # end:
+        #
+        #     +++++++
+        #     +?+++++
+        #     +?+++++
+        #     +?+++++
+        #     +?*++++
+        #
+        # The problem is that the algorithm will explore all of the
+        # ways of getting to commit *, and the number of paths grows
+        # like a binomial coefficient.  The solution would be to
+        # remember dead-ends and reject any curves that visit a point
+        # to the right of a dead-end.
+        #
+        # For now we don't intend to allow a situation like this to be
+        # created, so we ignore the problem.
+
+        # A list (i1, i2, down) of points in the path so far.  down is
+        # True iff the attempted step following this one was
+        # downwards.
+        path = []
+
+        def create_frontier(path):
+            blocks = []
+            for ((i1old, i2old, downold), (i1new, i2new, downnew)) in iter_neighbors(path):
+                if downold is True and downnew is False:
+                    blocks.append(block[:i1new + 1, :i2new + 1])
+            return BlockwiseMergeFrontier(block, blocks)
+
+        # Loop invariants:
+        #
+        # * path is a valid path
+        #
+        # * (i1, i2) is in block but it not yet added to path
+        #
+        # * down is True if a step downwards from (i1, i2) has not yet
+        #   been attempted
+        (i1, i2) = (block.len1 - 1, 0)
+        down = True
+        while True:
+            if down:
+                if i2 == block.len2 - 1:
+                    # Hit edge of block; can't move down:
+                    down = False
+                elif (i1, i2 + 1) in block and not block.is_blocked(i1, i2 + 1):
+                    # Can move down
+                    path.append((i1, i2, True))
+                    i2 += 1
+                else:
+                    # Can't move down.
+                    down = False
+            else:
+                if i1 == 0:
+                    # Success!
+                    path.append((i1, i2, False))
+                    return create_frontier(path)
+                elif (i1 - 1, i2) in block and not block.is_blocked(i1 - 1, i2):
+                    # Can move left
+                    path.append((i1, i2, False))
+                    down = True
+                    i1 -= 1
+                else:
+                    # There's no way to go forward; backtrack until we
+                    # find a place where we can still try going left:
+                    while True:
+                        try:
+                            (i1, i2, down) = path.pop()
+                        except IndexError:
+                            # This shouldn't happen because, in the
+                            # worst case, there is a valid path across
+                            # the top edge of the merge diagram.
+                            raise RuntimeError('Block is improperly formed!')
+                        if down:
+                            down = False
+                            break
+
+    @staticmethod
+    def initiate_merge(block):
+        """Return a BlockwiseMergeFrontier instance for block.
+
+        Compute the blocks making up the boundary using bisection (see
+        find_frontier_blocks() for more information). Outline the
+        blocks, then return a BlockwiseMergeFrontier reflecting the
+        final result.
+
+        """
+
+        top_level_frontier = BlockwiseMergeFrontier(
+            block, list(find_frontier_blocks(block)),
+            )
+
+        # Now outline the mergeable blocks, backtracking if there are
+        # any unexpected merge failures:
+
+        frontier = top_level_frontier
+        while frontier:
+            subblock = next(iter(frontier))
+
+            try:
+                subblock.auto_outline()
+            except UnexpectedMergeFailure as e:
+                # One of the merges that we expected to succeed in
+                # fact failed.
+                frontier.remove_failure(e.i1, e.i2)
+
+                if (e.i1, e.i2) == (1, 1):
+                    # The failed merge was the first micromerge that we'd
+                    # need for `best_block`, so record it as a blocker:
+                    subblock[1, 1].record_blocked(True)
+
+                if frontier is not top_level_frontier:
+                    # Report that failure back to the top-level
+                    # frontier, too (but first we have to translate
+                    # the indexes):
+                    (i1orig, i2orig) = subblock.get_original_indexes(e.i1, e.i2)
+                    top_level_frontier.remove_failure(
+                        *block.convert_original_indexes(i1orig, i2orig),
+                        )
+                # Restart loop for the same frontier...
+            else:
+                # We're only interested in subfrontiers that contain
+                # mergeable subblocks:
+                sub_frontiers = [f for f in frontier.partition(subblock) if f]
+                if not sub_frontiers:
+                    break
+
+                # Since we just outlined the first (i.e., leftmost)
+                # mergeable block in `frontier`,
+                # `frontier.partition()` can at most have returned a
+                # single non-empty value, namely one to the right of
+                # `subblock`.
+                [frontier] = sub_frontiers
+
+        return top_level_frontier
+
+    def __init__(self, block, blocks=None):
+        MergeFrontier.__init__(self, block)
+        self.blocks = self._normalized_blocks(blocks or [])
+
+    def __iter__(self):
+        """Iterate over blocks from bottom left to upper right."""
+
+        return iter(self.blocks)
+
+    def __bool__(self):
+        """Return True iff this frontier contains any SubBlocks.
+
+        Return True if this BlockwiseMergeFrontier contains any
+        SubBlocks that are thought to be completely mergeable (whether
+        they have been outlined or not).
+
+        """
+
+        return bool(self.blocks)
+
+    def is_complete(self):
+        """Return True iff the frontier covers the whole block."""
+
+        return (
+            len(self.blocks) == 1
+            and self.blocks[0].len1 == self.block.len1
+            and self.blocks[0].len2 == self.block.len2
+            )
+
     @staticmethod
     def _normalized_blocks(blocks):
         """Return a normalized list of blocks from the argument.
@@ -1881,13 +1998,15 @@ class MergeFrontier(object):
             self.blocks = self._normalized_blocks(newblocks)
 
     def partition(self, block):
-        """Return two MergeFrontier instances partitioned by block.
+        """Iterate over the BlockwiseMergeFrontiers partitioned by block.
 
-        Return (frontier1, frontier2), where each frontier is limited
-        to each side of the argument.
+        Iterate over the zero, one, or two BlockwiseMergeFrontiers to
+        the left and/or right of block.
 
-        block must be contained in this MergeFrontier and already be
-        outlined."""
+        block must be contained in this frontier and already be
+        outlined.
+
+        """
 
         # Remember that the new blocks have to include the outlined
         # edge of the partitioning block to satisfy the invariant that
@@ -1905,30 +2024,38 @@ class MergeFrontier(object):
                 right.append(b[block.len1 - 1:, :])
             else:
                 raise ValueError(
-                    'MergeFrontier partitioned with inappropriate block'
+                    'BlockwiseMergeFrontier partitioned with inappropriate block'
                     )
-        return (
-            MergeFrontier(self.block[:block.len1, block.len2 - 1:], left),
-            MergeFrontier(self.block[block.len1 - 1:, :block.len2], right),
-            )
+
+        if block.len2 < self.block.len2:
+            yield BlockwiseMergeFrontier(self.block[:block.len1, block.len2 - 1:], left)
+
+        if block.len1 < self.block.len1:
+            yield BlockwiseMergeFrontier(self.block[block.len1 - 1:, :block.len2], right)
+
+    def iter_boundary_blocks(self):
+        """Iterate over the complete blocks that form this block's boundary.
+
+        Iterate over them from bottom left to top right. This is like
+        self.blocks, except that it also includes the implicit blocks
+        at self.block[0, :] and self.blocks[:, 0] if they are needed
+        to complete the boundary.
+
+        """
+
+        if not self or self.blocks[0].len2 < self.block.len2:
+            yield self.block[0, :]
+        for block in self:
+            yield block
+        if not self or self.blocks[-1].len1 < self.block.len1:
+            yield self.block[:, 0]
 
     def iter_blocker_blocks(self):
         """Iterate over the blocks on the far side of this frontier.
 
         This must only be called for an outlined frontier."""
 
-        if not self:
-            yield self.block
-            return
-
-        blockruns = []
-        if self.blocks[0].len2 < self.block.len2:
-            blockruns.append([self.block[0, :]])
-        blockruns.append(self)
-        if self.blocks[-1].len1 < self.block.len1:
-            blockruns.append([self.block[:, 0]])
-
-        for block1, block2 in iter_neighbors(itertools.chain(*blockruns)):
+        for block1, block2 in iter_neighbors(self.iter_boundary_blocks()):
             yield self.block[block1.len1 - 1:block2.len1, block2.len2 - 1: block1.len2]
 
     def get_affected_blocker_block(self, i1, i2):
@@ -1958,6 +2085,16 @@ class MergeFrontier(object):
                 % self.block.get_original_indexes(i1, i2)
                 )
 
+    def incorporate_merge(self, i1, i2):
+        """Incorporate a successful merge at (i1, i2).
+
+        Raise NotABlockingCommitError if that merge was not a blocker.
+
+        """
+
+        unblocked_block = self.get_affected_blocker_block(i1, i2)
+        unblocked_block[1, 1].record_blocked(False)
+
     def auto_expand(self):
         """Try pushing out one of the blocks on this frontier.
 
@@ -1975,7 +2112,8 @@ class MergeFrontier(object):
         blocks.sort(key=lambda block: block.get_original_indexes(0, 0))
 
         for block in blocks:
-            if block.auto_expand_frontier():
+            merge_frontier = BlockwiseMergeFrontier.initiate_merge(block)
+            if bool(merge_frontier):
                 return
         else:
             # None of the blocks could be expanded.  Suggest that the
@@ -1986,6 +2124,60 @@ class MergeFrontier(object):
                 'Conflict; suggest manual merge of %d-%d' % (i1, i2),
                 i1, i2
                 )
+
+    def create_diagram(self):
+        """Generate a diagram of this frontier.
+
+        This method adds FRONTIER_* bits to the diagram generated by
+        the super method.
+
+        """
+
+        diagram = MergeFrontier.create_diagram(self)
+
+        try:
+            next_block = self.blocks[0]
+        except IndexError:
+            next_block = None
+
+        diagram[0][-1] |= self.FRONTIER_BOTTOM_EDGE
+        for i2 in range(1, self.block.len2):
+            if next_block is None or i2 >= next_block.len2:
+                diagram[0][i2] |= self.FRONTIER_RIGHT_EDGE
+
+        prev_block = None
+        for n in range(len(self.blocks)):
+            block = self.blocks[n]
+            try:
+                next_block = self.blocks[n + 1]
+            except IndexError:
+                next_block = None
+
+            for i1 in range(block.len1):
+                for i2 in range(block.len2):
+                    v = self.FRONTIER_WITHIN
+                    if i1 == block.len1 - 1 and (
+                            next_block is None or i2 >= next_block.len2
+                            ):
+                        v |= self.FRONTIER_RIGHT_EDGE
+                    if i2 == block.len2 - 1 and (
+                            prev_block is None or i1 >= prev_block.len1
+                            ):
+                        v |= self.FRONTIER_BOTTOM_EDGE
+                    diagram[i1][i2] |= v
+            prev_block = block
+
+        try:
+            prev_block = self.blocks[-1]
+        except IndexError:
+            prev_block = None
+
+        for i1 in range(1, self.block.len1):
+            if prev_block is None or i1 >= prev_block.len1:
+                diagram[i1][0] |= self.FRONTIER_BOTTOM_EDGE
+        diagram[-1][0] |= self.FRONTIER_RIGHT_EDGE
+
+        return diagram
 
 
 class NoManualMergeError(Exception):
@@ -2128,11 +2320,12 @@ class Block(object):
                 )
             try:
                 self.git.automerge(self[i1, 0].sha1, self[0, i2].sha1)
-                sys.stderr.write('success.\n')
-                return True
             except AutomaticMergeFailed:
                 sys.stderr.write('failure.\n')
                 return False
+            else:
+                sys.stderr.write('success.\n')
+                return True
 
     def auto_outline(self):
         """Complete the outline of this Block.
@@ -2151,10 +2344,12 @@ class Block(object):
             logmsg = 'imerge \'%s\': automatic merge %d-%d' % (self.name, i1orig, i2orig)
             try:
                 merge = self.git.automerge(commit1, commit2, msg=logmsg)
-                sys.stderr.write('success.\n')
             except AutomaticMergeFailed as e:
                 sys.stderr.write('unexpected conflict.  Backtracking...\n')
                 raise UnexpectedMergeFailure(str(e), i1, i2)
+            else:
+                sys.stderr.write('success.\n')
+
             if record:
                 merges.append((i1, i2, merge))
             return merge
@@ -2212,16 +2407,17 @@ class Block(object):
         for (i1, i2, merge) in merges:
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
 
-    def auto_fill_micromerge(self):
-        """Try to fill the very first micromerge in this block.
+    def auto_fill_micromerge(self, i1=1, i2=1):
+        """Try to fill micromerge (i1, i2) in this block (default (1, 1)).
 
         Return True iff the attempt was successful."""
 
-        assert (1, 1) not in self
-        if self.len1 <= 1 or self.len2 <= 1 or self.is_blocked(1, 1):
+        assert (i1, i2) not in self
+        assert (i1 - 1, i2) in self
+        assert (i1, i2 - 1) in self
+        if self.len1 <= i1 or self.len2 <= i2 or self.is_blocked(i1, i2):
             return False
 
-        i1, i2 = 1, 1
         (i1orig, i2orig) = self.get_original_indexes(i1, i2)
         sys.stderr.write('Attempting to merge %d-%d...' % (i1orig, i2orig))
         logmsg = 'imerge \'%s\': automatic merge %d-%d' % (self.name, i1orig, i2orig)
@@ -2231,58 +2427,14 @@ class Block(object):
                 self[i1 - 1, i2].sha1,
                 msg=logmsg,
                 )
-            sys.stderr.write('success.\n')
         except AutomaticMergeFailed:
             sys.stderr.write('conflict.\n')
             self[i1, i2].record_blocked(True)
             return False
         else:
+            sys.stderr.write('success.\n')
             self[i1, i2].record_merge(merge, MergeRecord.NEW_AUTO)
             return True
-
-    def auto_outline_frontier(self, merge_frontier=None):
-        """Try to outline the merge frontier of this block.
-
-        Return True iff some progress was made."""
-
-        if merge_frontier is None:
-            merge_frontier = MergeFrontier.compute_by_bisection(self)
-
-        if not merge_frontier:
-            # Nothing to do.
-            return False
-
-        best_block = max(merge_frontier, key=lambda block: block.get_original_indexes(0, 0))
-
-        try:
-            best_block.auto_outline()
-        except UnexpectedMergeFailure as e:
-            # One of the merges that we expected to succeed in
-            # fact failed.
-            merge_frontier.remove_failure(e.i1, e.i2)
-
-            if (e.i1, e.i2) == (1, 1):
-                # The failed merge was the first micromerge that we'd
-                # need for `best_block`, so record it as a blocker:
-                best_block[e.i1, e.i2].record_blocked(True)
-
-            return self.auto_outline_frontier(merge_frontier)
-        else:
-            f1, f2 = merge_frontier.partition(best_block)
-            if f1:
-                f1.block.auto_outline_frontier(f1)
-            if f2:
-                f2.block.auto_outline_frontier(f2)
-            return True
-
-    def auto_expand_frontier(self):
-        merge_state = self.get_merge_state()
-        if merge_state.manual:
-            return False
-        elif merge_state.goal == 'full':
-            return self.auto_fill_micromerge()
-        else:
-            return self.auto_outline_frontier()
 
     # The codes in the 2D array returned from create_diagram()
     MERGE_UNKNOWN = 0
@@ -2645,6 +2797,18 @@ class MergeState(Block):
         value = self._data[i1][i2]
         return (value is not None) and value.is_known()
 
+    def map_frontier(self):
+        """Return a MergeFrontier instance describing the current frontier.
+
+        """
+
+        if self.manual:
+            return ManualMergeFrontier.map_known_frontier(self)
+        elif self.goal == 'full':
+            return FullMergeFrontier.map_known_frontier(self)
+        else:
+            return BlockwiseMergeFrontier.map_known_frontier(self)
+
     def auto_complete_frontier(self):
         """Complete the frontier using automerges.
 
@@ -2655,14 +2819,15 @@ class MergeState(Block):
         progress_made = False
         try:
             while True:
-                frontier = MergeFrontier.map_known_frontier(self)
-                frontier.auto_expand()
-                self.save()
+                frontier = self.map_frontier()
+                try:
+                    frontier.auto_expand()
+                finally:
+                    self.save()
                 progress_made = True
         except BlockCompleteError:
             return
         except FrontierBlockedError as e:
-            self.save()
             if not progress_made:
                 # Adjust the error message:
                 raise FrontierBlockedError(
@@ -2837,8 +3002,6 @@ class MergeState(Block):
 
         self.git.require_clean_work_tree('proceed')
 
-        merge_frontier = MergeFrontier.map_known_frontier(self)
-
         # This might throw ManualMergeUnusableError:
         (i1, i2) = self.incorporate_manual_merge(commit)
 
@@ -2849,16 +3012,14 @@ class MergeState(Block):
             refname, 'imerge %s: remove scratch reference' % (self.name,),
             )
 
+        merge_frontier = self.map_frontier()
         try:
             # This might throw NotABlockingCommitError:
-            unblocked_block = merge_frontier.get_affected_blocker_block(i1, i2)
-            unblocked_block[1, 1].record_blocked(False)
+            merge_frontier.incorporate_merge(i1, i2)
             sys.stderr.write(
                 'Merge has been recorded for merge %d-%d.\n'
-                % unblocked_block.get_original_indexes(1, 1)
+                % self.get_original_indexes(i1, i2)
                 )
-        except NotABlockingCommitError:
-            raise
         finally:
             self.save()
 
@@ -3726,8 +3887,7 @@ def cmd_simplify(parser, options):
     git = GitRepository()
     git.require_clean_work_tree('proceed')
     merge_state = read_merge_state(git, options.name)
-    merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-    if not merge_frontier.is_complete():
+    if not merge_state.map_frontier().is_complete():
         raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
     refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
     if options.goal is not None:
@@ -3740,8 +3900,7 @@ def cmd_finish(parser, options):
     git = GitRepository()
     git.require_clean_work_tree('proceed')
     merge_state = read_merge_state(git, options.name)
-    merge_frontier = MergeFrontier.map_known_frontier(merge_state)
-    if not merge_frontier.is_complete():
+    if not merge_state.map_frontier().is_complete():
         raise Failure('Merge %s is not yet complete!' % (merge_state.name,))
     refname = 'refs/heads/%s' % ((options.branch or merge_state.branch),)
     if options.goal is not None:
@@ -3763,11 +3922,11 @@ def cmd_diagram(parser, options):
         merge_state.write(sys.stdout, merge_state.tip1, merge_state.tip2)
         sys.stdout.write('\n')
     if options.frontier:
-        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+        merge_frontier = merge_state.map_frontier()
         merge_frontier.write(sys.stdout, merge_state.tip1, merge_state.tip2)
         sys.stdout.write('\n')
     if options.html:
-        merge_frontier = MergeFrontier.map_known_frontier(merge_state)
+        merge_frontier = merge_state.map_frontier()
         html = open(options.html, 'w')
         merge_frontier.write_html(html, merge_state.name)
         html.close()
