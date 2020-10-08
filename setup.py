@@ -22,7 +22,7 @@ else:
 
 setup(
     name="git-imerge",
-    description="Incremental merge for git",
+    description="Incremental merge and rebase for Git",
     url="https://github.com/mhagger/git-imerge",
     version="1.2.0",
     author="Michael Haggerty",
