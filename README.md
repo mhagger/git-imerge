@@ -268,6 +268,9 @@ To run with a specific Python version, such as 3.7, pass the `-e` argument to `t
 
 `git-imerge` is released as open-source software under the GNU General Public License (GPL), version 2 or later. See file `COPYING` for more information.
 
+## Alternatives
+
+* [mergify](https://github.com/brooksdavis/mergify): merge changes from a branch one commit at a time
 
 ## References
 
