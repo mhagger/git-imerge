@@ -8,9 +8,9 @@ Perform a merge between two branches incrementally. If conflicts are encountered
 
 * Allow a merge to be saved, tested, interrupted, published, and collaborated on while it is in progress.
 
-I think that it is easiest to understand the concept of incremental merging visually, and therefore I recommend the video of my [git-imerge presentation from the GitMerge 2013 conference](http://www.youtube.com/watch?v=FMZ2_-Ny_zc) (20 min) as a good place to start. The full slides for that talk are available in this repository under `doc/presentations/GitMerge-2013`. At the same conference, I was interviewed about `git-imerge` by Thomas Ferris Nicolaisen for his [GitMinutes Podcast #12](http://episodes.gitminutes.com/2013/06/gitminutes-12-git-merge-2013-part-4.html).
+I think that it is easiest to understand the concept of incremental merging visually, and therefore I recommend the video of my [git-imerge presentation from the GitMerge 2013 conference](https://www.youtube.com/watch?v=FMZ2_-Ny_zc) (20 min) as a good place to start. The full slides for that talk are available in this repository under `doc/presentations/GitMerge-2013`. At the same conference, I was interviewed about `git-imerge` by Thomas Ferris Nicolaisen for his [GitMinutes Podcast #12](https://episodes.gitminutes.com/2013/06/gitminutes-12-git-merge-2013-part-4.html).
 
-To learn how to use the `git-imerge` tool itself, I suggest the blog article [git-imerge: A Practical Introduction](http://softwareswirl.blogspot.com/2013/05/git-imerge-practical-introduction.html) and also typing `git-imerge --help` and `git-imerge SUBCOMMAND --help`. If you want more information, the theory and benefits of incremental merging are described in minute detail in a series of blog articles [[1](#REF1)], as are the benefits of retaining history when doing a rebase [[2](#REF2)].
+To learn how to use the `git-imerge` tool itself, I suggest the blog article [git-imerge: A Practical Introduction](https://softwareswirl.blogspot.com/2013/05/git-imerge-practical-introduction.html) and also typing `git-imerge --help` and `git-imerge SUBCOMMAND --help`. If you want more information, the theory and benefits of incremental merging are described in minute detail in a series of blog articles [[1](#REF1)], as are the benefits of retaining history when doing a rebase [[2](#REF2)].
 
 Multiple incremental merges can be in progress at the same time. Each incremental merge has a name, and its progress is recorded in the Git repository as references under `refs/imerge/NAME`. The current state of an incremental merge can be visualized using the `diagram` command.
 
@@ -272,15 +272,15 @@ To run with a specific Python version, such as 3.7, pass the `-e` argument to `t
 ## References
 
 <a name="REF1">[1]</a>
-* http://softwareswirl.blogspot.com/2012/12/the-conflict-frontier-of-nightmare-merge.html
-* http://softwareswirl.blogspot.com/2012/12/mapping-merge-conflict-frontier.html
-* http://softwareswirl.blogspot.com/2012/12/real-world-conflict-diagrams.html
-* http://softwareswirl.blogspot.com/2013/05/git-incremental-merge.html
-* http://softwareswirl.blogspot.com/2013/05/one-merge-to-rule-them-all.html
-* http://softwareswirl.blogspot.com/2013/05/incremental-merge-vs-direct-merge-vs.html
-* http://softwareswirl.blogspot.com/2013/05/git-imerge-practical-introduction.html
+* https://softwareswirl.blogspot.com/2012/12/the-conflict-frontier-of-nightmare-merge.html
+* https://softwareswirl.blogspot.com/2012/12/mapping-merge-conflict-frontier.html
+* https://softwareswirl.blogspot.com/2012/12/real-world-conflict-diagrams.html
+* https://softwareswirl.blogspot.com/2013/05/git-incremental-merge.html
+* https://softwareswirl.blogspot.com/2013/05/one-merge-to-rule-them-all.html
+* https://softwareswirl.blogspot.com/2013/05/incremental-merge-vs-direct-merge-vs.html
+* https://softwareswirl.blogspot.com/2013/05/git-imerge-practical-introduction.html
 
 <a name="REF2">[2]</a>
-* http://softwareswirl.blogspot.com/2009/04/truce-in-merge-vs-rebase-war.html
-* http://softwareswirl.blogspot.com/2009/08/upstream-rebase-just-works-if-history.html
-* http://softwareswirl.blogspot.com/2009/08/rebase-with-history-implementation.html
+* https://softwareswirl.blogspot.com/2009/04/truce-in-merge-vs-rebase-war.html
+* https://softwareswirl.blogspot.com/2009/08/upstream-rebase-just-works-if-history.html
+* https://softwareswirl.blogspot.com/2009/08/rebase-with-history-implementation.html
