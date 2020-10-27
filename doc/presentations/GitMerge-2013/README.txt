@@ -4,6 +4,6 @@ on "User Day".
 (I gave another, more technical talk on a whiteboard the day before at
 "Developer Day".)
 
-To convert it into HTML, run "make html" in the top-level directory.
+To convert it into HTML, run "make html" in this directory.
 
 -- Michael Haggerty
