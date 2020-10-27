@@ -22,7 +22,7 @@ git-imerge
 
    | Michael Haggerty
    | ``mhagger@alum.mit.edu``
-   | ``http://softwareswirl.blogspot.com/``
+   | ``https://softwareswirl.blogspot.com/``
 
 Overview
 ========
@@ -1375,7 +1375,7 @@ main Git repository).
    |     ``https://github.com/mhagger/git-imerge``
 
    | For more details, see my blog "SoftwareSwirl":
-   |     ``http://softwareswirl.blogspot.com/``
+   |     ``https://softwareswirl.blogspot.com/``
    
    Thank you for your attention!
 
