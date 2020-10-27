@@ -1891,8 +1891,7 @@ class BlockwiseMergeFrontier(MergeFrontier):
                     # the indexes):
                     (i1orig, i2orig) = subblock.get_original_indexes(e.i1, e.i2)
                     top_level_frontier.remove_failure(
-                        *block.convert_original_indexes(i1orig, i2orig),
-                        )
+                        *block.convert_original_indexes(i1orig, i2orig))
                 # Restart loop for the same frontier...
             else:
                 # We're only interested in subfrontiers that contain
