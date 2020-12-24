@@ -13,7 +13,7 @@
 
 ## Convenience features
 
-* Add a two-argument form of the `start` and `init` commands to specify both branches in one go. (Or maybe not, if we want to leave the way open to supporting octipus merges!) Maybe `--onto=X` like rebase?
+* Add a two-argument form of the `start` and `init` commands to specify both branches in one go. (Or maybe not, if we want to leave the way open to supporting octopus merges!) Maybe `--onto=X` like rebase?
 
 * Improve the handling of log messages. Incorporate log messages from manual merge conflicts into suggested log messages for the simplified commits.
 
