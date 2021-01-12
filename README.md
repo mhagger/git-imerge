@@ -45,6 +45,9 @@ or using `setup.py` if you have downloaded the source package locally:
 
     $ python setup.py install
 
+If you are on macOS, you can use Homebrew to install `git-imerge`:
+
+    $ brew install git-imerge
 
 ## Instructions
 
