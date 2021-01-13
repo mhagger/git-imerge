@@ -36,7 +36,7 @@ Bash completion requires Git's completion being available.
 
 ## Installation
 
-`git-imerge` is available on PyPI_, so you can install it with `pip`:
+`git-imerge` is available on [PyPI](https://pypi.org), so you can install it with `pip`:
 
     $ pip install git-imerge
 
@@ -45,7 +45,7 @@ or using `setup.py` if you have downloaded the source package locally:
 
     $ python setup.py install
 
-If you are on macOS, you can use Homebrew to install `git-imerge`:
+If you prefer, you can use [Homebrew](https://brew.sh) to install `git-imerge`:
 
     $ brew install git-imerge
 
@@ -258,7 +258,7 @@ When `git imerge continue` or `git imerge record` finds a resolved merge in the 
 
 ## Testing
 
-`git-imerge` uses [`tox`](https://tox.readthedocs.io/) to run tests. To run the test suite with the system's default Python:
+`git-imerge` uses [`tox`](https://tox.readthedocs.io) to run tests. To run the test suite with the system's default Python:
 
     $ tox
 
