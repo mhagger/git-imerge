@@ -3934,17 +3934,26 @@ def cmd_diagram(parser, options):
     sys.stdout.write(
         'Key:                                                    Map:\n'
         )
+
+    # axis for minimap
+    lastx = merge_state.len1-1
+    lasty = merge_state.len2-1
+    if lastx < 4:
+        xaxis = 'o-' + '-'.join(str(i) for i in range(lastx+1))
+    else:
+        xaxis = 'o-0-1-2..' + str(lastx)
+    xaxis += '  %s' % str(merge_state.tip1)
+
     sys.stdout.write(
-        '  * = merge done manually                                 o-0-1-2..-%(len1)d  %(tip1)s\n'
+        '  * = merge done manually                                 %(xaxis)s\n'
         '  . = merge done automatically                              1\n'
         '  # = conflict that is currently blocking progress         ..\n'
         '  @ = merge was blocked but has been resolved           %(len2)5d\n'
         '  ? = no merge recorded                                    %(tip2)s\n'
         '' % {
-            'tip1': merge_state.tip1,
+            'xaxis': xaxis,
             'tip2': merge_state.tip2,
-            'len1': merge_state.len1-1,
-            'len2': merge_state.len2-1}
+            'len2': lasty}
         )
     if options.frontier:
         sys.stdout.write(
