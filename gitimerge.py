@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # -*- coding: utf-8 -*-
 
 # Copyright 2012-2013 Michael Haggerty <mhagger@alum.mit.edu>
@@ -3936,7 +3938,7 @@ def cmd_diagram(parser, options):
         '  * = merge done manually                                 o-0-1-2..-%(len1)d  %(tip1)s\n'
         '  . = merge done automatically                              1\n'
         '  # = conflict that is currently blocking progress         ..\n'
-        '  @ = merge was blocked but has been resolved           %(len2)4d\n'
+        '  @ = merge was blocked but has been resolved           %(len2)5d\n'
         '  ? = no merge recorded                                    %(tip2)s\n'
         '' % {
             'tip1': merge_state.tip1,
