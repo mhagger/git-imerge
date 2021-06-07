@@ -3947,7 +3947,7 @@ def cmd_diagram(parser, options):
     sys.stdout.write(
         '  * = merge done manually                                 %(xaxis)s\n'
         '  . = merge done automatically                              1\n'
-        '  # = conflict that is currently blocking progress         ..\n'
+        '  # = conflict that is currently blocking progress          :\n'
         '  @ = merge was blocked but has been resolved           %(len2)5d\n'
         '  ? = no merge recorded                                    %(tip2)s\n'
         '' % {
