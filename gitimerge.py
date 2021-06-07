@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # -*- coding: utf-8 -*-
 
 # Copyright 2012-2013 Michael Haggerty <mhagger@alum.mit.edu>
@@ -3930,20 +3932,34 @@ def cmd_diagram(parser, options):
         merge_frontier.write_html(html, merge_state.name)
         html.close()
     sys.stdout.write(
-        'Key:\n'
+        'Key:                                                    Map:\n'
+        )
+
+    # axis for minimap
+    lastx = merge_state.len1-1
+    lasty = merge_state.len2-1
+    if lastx < 4:
+        xaxis = 'o-' + '-'.join(str(i) for i in range(lastx+1))
+    else:
+        xaxis = 'o-0-1-2..' + str(lastx)
+    xaxis += '  %s' % str(merge_state.tip1)
+
+    sys.stdout.write(
+        '  * = merge done manually                                 %(xaxis)s\n'
+        '  . = merge done automatically                              1\n'
+        '  # = conflict that is currently blocking progress          :\n'
+        '  @ = merge was blocked but has been resolved           %(len2)5d\n'
+        '  ? = no merge recorded                                    %(tip2)s\n'
+        '' % {
+            'xaxis': xaxis,
+            'tip2': merge_state.tip2,
+            'len2': lasty}
         )
     if options.frontier:
         sys.stdout.write(
             '  |,-,+ = rectangles forming current merge frontier\n'
             )
-    sys.stdout.write(
-        '  * = merge done manually\n'
-        '  . = merge done automatically\n'
-        '  # = conflict that is currently blocking progress\n'
-        '  @ = merge was blocked but has been resolved\n'
-        '  ? = no merge recorded\n'
-        '\n'
-        )
+    sys.stdout.write('\n')
 
 
 def reparent_recursively(git, start_commit, parents, end_commit):
