@@ -668,7 +668,10 @@ class GitRepository(object):
     def manualmerge(self, commit, msg):
         """Initiate a merge of commit into the current HEAD."""
 
-        check_call(['git', 'merge', '--no-commit', '-m', msg, commit,])
+        check_call([
+            'git', '-c', 'rerere.enabled=false',
+            'merge', '--no-commit', '-m', msg, commit,
+        ])
 
     def require_clean_work_tree(self, action):
         """Verify that the current tree is clean.
