@@ -40,14 +40,13 @@ Bash completion requires Git's completion being available.
 
     $ pip install git-imerge
 
-
 or using `setup.py` if you have downloaded the source package locally:
 
     $ python setup.py install
 
-If you prefer, you can use [Homebrew](https://brew.sh) to install `git-imerge`:
-
-    $ brew install git-imerge
+`git-imerge` is also available to install from
+[package managers](https://repology.org/project/git-imerge/versions)
+on several platforms.
 
 ## Instructions
 
