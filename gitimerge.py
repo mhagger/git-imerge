@@ -1349,7 +1349,7 @@ def find_frontier_blocks(block):
         return
 
     if block.is_mergeable(block.len1 - 1, block.len2 - 1):
-        # The whole block is mergable!
+        # The whole block is mergeable!
         yield block
         return
 
