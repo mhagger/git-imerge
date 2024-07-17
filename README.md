@@ -16,7 +16,7 @@ Multiple incremental merges can be in progress at the same time. Each incrementa
 
 An incremental merge can be interrupted and resumed arbitrarily, or even pushed to a server to allow somebody else to work on it.
 
-`git-imerge` comes with a Bash completion script, `completions/git-imerge`, which is installed automatically when installing `git-imerge`.
+`git-imerge` comes with a Bash completion script, `completions/git-imerge`, which is installed automatically when installing `git-imerge`. It also comes with a Zsh completion script, `completions/_git-imerge`, which can be installed manually by copying it to a folder in your `$fpath`.
 
 
 ## Requirements
@@ -31,7 +31,7 @@ An incremental merge can be interrupted and resumed arbitrarily, or even pushed 
 
 * A recent version of Git.
 
-Bash completion requires Git's completion being available.
+Bash completion requires Git's completion being available. Zsh completion does not require Git's completion.
 
 
 ## Installation

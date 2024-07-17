@@ -1,0 +1,207 @@
+#compdef git-imerge
+
+__git_imerge_branches () {
+  local -a branches;
+
+  branches=(
+    $(git for-each-ref --format='%(refname)' refs/heads/ refs/remotes/ 2>/dev/null |
+      sed -e 's!^refs/heads/!!' -e 's!^refs/remotes/!!')
+  )
+
+  _describe -t branches 'branches' branches
+}
+
+__git_imerge_names () {
+  local -a names;
+
+  names=(
+    $(git for-each-ref --format='%(refname)' refs/imerge/ 2>/dev/null |
+      sed -e 's/^refs\/imerge\/\(.*\)\/.*/\1/' -e '/manual/d' -e '/auto/d')
+  )
+
+  _describe -t names 'names' names
+}
+
+__git_imerge_commits () {
+  # complete commits sorted newest first
+  # if the commit is followed by a dot, complete a range of commits from that point onwards
+  # assumes that the commit to be completed is the last argument
+  local -a commits;
+  local word=$words[-1]
+
+  if [[ $word != *. ]]; then
+    commits=(
+      $(git rev-list --no-commit-header --format='%h:%s' HEAD 2>/dev/null)
+    )
+  fi
+  word="${word%%.*}.."
+  commits=(
+    $commits
+    $(git rev-list --reverse --no-commit-header --format="$word"'%h:%s' "$word" 2>/dev/null)
+  )
+
+  _describe -t commits 'commits' commits -o nosort
+}
+
+__git_imerge_goals=(
+  full
+  rebase
+  rebase-with-history
+  border
+  border-with-history
+  border-with-history2
+  merge
+  drop
+  revert
+)
+
+__git_imerge_commands () {
+  local -a commands
+
+  commands=(
+    'start:start a new incremental merge'
+    'merge:start a simple merge via incremental merge'
+    'rebase:start a simple rebase via incremental merge'
+    'drop:drop one or more commits via incremental merge'
+    'revert:revert one or more commits via incremental merge'
+    'continue:record the merge at branch imerge/NAME and autofill non-conflicting merges'
+    'finish:simplify then remove a completed incremental merge'
+    'diagram:display a diagram of the current state of a merge'
+    'list:list the names of incremental merges that are currently in progress.'
+    'init:initialize a new incremental merge'
+    'record:record the merge at branch imerge/NAME'
+    'autofill:autofill non-conflicting merges'
+    'simplify:simplify a completed incremental merge by discarding unneeded intermediate merges and cleaning up the ancestry of the commits that are retained'
+    'remove:irrevocably remove an incremental merge'
+    'reparent:change the parents of the specified commit and propagate the change to HEAD'
+  )
+
+  _describe -t commands 'git-imerge subcommand' commands "$@"
+}
+
+__git-imerge_start_completion() {
+  _arguments \
+    '1:branch:__git_imerge_branches' \
+    '(-h,--help)'{-h,--help}'[Show this help message and exit.]' \
+    '--name[name to use for this incremental merge]:NAME:' \
+    '--goal[the goal of the incremental merge]:GOAL:($__git_imerge_goals)' \
+    '--branch[the name of the branch to which the result will be stored]:BRANCH:' \
+    '--manual[ask the user to complete all merges manually, even when they appear conflict-free.]' \
+    '--first-parent[handle only the first parent commits]'
+}
+
+__git-imerge_init_completion() {
+  __git-imerge_start_completion $1
+}
+
+__git-imerge_continue_completion() {
+  _arguments \
+    '(-h,--help)'{-h,--help}'[Show this help message and exit.]' \
+    '--name[name to use for this incremental merge]:NAME:__git_imerge_names' \
+    '(-e,--edit)'{-e,--edit}'[commit staged changes with the --edit option]' \
+    '--no-edit[commit staged changes with the --no-edit option]'
+}
+
+__git-imerge_finish_completion() {
+  _arguments \
+    '(-h,--help)'{-h,--help}'[Show this help message and exit.]' \
+    '--name[name to use for this incremental merge]:NAME:__git_imerge_names' \
+    '--goal[the goal of the incremental merge]:GOAL:($__git_imerge_goals)' \
+    '--branch[the name of the branch to which to store the result (default is the value provided to "init" or "start" if any; otherwise the name of the merge).]:BRANCH:__git_imerge_branches' \
+    '--manual[ask the user to complete all merges manually, even when they appear conflict-free.]' \
+    '--force[allow the target branch to be updated in a non-fast-forward manner]'
+}
+
+__git-imerge_simplify_completion() {
+  __git-imerge_finish_completion $1
+}
+
+__git-imerge_merge_completion() {
+  _arguments \
+    '1:branch:__git_imerge_branches' \
+    '(-h,--help)'{-h,--help}'[Show this help message and exit.]' \
+    '--name[name to use for this incremental merge]:NAME:' \
+    '--goal[the goal of the incremental merge]:GOAL:($__git_imerge_goals)' \
+    '--branch[the name of the branch to which the result will be stored]:BRANCH:' \
+    '--manual[ask the user to complete all merges manually, even when they appear conflict-free.]'
+}
+
+__git-imerge_rebase_completion() {
+  __git-imerge_merge_completion $1
+}
+
+__git-imerge_drop_completion() {
+  _arguments \
+    '1:commit:__git_imerge_commits' \
+    '(-h,--help)'{-h,--help}'[Show this help message and exit.]' \
+    '--name[name to use for this incremental merge]:NAME:' \
+    '--branch[the name of the branch to which the result will be stored]:BRANCH:' \
+    '--manual[ask the user to complete all merges manually, even when they appear conflict-free.]' \
+    '--first-parent[handle only the first parent commits]'
+}
+
+__git-imerge_revert_completion() {
+  __git-imerge_drop_completion $1
+}
+
+__git-imerge_list_completion() {
+  _arguments \
+    '(-h,--help)'{-h,--help}'[show this help message and exit]'
+}
+
+__git-imerge_reparent_completion() {
+  __git-imerge_list_completion $1
+}
+
+__git-imerge_record_completion() {
+  _arguments \
+    '(-h,--help)'{-h,--help}'[show this help message and exit]' \
+    '--name[name of merge to which the merge should be added]:NAME:__git_imerge_names'
+}
+
+__git-imerge_autofill_completion() {
+  _arguments \
+    '(-h,--help)'{-h,--help}'[show this help message and exit]' \
+    '--name[name of incremental merge to autofill]:NAME:__git_imerge_names'
+}
+
+__git-imerge_remove_completion() {
+  __git-imerge_autofill_completion $1
+}
+
+__git-imerge_diagram_completion() {
+  _arguments \
+    '(-h,--help)'{-h,--help}'[show this help message and exit]' \
+    '--name[name of incremental merge to diagram]:NAME:__git_imerge_names' \
+    '--commits[show the merges that have been made so far]' \
+    '--frontier[show the current merge frontier]' \
+    '--html[generate HTML diagram showing the current merge frontier]:HTML:' \
+    '--color[draw diagram with colors]' \
+    '--no-color[draw diagram without colors]'
+}
+
+_git-imerge () {
+  local context curcontext="$curcontext" state line
+  local IFS=$'\n' ret=1
+
+  _arguments -C \
+    '1: :__git_imerge_commands' \
+    '(-h,--help)'{-h,--help}'[Show this help message and exit.]' \
+    '*::arg:->args' \
+  && ret=0
+
+  case $state in
+    (args)
+      local subcmd=$line[1]
+      [[ -v functions[__git-imerge_${subcmd}_completion] ]] &&
+        __git-imerge_${subcmd}_completion $subcmd && ret=0
+      ;;
+  esac
+
+  return $ret
+}
+
+# don't run the completion function when being source-ed or eval-ed
+if [ "$funcstack[1]" = "_git-imerge" ]; then
+    _git-imerge "$@"
+fi
