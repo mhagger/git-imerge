@@ -845,7 +845,7 @@ class GitRepository(object):
         """Return a list containing the parents of commit."""
 
         return check_output(
-            ['git', '--no-pager', 'log', '--no-walk', '--pretty=format:%P', commit]
+            ['git', '-c', 'log.showSignature=false', '--no-pager', 'log', '--no-walk', '--pretty=format:%P', commit]
             ).strip().split()
 
     def get_tree(self, arg):
